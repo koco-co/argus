@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-27 — GPT spec review adoption (v1.3 → v1.4)
+
+Input: external GPT review of the v1.2 `spec.zip` snapshot (48 findings, P0×14 / P1×27 / P2×5 / P3×2). Every finding was re-verified against the current v1.3 tree before acting — several were already fixed by the Claude/Grok adoptions, and its headline "Schema 非法 JSON" probe did not reproduce against either snapshot (all fenced blocks parse).
+
+Already satisfied by ≤v1.3 (no change needed): API-led R→A lineage (#3), Hybrid explicitly forbidden in v1 rather than branch-sub-stated (#4), API status/env-enum/tier-count consistency (#14), GitHub Actions as sole CI authority with Jenkins post-v1 (#33), Performance removed from product title (#44), optimizer self-apply guardrails (#35 core concern), Postgres component retention / typed expectations groundwork (#7/#17 partials).
+
+Adopted as documentation-contract changes:
+- Schema fixes (DATA_MODEL §5–§10): `out_of_scope` conditional now carries explicit `required` (absent property can no longer vacuously demand a reason); unusable Draft-07 `maxContains` removed, exactly-one-module-tag demoted to semantic enforcement; source-payload envelope gains `schema_version` plus mutually-exclusive success/error variants; run-summary gains terminal-state conditionals (timing/env/scope/attempts required when terminal, escalation required when escalated); `input_sha256` gets hash pattern; schema_fragment preserves `format`; documented dialect rules (defaults are annotations, FormatChecker always on) and `generated_from.inputs[]` extension.
+- Per-run evidence layout: `iterations/<id>/runs/<run_id>/` with append-only summary/allure/logs ([ADR-010](../architecture/adr/adr-010-per-run-evidence-directories.md)); global `reports/` demoted to display scratch; CI archives/uploads run dirs.
+- Merge lifecycle truthfulness: PR requires `accepted`; `merged` is finalized post-merge onto release with real merge SHA/event via `scripts/finalize_merge.py` ([ADR-011](../architecture/adr/adr-011-post-merge-finalization.md)).
+- Roadmap order/DoD repairs: contract bootstrap absorbed into 0.7 (fixes registry used-before-created); 0.3 local hooks activate no-op-clean until their scripts exist; validate_iteration is a pure check with separate `--fix`; nodeid collectability cross-check in 1.7; new 1.17 `check_prod_scope.py`; seed-integrity canary in 5.0.2; WITH/EXPLAIN data-modifying-CTE negatives in 5.2; Phase 7 hardening (SHA-pinned actions, minimal permissions, timeouts/concurrency) reflected in ARCHITECTURE skeletons; 8.2 candidates must cite evidence + minimal eval set; 9.2/9.3 use accepted→post-merge flow.
+- Security/audit honesty: prod protection restated as layered defense-in-depth (collection gate + static write-call audit + read-only DB role as true boundary); M8 approvals digest redacted-copy based so approvals cannot double as secret oracles; target-app harness added to canonical directory tree; control-plane note stating v1's no-orchestrator stance; generated suites pinned to synchronous httpx clients; skill frontmatter aligned to Agent Skills convention (`metadata.version`) with per-skill write scope/stages.
+- Trace mandatory for failed debug cycles; API cases declare `side_effect` excluded from automatic reruns; clarification protocol allows composable mixed options; M12/plugin content treated as untrusted data.
+
+Rejected/reaffirmed-with-records (see [RISKS_AND_KNOWN_ISSUES](./RISKS_AND_KNOWN_ISSUES.md) #12–16 and the refreshed rejected-proposals table): cryptographic approval receipts, full provenance-graph-per-artifact, forced M3 semantic gate (Spec Kit analogy reconsidered), sqlparse dependency, bandit/container sandbox gate, orchestrator service, multi-project core split, cross-iteration UID model, skill eval-harness baselines — all either superseded-by-lighter-mechanism or deferred with explicit revisit triggers.
+
 ## 2026-08-27 — Grok spec review adoption (v1.2 → v1.3)
 
 - Adopted the Grok contract findings: API-led coverage is now R→A→nodeid with `requirement_ids[]`; UI/API branches are explicit; exemptions moved to immutable-source-safe `exemptions.yaml`; accepted artifacts use explicit approval/reopen tooling and stale blocking.

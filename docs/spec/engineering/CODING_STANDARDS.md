@@ -65,12 +65,12 @@ Expected values come from the **seed context** (`checkout_seeded` computes the d
 
 ```python
 class OrdersClient(BaseClient):
-    async def create_order(self, payload: CreateOrderRequest) -> OrderResponse:
-        resp = await self._http.post("/store/orders", json=payload.model_dump())
+    def create_order(self, payload: CreateOrderRequest) -> OrderResponse:
+        resp = self._http.post("/store/orders", json=payload.model_dump())
         return OrderResponse.model_validate(resp.json())
 ```
 
-Rule: handlers accept/return model instances; `model_dump()` happens exactly once at the transport edge; response validation errors surface as failures, not silent `dict`s.
+Rule: handlers accept/return model instances; `model_dump()` happens exactly once at the transport edge; response validation errors surface as failures, not silent `dict`s. Generated API suites use **synchronous** httpx clients — no `async`/`await` (pytest's async support would add plugin machinery that v1 deliberately keeps out of the dependency set; revisit as a stack decision if ever needed).
 
 ### Test data isolation
 
@@ -106,20 +106,28 @@ Every `SKILL.md` follows one shape so cross-model behavior stays comparable (mer
 ```markdown
 ---
 name: functional-test-design
-version: 1.0.0
+metadata:
+  version: 1.0.0
 description: >
   Use for the full functional-test-design phase: raw requirement dump -> clarified
   requirement -> test points -> functional cases.yaml -> xmind export.
   Owns the UI-led confirmation points only. For an API-led iteration, stop after
   requirements are accepted and route to api-test-design; do not create test_points.yaml.
+  Not for API spec normalization or API case design (use api-test-design for those).
 ---
-## Inputs / Outputs
-(inputs; outputs in order, each gated by validate_schema.py;
- approvals are written only by scripts/record_approval.py)
+## Inputs / Outputs / Write scope
+(inputs read-only; outputs in order, each gated by validate_schema.py;
+ write paths limited to the artifact files this skill owns per DATA_MODEL placement;
+ prohibited paths follow Architecture §3; approvals are written only by
+ scripts/record_approval.py)
 ## Stop-and-confirm points
 (explicit user acceptance between stages; every acceptance calls
  scripts/record_approval.py, which appends {stage, action, actor=user,
  timestamp, artifact_sha256} to approvals[])
+## Stages
+(each stage declares its own precondition, output schema and confirmation:
+ stage=m1 clarify+accept · stage=m2 test points/exemptions + accept ·
+ stage=m3 functional cases + export)
 ## Rules
 - Never invent content absent from 00-raw/ or user answers.
 - Populate branch-correct traceability links while generating, never deferred.
@@ -131,4 +139,4 @@ description: >
  and omit generic or speculative observations)
 ```
 
-Generation-skill rules block (web variant; API analog adds pydantic-model pairing): read `knowledge/target-app-notes/<target-app>.md` before generating; choose locators in this order: role → label → placeholder → text → testid → CSS, with a documented reason to fall back; one page object per route under `pages/<module>/`, creating the module dir when new · tests import page objects only — selector literals fail `check_pom_boundary.py`, assertions live in tests only · markers `module/case_id/iteration` on every test with path consistency enforced by `check_test_markers.py`; generated test filenames include both `iteration_id` and `case_id`; run selection is by directory · reuse-before-create across `pages/` + `components/`; existing page methods referenced by another iteration cannot be deleted without a retirement record; traceability upsert of nodeids immediately. Frontmatter carries `version:` for future upstream diffing (ADR-003). The self-debug loop's behavioral rules live in PRD §4.7 and ADR-004; its SKILL.md is a Roadmap Phase 5 deliverable conforming to this template. Functional test-design and API test-design are parallel skills; their names must remain symmetric.
+Generation-skill rules block (web variant; API analog adds pydantic-model pairing): read `knowledge/target-app-notes/<target-app>.md` before generating; choose locators in this order: role → label → placeholder → text → testid → CSS, with a documented reason to fall back; one page object per route under `pages/<module>/`, creating the module dir when new · tests import page objects only — selector literals fail `check_pom_boundary.py`, assertions live in tests only · markers `module/case_id/iteration` on every test with path consistency enforced by `check_test_markers.py`; generated test filenames include both `iteration_id` and `case_id`; run selection is by directory · reuse-before-create across `pages/` + `components/`; existing page methods referenced by another iteration cannot be deleted without a retirement record; traceability upsert of nodeids immediately. Frontmatter carries `metadata.version:` (Agent Skills convention) for future upstream diffing (ADR-003). The self-debug loop's behavioral rules live in PRD §4.7 and ADR-004; its SKILL.md is a Roadmap Phase 5 deliverable conforming to this template. Functional test-design and API test-design are parallel skills; their names must remain symmetric.

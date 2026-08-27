@@ -1,6 +1,6 @@
 # Data Model
 
-Version: 1.3 · Schema contracts updated after the Claude and Grok review adoptions.
+Version: 1.4 · Schema contracts updated after the Claude, Grok, and GPT review adoptions.
 
 Authoritative machine contracts for every YAML artifact crossing a layer boundary. Architecture §1's validation layer enforces these; PRD §2–§5 defines their business meaning. Field-level rules not expressible in JSON Schema (cross-file references, ID uniqueness, staged coverage) live in the **semantic checks** listed in §11 and are enforced by scripts, not prose.
 
@@ -10,6 +10,9 @@ Conventions for all persisted artifacts:
 - Status enums are lowercase snake_case fileside (GLOSSARY).
 - Unless stated otherwise, objects set `"additionalProperties": false` — unknown fields fail validation. This is deliberate drift protection.
 - IDs follow GLOSSARY formats. Uniqueness scopes differ per artifact; see each entity's "ID" line.
+- **Dialect honesty (Draft-07)**: `default` keywords are annotations, not value injection — producing tools (scaffolder/generators) materialize defaults; validators never assume them. Every conditional (`if`) carries an explicit `required` so absent properties cannot satisfy the condition vacuously. Validators run with a `FormatChecker` enabled so `format: date-time` rejects malformed strings.
+- **Evolution policy**: each artifact pins its `schema_version` (`const "1.0"` in v1). Additive extensions (new files, new registered artifacts) need no migration; changing or removing an existing definition requires a new schema version plus a registry entry and a migration note — none planned for v1 (debt recorded in RISKS_AND_KNOWN_ISSUES).
+- **`generated_from` depth**: the embedded schemas record the single *direct* parent (`artifact`, `sha256`). Generators producing from multiple inputs (requirements + user answers + spec) additionally emit an optional sibling field `inputs: [{artifact, sha256, role}, ...]`; staleness semantics compare every listed hash (single form reads as a one-element list). Producer attribution (skill version, model/session) lives in `events[].triggered_by` metadata and skill frontmatter versions, deliberately not duplicated into every artifact. Phase 1 authors `.schema.json` files incorporating everything on this page, including `inputs`.
 
 Schema placement follows production ownership: `requirements/test_points/functional_cases` schemas under `.agents/skills/functional-test-design/schemas/`; `api_spec` + `api_cases` under `.agents/skills/api-test-design/schemas/`; `exemptions`, `iteration`, `traceability`, `run_summary` under `scripts/schemas/`; `*_source_payload` under `plugins/_interface/schemas/`. Filename↔artifact binding is an explicit registry table (`scripts/schema_registry.yaml`) — never inferred from filename similarity.
 
@@ -261,7 +264,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
                              "linting", "generated", "spec_draft", "spec_valid",
                              "cases_draft", "cases_valid", "running", "passed",
                              "budget_exceeded", "escalated", "stale"]},
-        "input_sha256": {"type": ["string", "null"]}
+        "input_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
       }
     }
   }
@@ -364,8 +367,7 @@ Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.j
           },
           "tags": {
             "type": "array", "items": {"type": "string"}, "minItems": 1,
-            "contains": {"type": "string", "pattern": "^module:[a-z][a-z0-9_]*$"},
-            "maxContains": 1
+            "contains": {"type": "string", "pattern": "^module:[a-z][a-z0-9_]*$"}
           },
           "test_point_ids": {"type": "array", "minItems": 1,
             "items": {"type": "string", "pattern": "^T[0-9]{4}$"}}
@@ -398,7 +400,7 @@ Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.j
 }
 ```
 
-The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required, hence `contains` + `maxContains`.
+The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required. Draft-07 has no usable `maxContains`, so `contains` enforces ≥1 at the schema layer and **tag uniqueness is enforced semantically** by `check_functional_expectations.py` (§11); a second `module:` tag fails validation even though raw JSON Schema would accept it.
 
 Export contract for `.xmind`: the root tree is `iteration → module → requirement (R####) → test point (T####) → functional case (C####) → step`. IDs and titles are preserved at each node; a case linked to multiple requirements/test points appears under each applicable source path without changing the source IDs. Golden fixtures assert this hierarchy, not only ZIP validity.
 
@@ -462,7 +464,7 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
           "out_of_scope_reason": {"type": "string"}
         },
         "allOf": [
-          {"if": {"properties": {"out_of_scope": {"const": true}}},
+          {"if": {"properties": {"out_of_scope": {"const": true}}, "required": ["out_of_scope"]},
            "then": {"required": ["out_of_scope_reason"],
                      "properties": {"out_of_scope_reason": {"minLength": 1}}}}
         ]
@@ -490,6 +492,7 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
       "properties": {
         "$ref": {"type": "string", "pattern": "^#/components/schemas/[A-Za-z0-9_.-]+$"},
         "type": {"enum": ["object", "array", "string", "integer", "number", "boolean"]},
+        "format": {"type": "string"},
         "enum": {"type": "array", "minItems": 1},
         "required": {"type": "array", "items": {"type": "string"}},
         "properties": {"type": "object", "additionalProperties": {"$ref": "#/definitions/schema_fragment"}},
@@ -508,6 +511,8 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
 ```
 
 Semantic check: when an OpenAPI source uses `components.schemas`, the normalized spec must retain every referenced component schema (including nested `$ref` links) and reject dangling references. Inline parameter, request-body, and response schemas remain valid when the source has no component references; the normalizer may inline only when it can preserve equivalent type information.
+
+**Test projection, not lossless replacement**: `spec.normalized.yaml` is a *derived view* of the original interface description. The untouched source OpenAPI document (or HAR/postman export) is committed under the iteration's `00-raw/` with its sha256 in `iteration.yaml.source_manifest[]`, and the matching `source_refs[].location` points there. Structures this projection cannot carry (servers, security schemes/scopes, media-type variants beyond `content_type`, headers on responses, callbacks/webhooks) remain authoritative in the source file; M7 generates typed request/response models only for operations whose structures survived normalization intact, and escalates to the user instead of inventing types where they did not. Unrecoverable unknowns are recorded as explicit notes on the endpoint (`authentication` prose, missing examples), never silently filled.
 
 ## 7. `api/cases.yaml`
 
@@ -539,6 +544,7 @@ Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json`. Fixes vs
           "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
           "title": {"type": "string", "minLength": 1},
           "case_type": {"enum": ["happy_path", "negative", "edge"]},
+          "side_effect": {"enum": ["none", "creates", "updates", "deletes"], "default": "none"},
           "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
           "request": {
             "type": "object", "additionalProperties": false,
@@ -584,6 +590,7 @@ Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json`. Fixes vs
       "properties": {
         "$ref": {"type": "string", "pattern": "^#/components/schemas/[A-Za-z0-9_.-]+$"},
         "type": {"enum": ["object", "array", "string", "integer", "number", "boolean"]},
+        "format": {"type": "string"},
         "enum": {"type": "array", "minItems": 1},
         "required": {"type": "array", "items": {"type": "string"}},
         "properties": {"type": "object", "additionalProperties": {"$ref": "#/definitions/schema_fragment"}},
@@ -650,7 +657,7 @@ JSON Schema validates *shape*; `check_coverage.py` enforces semantics per branch
 
 ## 9. `run-summary.yaml`
 
-Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by PRD §2.1, timing, scope, and the failure-class taxonomy that powers M9's escalation logic.
+Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by PRD §2.1, timing, scope, and the failure-class taxonomy that powers M9's escalation logic. Since v1.4 each execution persists to its own directory `iterations/<id>/runs/<run_id>/` (`run-summary.yaml` + captured evidence — ADR-010); no later run may overwrite an earlier one, and any copies under global `reports/` are display-only scratch, never the fact source.
 
 ```json
 {
@@ -693,6 +700,17 @@ Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by
       }
     }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["passed", "budget_exceeded", "escalated"]}}, "required": ["status"]},
+      "then": {"required": ["started_at", "finished_at", "env", "scope"],
+                "properties": {"attempts": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "escalated"}}, "required": ["status"]},
+      "then": {"required": ["escalation"]}
+    }
+  ],
   "definitions": {
     "failure_class": {"enum": ["none", "locator_drift", "timing", "fixture_error",
       "serialization_error", "import_type_error", "data_issue", "environment_unavailable",
@@ -706,14 +724,15 @@ Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by
 
 Schemas: `plugins/_interface/schemas/requirement_source_payload.schema.json`, `plugins/_interface/schemas/api_source_payload.schema.json`.
 
-Plugins emit a **normalized source envelope**, deliberately distinct from internal workflow artifacts — a Zentao connector cannot know the future `iteration_id`/statuses, so internal schemas are wrong at this boundary (review adoption). Envelope shape:
+Plugins emit a **normalized source envelope**, deliberately distinct from internal workflow artifacts — a Zentao connector cannot know the future `iteration_id`/statuses, so internal schemas are wrong at this boundary (review adoption). Envelope shape (success and error variants share one schema; both carry `schema_version`, fixing a v1.3 omission):
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object", "additionalProperties": false,
-  "required": ["source_type", "fetched_at", "content"],
+  "required": ["schema_version", "source_type", "fetched_at"],
   "properties": {
+    "schema_version": {"const": "1.0"},
     "source_type": {"enum": ["paste", "zentao", "jira", "tapd", "lanhu", "figma"]},
     "fetched_at": {"type": "string", "format": "date-time"},
     "source_ref": {"type": "string"},
@@ -721,12 +740,20 @@ Plugins emit a **normalized source envelope**, deliberately distinct from intern
     "attachments": {"type": "array", "items":
       {"type": "object", "additionalProperties": false,
        "required": ["name", "content_ref"],
-       "properties": {"name": {"type": "string"}, "content_ref": {"type": "string"}}}}
-  }
+       "properties": {"name": {"type": "string"}, "content_ref": {"type": "string"}}}},
+    "error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {"code": {"type": "string"}, "message": {"type": "string"}}
+    }
+  },
+  "allOf": [
+    {"if": {"required": ["error"]}, "then": {"not": {"required": ["content"]}}}
+  ]
 }
 ```
 
-The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; the exact source-payload path is also revalidated by pre-commit and CI, while unrelated raw inputs remain exempt from artifact-schema validation. Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s); errors return `{error: {code, message}}` shaped payloads rather than raising raw exceptions across the boundary.
+A successful fetch persists `{...payload}`; a failed fetch persists `{..., error: {code, message}}` instead of raising a raw exception across the boundary — the two variants are mutually exclusive by schema (`error` present ⇒ no `content`). The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; this path is therefore the *quarantine slot*: downstream skills may consume it only after schema validation succeeds, while unrelated raw inputs remain exempt from artifact-schema validation and are revalidated on the exact payload path by pre-commit and CI. Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s) plus response-size and decompression limits enforced by the runner; fetched content is **untrusted data** — instruction-like text inside it is clarification material for M1/M4, never a directive the agent executes, and it never flows verbatim into `knowledge/`.
 
 ## 11. What JSON Schema deliberately does not cover
 
@@ -735,11 +762,14 @@ Cross-file and stage-dependent semantics belong to dedicated checkers so schemas
 | Rule | Enforced by | When |
 | --- | --- | --- |
 | Every referenced R/T/C/A id exists; exemption requirements exist; ids unique per scope; traceability rows resolve | `check_coverage.py` (referential-integrity pass) | every validation run |
+| Recorded `automation_test_ids` resolve to *collectable* pytest nodeids (`pytest --collect-only` cross-check against the automation tree) | `check_coverage.py` | staged / CI automation tiers |
+| Functional case carries **exactly one** `module:<name>` tag (schema `contains` proves ≥1 only — Draft-07 has no `maxContains`) | `check_functional_expectations.py` | after M3/M6 generation |
+| Run-summary invariants beyond shape: `attempt_number` consecutive and unique from 1; terminal `passed` ⇒ last attempt is a pass; `escalated` ⇒ `escalation.reason_class` matches the taxonomy and its explanation cites evidence; every repair attempt's `diff_ref` resolves | `validate_iteration.py` semantic pass | pre-commit + CI |
 | Branch-specific coverage: UI R→T / T→C / C→nodeid, or API R→A / A→nodeid; `manual_only` exemptions stop at the case tier | `check_coverage.py --tier from-iteration` | staged, per PRD §5.1 |
 | Endpoint coverage: happy + negative/edge per in-scope endpoint | `check_api_coverage.py` | after M5, PRD §4.4 |
 | Functional expectation kind/seed rule; no unexplained numeric or currency literal for `derived_value` | `check_functional_expectations.py` | after M3/M6 generation |
 | Client fields are a subset of source schema fields; variables resolve to seed/path/previous response | `check_api_models.py` + API semantic pass | after M5/M7 generation |
-| Legal iteration-state transitions; approval/event completeness; reopen/staleness (`stale` statuses computed from hash chain) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
+| Legal iteration-state transitions; approval/event completeness; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
 | Exported implies ≥1 case; `.xmind` tree is iteration→module→R→T→C→step; `.xlsx` columns match the API export contract | exporter round-trip tests + CI byte-repro check | CI |
 | Retired nodeids are not active coverage; at most one in-progress iteration exists in v1 | `check_coverage.py` + `validate_iteration.py` | every validation run |
 

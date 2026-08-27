@@ -35,7 +35,7 @@ lint:             uv run ruff check . && uv run pyright
 target-app-up/seed/reset/healthcheck/down:  harness scripts (policy: TESTING_STRATEGY harness section)
 ```
 
-Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pytest cannot filter parameterized marks that way — reviewed & confirmed error); no `debug` target exists (self-debug is the agent-session flow, ADR-004).
+Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pytest cannot filter parameterized marks that way — reviewed & confirmed error); no `debug` target exists (self-debug is the agent-session flow, ADR-004). Execution scratch (`--alluredir=reports/allure-results`) stays gitignored display-only state; the durable evidence copy lands in `iterations/<id>/runs/<run_id>/` via the self-debug helper / CI archive step (ADR-010).
 
 **.gitignore essentials**: gitignored env/notify YAMLs; `reports/**` + `!reports/**/.gitkeep`; `automation/api/har/**` + keeper; `config/env.ci.yaml`; `.venv/`. Raw inputs: tracked text under `iterations/*/00-raw/` (subject to secret scan), binaries/large-file patterns ignored there with manifest fallback (PRD §6).
 
@@ -59,6 +59,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已定义 / 待实现 |
 | Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
 | Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
-| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; both notify under `always()` | see ARCHITECTURE §8 | 已定义 / 待实现 |
+| Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive --run-id <rid>` | summary/allure/logs copied into `iterations/<id>/runs/<rid>/`, previous runs untouched | 已定义 / 待实现 |
+| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已定义 / 待实现 |
 
 Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.

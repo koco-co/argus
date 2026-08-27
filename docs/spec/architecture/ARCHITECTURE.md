@@ -2,7 +2,7 @@
 
 ## AI-Driven Automation Framework
 
-Version: 1.3 · Performance/load testing is reserved for post-v1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
+Version: 1.4 · Performance/load testing is reserved for post-v1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
 
 > Machine contracts (JSON Schemas) are defined authoritatively in [DATA_MODEL.md](./DATA_MODEL.md); this document owns layering, directory structure, and dependency rules.
 
@@ -54,6 +54,8 @@ Version: 1.3 · Performance/load testing is reserved for post-v1 · Companion do
 - **Data-flow direction** (arrows above): how information moves between layers.
 - **Dependency rules** (§3 table): what each *Python-code* directory may import. These apply to real code only (`plugins/`, `scripts/`, `shared/`, `automation/`); `.agents/skills/` is Markdown and cannot be import-scanned — its boundary rules are process rules verified by review plus a lightweight grep check that skills never name direct platform-SDK usage outside `run_plugin.py` invocation.
 
+**Control plane (what sequences the modules?)**: v1 deliberately ships no orchestrator service or skill. The enforced sequence *is* the contract above plus deterministic validators: `iteration.yaml` state transitions are checked by `validate_iteration.py`, tier gates order M-gate progression, and AGENTS.md instructs the agent through confirmation points. An LLM-composed pipeline can therefore only be rejected as invalid after the fact of a step, but every illegal step is caught before it persists. A deterministic orchestrator CLI remains a post-v1 evaluation item (RISKS_AND_KNOWN_ISSUES).
+
 ---
 
 ## 2. Complete Directory Structure
@@ -99,7 +101,11 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── api/spec.normalized.yaml, api/cases.yaml
 │   ├── exports/*.xmind, exports/*.xlsx
 │   ├── traceability.yaml
-│   └── run-summary.yaml
+│   └── runs/<run-id>/               # ⭐ per-run evidence dir (ADR-010): run-summary.yaml,
+│                                    #    allure-results/, logs/, attempt patch refs —
+│                                    #    append-only; later runs never overwrite earlier ones
+├── target-app/                      # ⭐ pinned harness home (ADR-002; policy in TESTING_STRATEGY):
+│                                    #    medusa.lock.yaml, compose.yaml
 ├── automation/
 │   ├── web/{pages,components,fixtures,tests}/<module>/, web/conftest.py
 │   ├── mobile/{android,ios,screens,tests}/<module>/, mobile/conftest.py
@@ -207,16 +213,20 @@ Three independent layers, so a single mistake can't cause a write. **The authori
 
 ```python
 _STATEMENT_VERBS = {"select", "with", "explain", "show", "describe", "table", "pragma"}
+_WRITE_TOKENS = ("insert", "update", "delete", "merge", "copy")   # WITH can wrap DML CTEs
 
 class ReadOnlyDBClient:
     def query(self, sql: str, params: tuple = ()) -> list[dict]:
         head = sql.lstrip("( \n\t").split(None, 1)[0].lower().rstrip(";")
         if head not in _STATEMENT_VERBS:            # leading-keyword allow-list,
             raise PermissionError(f"Blocked by ReadOnlyDBClient: {sql[:80]!r}")
+        lowered = sql.lower()                        # `with`/`explain` get a second look:
+        if any(t in lowered for t in _WRITE_TOKENS) or "analyze" in lowered:
+            raise PermissionError(...)               # fail closed; EXPLAIN ANALYZE executes
         return self._conn.execute(sql, params).fetchall()
 ```
 
-Design change vs v1.0: the denylist regex scanned the whole statement and false-blocked legitimate reads containing words like `'INSERT'` inside string literals; an allow-list on the statement's leading keyword fixes the common false positive without a SQL-parser dependency. Multi-statement strings (e.g. `"SELECT 1; DROP TABLE x"`) are rejected outright by refusing any `;` followed by non-whitespace. The connection object comes from a driver chosen per target app (Medusa ⇒ PostgreSQL, e.g. psycopg) — v1.0's `import httpx` comment was a placeholder error.
+Design change vs v1.0: the denylist regex scanned the whole statement and false-blocked legitimate reads containing words like `'INSERT'` inside string literals; an allow-list on the statement's leading keyword fixes the common false positive without a SQL-parser dependency. Multi-statement strings (e.g. `"SELECT 1; DROP TABLE x"`) are rejected outright by refusing any `;` followed by non-whitespace. Known sharp edge (kept deliberately): the token scan over `WITH`/`EXPLAIN` statements is substring-based and therefore *over*-blocks reads whose literals merely mention write words — acceptable because the DB role is authoritative anyway, failing closed beats parsing SQL, and an implementation may refine it with a real tokenizer as long as every data-modifying-CTE fixture still fails (Roadmap 5.2). The connection object comes from a driver chosen per target app (Medusa ⇒ PostgreSQL, e.g. psycopg) — v1.0's `import httpx` comment was a placeholder error.
 
 **Layer 3 — static scans.**
 - Pre-commit: `check_db_readonly.py` scans `shared/db/**` for write verbs appearing as executable code identifiers; uses the unified denylist (`INSERT UPDATE DELETE MERGE REPLACE UPSERT CALL EXEC COPY GRANT ALTER DROP TRUNCATE CREATE`), implemented over AST tokens so string/comment literals don't trip it; explicit escape hatch only via reviewed `# db-write-ok: <reason>` (used solely by the checker's own unit tests).
@@ -254,11 +264,11 @@ def load_env(env_name: str | None = None, cli_flag: str | None = None) -> EnvCon
 
 Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows.
 
-**prod protection is mechanical**: `automation/conftest.py` registers markers strict and, when `TEST_ENV=prod`, implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only` — collection-level enforcement, so generated regression cannot create orders/users/discounts against prod even if misconfigured. The AGENTS.md prose rule remains, but no longer carries the risk alone.
+**prod protection is layered** (`check_prod_scope.py` + conftest + DB role): when `TEST_ENV=prod`, root `automation/conftest.py` implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only`; on top of collection gating, `scripts/check_prod_scope.py` statically audits read-only-marked tests for write-shaped client/page calls (configurable method denylist) before a prod run is assembled. Honest scoping: the marker is classification metadata that generation self-reports, so these code layers are defense-in-depth *around* the real boundaries — the SELECT-only DB role and host-side network/tenant controls. Combined they catch misconfiguration; no single layer is trusted alone.
 
 ### 7.2 Notification
 
-Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Feishu/WeCom/Email; dispatcher fans one run result to all configured channels; per-channel retry with exponential backoff (1s/2s/4s); a failing channel is logged and never blocks others nor the run. Entrypoints are unified (v1.0 had two competing ones): `shared/notify/dispatcher.py` holds the logic, `scripts/notify.py` is the CLI wrapper consuming either `run-summary.yaml` or a CI job status. CI invokes it under `if: ${{ always() }}` so failures notify too (a plain step after a failed step would be skipped), and notification steps themselves carry `continue-on-error: true` per best-effort policy.
+Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Feishu/WeCom/Email; dispatcher fans one run result to all configured channels; per-channel retry with exponential backoff (1s/2s/4s); a failing channel is logged and never blocks others nor the run. Entrypoints are unified (v1.0 had two competing ones): `shared/notify/dispatcher.py` holds the logic, `scripts/notify.py` is the CLI wrapper consuming a run's `run-summary.yaml` (explicit path, or `auto` = the newest `iterations/<id>/runs/<run-id>/run-summary.yaml`) or a CI job status. CI invokes it under `if: ${{ always() }}` so failures notify too (a plain step after a failed step would be skipped), and notification steps themselves carry `continue-on-error: true` per best-effort policy.
 
 ### 7.3 Extending environments/channels
 
@@ -272,7 +282,9 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 Two jobs, deliberately split because their prerequisites differ:
 
 - **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, uploads Allure results/run-summary/patch history as artifacts, and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, archives run evidence into each touched iteration's `runs/<run_id>/` (helper invocation), uploads the run directories (summary/allure/logs/junit/patches) as artifacts, and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only.
+
+Workflow-hardening contract (GitHub's own guidance): third-party actions are pinned to **full commit SHAs** (`<sha> # vX.Y` comments; Dependabot keeps them current), top-level `permissions` default to none with per-job opt-in, every job sets `timeout-minutes`, and PR workflows share a concurrency group that cancels superseded runs.
 
 CI trigger and notification contract:
 
@@ -298,16 +310,23 @@ CI trigger and notification contract:
 | Consolidated repo layout: 6 skills, plugins layer, iterations↔module split, YAML sources + derived views | [ADR-007](./adr/adr-007-repo-layout-redesign.md) |
 | Namespaced test data and worker-isolated fixtures for parallel execution | [ADR-008](./adr/adr-008-parallel-test-isolation.md) |
 | Accepted artifacts are immutable; exemptions and explicit reopen are separate contracts | [ADR-009](./adr/adr-009-exemptions-and-accepted-artifact-reopen.md) |
+| Per-run evidence directories under `iterations/<id>/runs/<run_id>/` | [ADR-010](./adr/adr-010-per-run-evidence-directories.md) |
+| `accepted` closes the PR; `merged` is finalized post-merge by script | [ADR-011](./adr/adr-011-post-merge-finalization.md) |
 
 CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
 
 ```yaml
 # .github/workflows/ci.yml — static checks, every PR, no target app needed
+permissions: {}                        # minimal by default; jobs opt in explicitly
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   static-checks:
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@<full-sha>        # v4 — pin exact SHA; Dependabot updates
+      - uses: astral-sh/setup-uv@<full-sha>      # v5
       - run: uv sync --group dev
       - run: uv run pre-commit run --all-files   # schemas/state/staleness/POM/
                                                   # models/markers/db/secrets/lint
@@ -320,26 +339,35 @@ jobs:
 
 # .github/workflows/regression.yml — e2e for release PRs or automation/iteration changes
 # Target-app provisioning is compose-only; target_app_up.py owns the full stack.
+permissions:
+  contents: read
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   e2e:
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@<full-sha>
+      - uses: astral-sh/setup-uv@<full-sha>
       - run: uv sync
       - run: uv run playwright install --with-deps chromium
       - run: uv run python scripts/target_app_up.py
       - run: uv run python scripts/target_app_seed.py
       - run: uv run python scripts/target_app_healthcheck.py
       - run: echo "base_url: $MEDUSA_URL" > config/env.ci.yaml   # assembled from secrets (+ auth/dsn blocks)
-      - run: TEST_ENV=ci uv run pytest automation/web automation/api --alluredir=reports/allure-results
+      - run: TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml
+      - run: uv run python scripts/self_debug_helper.py archive --dest iterations/*/runs/   # allure+logs+summary into per-run dirs
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@<full-sha>   # v4
         with:
-          name: allure-and-run-summary
-          path: reports/allure-results/
+          name: run-evidence-${{ github.run_id }}
+          path: |
+            reports/
+            iterations/*/runs/
       - if: always()
         continue-on-error: true
-        run: uv run python scripts/notify.py --summary latest-run-summary
+        run: uv run python scripts/notify.py --summary auto   # resolves newest iterations/<id>/runs/<run-id>/run-summary.yaml
       - if: always()
         run: uv run python scripts/target_app_down.py
 ```
