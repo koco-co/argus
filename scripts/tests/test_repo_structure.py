@@ -182,6 +182,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "check_db_readonly.py",
         "check_secrets.py",
         "render_md.py",
+        "export_xmind.py",
         "schemas",
         "tests",
     },
@@ -195,6 +196,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_schema_validator.py",
         "test_validate_iteration.py",
         "test_render_md.py",
+        "test_export_xmind.py",
     },
     "target-app": set(),
 }

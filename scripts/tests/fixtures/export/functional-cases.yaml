@@ -1,0 +1,40 @@
+schema_version: "1.0"
+iteration_id: 2026-08-export-demo
+status: exported
+generated_from:
+  artifact: iterations/2026-08-export-demo/test_points.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+cases:
+  - case_id: C0001
+    title: Apply valid discount at checkout
+    priority: 1
+    precondition: Storefront open, seeded product in cart.
+    steps:
+      - action: Open the discount code field.
+        expected: Input is visible.
+        expected_kind: ui_state
+      - action: Apply code QA-DISCOUNT.
+        expected: Success message shown.
+        expected_kind: copy
+    tags: ["module:checkout"]
+    test_point_ids: [T0001]
+  - case_id: C0002
+    title: Session order appears in history
+    priority: 2
+    precondition: One order placed this session.
+    steps:
+      - action: Open order history.
+        expected: The session order is listed.
+        expected_kind: ui_state
+    tags: ["module:orders"]
+    test_point_ids: [T0002]
+  - case_id: C0003
+    title: Expired discount rejected at checkout
+    priority: 1
+    precondition: Storefront open, seeded product in cart.
+    steps:
+      - action: Apply expired code QA-EXPIRED.
+        expected: Rejection message shown.
+        expected_kind: copy
+    tags: ["module:checkout"]
+    test_point_ids: [T0001, T0003]

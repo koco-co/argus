@@ -1,0 +1,15 @@
+schema_version: "1.0"
+iteration_id: 2026-08-export-demo
+status: accepted
+generated_from:
+  artifact: iterations/2026-08-export-demo/00-raw/requirements-dump.md
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+requirements:
+  - requirement_id: R0001
+    title: Guest checkout with discount
+    description: A guest applies one discount code at checkout.
+    priority: 1
+  - requirement_id: R0002
+    title: Order history listing
+    description: A guest sees orders placed in this session.
+    priority: 2
