@@ -322,6 +322,8 @@ def find_in_progress(iterations_dir: Path, exclude: str | None = None) -> str | 
     if not iterations_dir.is_dir():
         return None
     for iteration_yaml in sorted(iterations_dir.glob("*/iteration.yaml")):
+        if iteration_yaml.parent.name.startswith("test-fixture-"):
+            continue  # permanent script-test fixtures are exempt (Roadmap 1.16)
         try:
             document = _load_yaml(iteration_yaml)
         except yaml.YAMLError:
@@ -374,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
+    if iteration_dir.is_file() and iteration_dir.name == "iteration.yaml":
+        iteration_dir = iteration_dir.parent  # pre-commit passes the file itself
     if not (iteration_dir / "iteration.yaml").exists():
         print(f"error: no iteration.yaml under {iteration_dir}", file=sys.stderr)
         return 1

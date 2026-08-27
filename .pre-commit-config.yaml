@@ -1,14 +1,13 @@
 # Pre-commit guardrails (Roadmap 0.3; finalized at 1.16).
 #
-# - Remote ruff hooks enforce immediately.
-# - The four local validator hooks no-op-clean until their backing logic is
-#   authored across Phases 0-2: each entry script exists as an explicit stub
-#   that names its implementing Roadmap task and exits 0 (the prescribed
-#   entry paths are final — Phase 1+ fills the same files with real logic).
-#   Hook `files:` filters scope each hook to the artifacts it guards.
-# - No hook may mutate tracked files during a check: ruff-format runs with
-#   --check; local hooks are read-only validators (fix modes are explicit,
-#   separate CLI invocations committed by a human/bot afterwards).
+# - Remote ruff hooks enforce immediately (format check-only - no hook
+#   mutates tracked files during a check).
+# - All four local validator hooks are REAL since Phase 1 (1.2/1.3/1.9/1.13)
+#   and enforce for real, including rejecting a modified source payload and
+#   hand-edited iteration files.
+# - No hook may mutate tracked files during a check: local hooks are
+#   read-only validators (fix modes are explicit, separate CLI invocations
+#   committed by a human/bot afterwards).
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.4

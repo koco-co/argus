@@ -1,0 +1,65 @@
+schema_version: '1.0'
+iteration_id: test-fixture-001
+state: test_points_accepted
+blocked_reason: null
+branches:
+  ui: true
+  api: false
+artifacts:
+  requirements:
+    status: accepted
+    input_sha256: null
+  exemptions:
+    status: not_started
+    input_sha256: null
+  test_points:
+    status: accepted
+    input_sha256: null
+  functional_cases:
+    status: not_started
+    input_sha256: null
+  api_spec:
+    status: not_started
+    input_sha256: null
+  api_cases:
+    status: not_started
+    input_sha256: null
+  web_automation:
+    status: not_started
+    input_sha256: null
+  api_automation:
+    status: not_started
+    input_sha256: null
+  execution:
+    status: not_started
+    input_sha256: null
+approvals:
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T12:00:00Z'
+  artifact_sha256: f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d
+- stage: test_points
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T12:00:00Z'
+  artifact_sha256: f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d
+events:
+- from_state: created
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T12:00:00Z'
+  triggered_by: agent
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T12:00:00Z'
+  triggered_by: agent
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-28T12:00:00Z'
+  triggered_by: agent
+- from_state: test_points_review
+  to_state: test_points_accepted
+  timestamp: '2026-08-28T12:00:00Z'
+  triggered_by: agent
+source_manifest: []
+updated_at: '2026-08-28T12:00:00Z'

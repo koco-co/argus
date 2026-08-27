@@ -1,0 +1,19 @@
+schema_version: '1.0'
+iteration_id: test-fixture-001
+status: accepted
+generated_from:
+  artifact: iterations/test-fixture-001/requirements.yaml
+  sha256: f9a16444655db89bb995e9cd55ee1330a677e0c7430cf3c217c92eccfbed4c44
+test_points:
+- test_point_id: T0001
+  requirement_ids:
+  - R0001
+  description: Checkout sample happy path.
+  type: happy
+  priority: 1
+- test_point_id: T0002
+  requirement_ids:
+  - R0002
+  description: Order history sample happy path.
+  type: happy
+  priority: 2

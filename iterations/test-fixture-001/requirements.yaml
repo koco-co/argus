@@ -1,0 +1,20 @@
+schema_version: '1.0'
+iteration_id: test-fixture-001
+status: accepted
+generated_from:
+  artifact: iterations/test-fixture-001/00-raw/requirements-dump.md
+  sha256: 3e3bda83c9a70a261b8522bd350884d4859804fc22670fb616066db34a075c93
+requirements:
+- requirement_id: R0001
+  title: Sample checkout requirement
+  description: A sample requirement exercised by framework tests.
+  priority: 1
+- requirement_id: R0002
+  title: Sample order history requirement
+  description: A second sample requirement for coverage pairs.
+  priority: 2
+ambiguities:
+- question: 'Sample: which currency applies?'
+  asked_at: '2026-08-28T11:00:00Z'
+  resolved: true
+  resolution: 'Fixture resolution: USD, per the sample dump.'

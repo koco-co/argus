@@ -107,10 +107,15 @@ def validate_via_registry(yaml_path: Path, registry_path: Path = REGISTRY_PATH) 
     return validate_artifact(relative, document, registry_path)
 
 
+FIXTURE_PREFIX = "test-fixture-"
+
+
 def find_in_progress_iteration(iterations_dir: Path) -> str | None:
     if not iterations_dir.is_dir():
         return None
     for iteration_yaml in sorted(iterations_dir.glob("*/iteration.yaml")):
+        if iteration_yaml.parent.name.startswith(FIXTURE_PREFIX):
+            continue  # permanent script-test fixtures are exempt (Roadmap 1.16)
         try:
             document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
         except yaml.YAMLError as exc:

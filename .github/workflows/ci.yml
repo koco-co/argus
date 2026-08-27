@@ -1,0 +1,35 @@
+# Static-checks CI (Roadmap 1.16; job shape per ARCHITECTURE §8).
+# The e2e job (regression.yml) lands with Phase 7 wiring; notification steps
+# land with M11 (Phase 7) - both are deliberately absent here.
+#
+# Hardening contract (ARCHITECTURE §8): actions pinned to full commit SHAs,
+# minimal top-level permissions, explicit timeout-minutes, PR-scoped
+# concurrency that cancels superseded runs.
+name: static-checks
+
+permissions: {}
+
+on:
+  pull_request:
+  push:
+    branches: [main, release]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@2af22b5b2dcfc0729ee842c635f300f1fc5a9e9a # v5.0.0
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev
+      - run: uv run pre-commit run --all-files
+      - run: uv run pytest scripts/tests
+      - run: uv run python scripts/check_coverage.py --tier from-iteration

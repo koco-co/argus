@@ -413,7 +413,12 @@ def tiers_for_state(branches: dict, state: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("iteration", type=Path, help="iterations/<id> directory")
+    parser.add_argument(
+        "iteration",
+        type=Path,
+        nargs="?",
+        help="iterations/<id> directory (omit to evaluate every iteration)",
+    )
     parser.add_argument(
         "--tier",
         choices=(*_TIERS, "from-iteration", "auto"),
@@ -428,11 +433,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.iteration is None:
+        args.iteration = REPO_ROOT / "iterations"
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
     if not iteration_dir.is_dir():
         print(f"error: iteration directory {iteration_dir} not found", file=sys.stderr)
         return 1
 
+    # Without an explicit iteration, evaluate every iteration directory
+    # (the CI shape in ARCHITECTURE §8 calls the checker without an id).
+    iteration_dirs = [
+        child for child in sorted(iteration_dir.iterdir()) if (child / "iteration.yaml").is_file()
+    ] or [iteration_dir]
+
+    overall = 0
+    for single_dir in iteration_dirs:
+        code = evaluate_one(single_dir, args.tier, args.automation_dir)
+        overall = overall or code
+    return overall
+
+
+def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> int:
     report = Report()
     iteration_yaml = iteration_dir / "iteration.yaml"
     branches: dict = {"ui": True, "api": False}
@@ -455,14 +476,14 @@ def main(argv: list[str] | None = None) -> int:
 
     check_referential_integrity(requirements, test_points, cases, api_cases, traceability, report)
 
-    if args.tier == "from-iteration":
+    if tier_arg == "from-iteration":
         tiers = tiers_for_state(branches, state)
-    elif args.tier == "auto":
+    elif tier_arg == "auto":
         tiers = ["r-t", "t-c", "c-auto"] if branches["ui"] else ["r-a", "a-auto"]
     else:
-        tiers = [args.tier]
+        tiers = [tier_arg]
 
-    collected = collected_nodeids(str(args.automation_dir))
+    collected = collected_nodeids(str(automation_dir))
     for tier in tiers:
         try:
             check_tier(
@@ -484,12 +505,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"coverage gap: {problem}")
         print(
             f"check_coverage: {len(report.problems)} gap(s) "
-            f"[tier={args.tier}, ui={branches['ui']}, state={state}]",
+            f"[tier={tier_arg}, ui={branches['ui']}, state={state}]",
             file=sys.stderr,
         )
         return 1
     print(
-        f"check_coverage: OK [tier={args.tier}, ui={branches['ui']}, state={state}, "
+        f"check_coverage: OK [tier={tier_arg}, ui={branches['ui']}, state={state}, "
         f"tiers checked: {', '.join(tiers) or 'none'}]"
     )
     return 0
