@@ -1,0 +1,15 @@
+# scripts/schema_registry.yaml — explicit artifact-path ↔ schema binding.
+#
+# Single authority for "which schema validates which file" (ARCHITECTURE §1,
+# DATA_MODEL §11): consumers consult this table exclusively; nothing infers a
+# schema from filename similarity. `path_pattern` is a fnmatch glob relative
+# to the repo root; `schema` points at the JSON Schema file.
+#
+# Phase 0 registers the iteration aggregate only. Phase 1 (task 1.1/1.2)
+# appends the remaining DATA_MODEL artifacts as their schema files land;
+# the scaffolder validates whatever is registered through this same path.
+schema_version: "1.0"
+bindings:
+  - artifact: iteration
+    path_pattern: "iterations/*/iteration.yaml"
+    schema: "scripts/schemas/iteration.schema.json"

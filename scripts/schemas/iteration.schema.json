@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "state", "branches", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "state": {"enum": [
+      "created", "blocked",
+      "requirements_clarifying", "requirements_accepted", "requirements_mapped",
+      "test_points_review", "test_points_accepted",
+      "functional_cases_generating", "functional_cases_exported",
+      "spec_normalizing", "spec_valid",
+      "api_cases_generating", "api_cases_exported",
+      "web_automation_generating", "web_automation_generated",
+      "api_automation_generating", "api_automation_generated",
+      "env_pending", "env_configured",
+      "executing", "execution_passed", "execution_budget_exceeded", "escalated",
+      "acceptance_pending", "accepted", "merged"
+    ]},
+    "blocked_reason": {"type": ["string", "null"]},
+    "branches": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ui", "api"],
+      "properties": {"ui": {"type": "boolean"}, "api": {"type": "boolean"}},
+      "oneOf": [
+        {"properties": {"ui": {"const": true}, "api": {"const": false}}},
+        {"properties": {"ui": {"const": false}, "api": {"const": true}}}
+      ]
+    },
+    "artifacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requirements", "test_points", "functional_cases",
+                    "api_spec", "api_cases", "web_automation", "api_automation", "execution"],
+      "properties": {
+        "requirements":    {"$ref": "#/definitions/artifact_status"},
+        "exemptions":      {"$ref": "#/definitions/artifact_status"},
+        "test_points":     {"$ref": "#/definitions/artifact_status"},
+        "functional_cases":{"$ref": "#/definitions/artifact_status"},
+        "api_spec":        {"$ref": "#/definitions/artifact_status"},
+        "api_cases":       {"$ref": "#/definitions/artifact_status"},
+        "web_automation":  {"$ref": "#/definitions/artifact_status"},
+        "api_automation":  {"$ref": "#/definitions/artifact_status"},
+        "execution":       {"$ref": "#/definitions/artifact_status"}
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["stage", "action", "actor", "timestamp", "artifact_sha256"],
+        "properties": {
+          "stage": {"enum": ["requirements", "test_points", "environment", "skill_change", "acceptance"]},
+          "action": {"enum": ["accepted", "rejected", "provided", "approved"]},
+          "actor": {"enum": ["user"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["from_state", "to_state", "timestamp", "triggered_by"],
+        "properties": {
+          "from_state": {"type": "string"},
+          "to_state": {"type": "string"},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "triggered_by": {"enum": ["agent", "script", "user"]}
+        }
+      }
+    },
+    "source_manifest": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "sha256", "captured_at"],
+        "properties": {
+          "path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "captured_at": {"type": "string", "format": "date-time"},
+          "redacted": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    "updated_at": {"type": "string", "format": "date-time"}
+  },
+  "definitions": {
+    "artifact_status": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["not_started", "draft", "clarifying", "clarified", "accepted",
+                             "review", "validating", "valid", "exported", "generating",
+                             "linting", "generated", "spec_draft", "spec_valid",
+                             "cases_draft", "cases_valid", "running", "passed",
+                             "budget_exceeded", "escalated", "stale"]},
+        "input_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}
