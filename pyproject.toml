@@ -1,0 +1,58 @@
+[project]
+name = "argus"
+version = "0.1.0"
+description = "AI-driven automation testing framework: requirement -> test design -> generated web/API automation with self-debug"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest>=8.3",
+    "pytest-playwright>=0.5",
+    "pytest-xdist>=3.6",
+    "allure-pytest>=2.15",
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "rich>=13.9",
+    "pyyaml>=6.0",
+    "jsonschema>=4.23",
+    "openpyxl>=3.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+    "pre-commit>=4.0",
+]
+mobile = [
+    "appium-python-client>=4.0",
+]
+perf = [
+    "locust>=2.29",
+]
+
+[tool.pytest.ini_options]
+# Module selection for generated suites is by directory path, never marker
+# expressions (ENVIRONMENT_SETUP.md); markers are metadata checked by
+# scripts/check_test_markers.py (Phase 1).
+addopts = "--strict-markers"
+testpaths = ["scripts/tests"]
+markers = [
+    "module(name): business module this test belongs to (metadata; run selection is by directory)",
+    "case_id(id): owning functional/API case id within the iteration (e.g. C0012 / A0007)",
+    "iteration(id): iteration_id this generated test belongs to",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# docs/ holds the accepted spec baseline; its embedded snippets are
+# documentation, not code — keep formatter/linter churn out of it.
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = ["scripts", "shared", "automation", "plugins"]
+exclude = ["**/__pycache__", ".venv"]

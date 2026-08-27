@@ -1,2 +1,61 @@
+# --- environment & secrets (PRD §6; ENVIRONMENT_SETUP) ---
+# Real values are user-provided at M8; only *.example.yaml files are tracked.
+config/env.local.yaml
+config/env.test.yaml
+config/env.prod.yaml
+config/env.ci.yaml
+config/notify.yaml
+
+# --- reports/: display-only scratch (ADR-010); keepers stay tracked ---
+reports/**
+!reports/**/
+!reports/**/.gitkeep
+
+# --- HAR captures (re-normalized through M4; keepers stay tracked) ---
+automation/api/har/**
+!automation/api/har/**/
+!automation/api/har/**/.gitkeep
+
+# --- per-run heavy evidence (ADR-012): run-summary.yaml + patch files stay
+# tracked; allure-results/, logs/, traces/ never enter git (keeper-free) ---
+iterations/*/runs/*/allure-results/**
+iterations/*/runs/*/logs/**
+iterations/*/runs/*/traces/**
+
+# --- raw-input binaries/large files under 00-raw (PRD §6): ignored here,
+# provenance preserved via iteration.yaml.source_manifest[] instead ---
+iterations/*/00-raw/**/*.zip
+iterations/*/00-raw/**/*.gz
+iterations/*/00-raw/**/*.tgz
+iterations/*/00-raw/**/*.tar
+iterations/*/00-raw/**/*.7z
+iterations/*/00-raw/**/*.rar
+iterations/*/00-raw/**/*.png
+iterations/*/00-raw/**/*.jpg
+iterations/*/00-raw/**/*.jpeg
+iterations/*/00-raw/**/*.gif
+iterations/*/00-raw/**/*.webp
+iterations/*/00-raw/**/*.pdf
+iterations/*/00-raw/**/*.har
+iterations/*/00-raw/**/*.mp4
+iterations/*/00-raw/**/*.mov
+iterations/*/00-raw/**/*.avi
+iterations/*/00-raw/**/*.bin
+iterations/*/00-raw/**/*.xlsx
+iterations/*/00-raw/**/*.docx
+iterations/*/00-raw/**/*.pptx
+
+# --- python toolchain ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.allure/
+playwright-report/
+
+# --- OS noise ---
 .DS_Store
+
+# --- local session tooling ---
 .mimosa/
