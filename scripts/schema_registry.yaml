@@ -2,14 +2,59 @@
 #
 # Single authority for "which schema validates which file" (ARCHITECTURE §1,
 # DATA_MODEL §11): consumers consult this table exclusively; nothing infers a
-# schema from filename similarity. `path_pattern` is a fnmatch glob relative
-# to the repo root; `schema` points at the JSON Schema file.
+# schema from filename similarity. `path_pattern` is an fnmatch glob relative
+# to the repo root (`*` may cross path separators — the file's own name
+# anchors the type). Each binding carries exactly one of:
+#   schema: <schema file>        — one schema validates
+#   any_of: [<schema files>]     — passes if ANY variant validates (used for
+#                                  the plugin envelope quarantine slot, where
+#                                  requirement vs api variant is decided by
+#                                  content, not by path)
 #
-# Phase 0 registers the iteration aggregate only. Phase 1 (task 1.1/1.2)
-# appends the remaining DATA_MODEL artifacts as their schema files land;
-# the scaffolder validates whatever is registered through this same path.
+# Placements follow DATA_MODEL ownership: requirements/test_points/
+# functional_cases → functional-test-design skill; api_spec/api_cases →
+# api-test-design skill; exemptions/iteration/traceability/run_summary →
+# scripts/schemas/; source payloads → plugins/_interface/schemas/.
 schema_version: "1.0"
 bindings:
   - artifact: iteration
     path_pattern: "iterations/*/iteration.yaml"
     schema: "scripts/schemas/iteration.schema.json"
+
+  - artifact: requirements
+    path_pattern: "iterations/*/requirements.yaml"
+    schema: ".agents/skills/functional-test-design/schemas/requirements.schema.json"
+
+  - artifact: exemptions
+    path_pattern: "iterations/*/exemptions.yaml"
+    schema: "scripts/schemas/exemptions.schema.json"
+
+  - artifact: test_points
+    path_pattern: "iterations/*/test_points.yaml"
+    schema: ".agents/skills/functional-test-design/schemas/test_points.schema.json"
+
+  - artifact: functional_cases
+    path_pattern: "iterations/*/functional-cases.yaml"
+    schema: ".agents/skills/functional-test-design/schemas/functional_cases.schema.json"
+
+  - artifact: api_spec
+    path_pattern: "iterations/*/api/spec.normalized.yaml"
+    schema: ".agents/skills/api-test-design/schemas/api_spec.schema.json"
+
+  - artifact: api_cases
+    path_pattern: "iterations/*/api/cases.yaml"
+    schema: ".agents/skills/api-test-design/schemas/api_cases.schema.json"
+
+  - artifact: traceability
+    path_pattern: "iterations/*/traceability.yaml"
+    schema: "scripts/schemas/traceability.schema.json"
+
+  - artifact: run_summary
+    path_pattern: "iterations/*/runs/*/run-summary.yaml"
+    schema: "scripts/schemas/run_summary.schema.json"
+
+  - artifact: source_payload
+    path_pattern: "iterations/*/00-raw/source-payload.yaml"
+    any_of:
+      - "plugins/_interface/schemas/requirement_source_payload.schema.json"
+      - "plugins/_interface/schemas/api_source_payload.schema.json"

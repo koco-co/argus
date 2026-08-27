@@ -133,6 +133,7 @@ EXPECTED_FILES: set[str] = {
     "knowledge/optimization-candidates.yaml",
     "automation/conftest.py",
     "scripts/new_iteration.py",
+    "scripts/_registry_lib.py",
     "scripts/schema_registry.yaml",
     "scripts/schemas/iteration.schema.json",
     "scripts/validate_schema.py",
@@ -172,8 +173,10 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
     },
     "scripts": {
         "new_iteration.py",
+        "_registry_lib.py",
         "schema_registry.yaml",
-        # Roadmap 0.3 stub entries — real logic lands in Phases 1-2.
+        # Roadmap 0.3 stub entries — real logic lands in Phases 1-2
+        # (validate_schema.py is real since 1.2).
         "validate_schema.py",
         "validate_iteration.py",
         "check_db_readonly.py",
@@ -188,6 +191,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_repo_structure.py",
         "test_schemas.py",
         "test_docs_schemas.py",
+        "test_schema_validator.py",
     },
     "target-app": set(),
 }

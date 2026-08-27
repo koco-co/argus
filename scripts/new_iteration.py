@@ -18,8 +18,6 @@ Rules enforced here (v1):
 from __future__ import annotations
 
 import argparse
-import fnmatch
-import json
 import os
 import re
 import shutil
@@ -29,10 +27,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import Draft7Validator, FormatChecker
+from _registry_lib import (
+    DEFAULT_REGISTRY,
+    RegistryError,
+    schema_errors,
+)
+from _registry_lib import (
+    load_registry as _load_registry,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-REGISTRY_PATH = REPO_ROOT / "scripts" / "schema_registry.yaml"
+REGISTRY_PATH = DEFAULT_REGISTRY
 
 ITERATION_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 # Terminal states per ARCHITECTURE §5.1: everything else counts as in-progress
@@ -55,49 +60,42 @@ class NewIterationError(Exception):
     """User-facing scaffolding failure."""
 
 
-def load_registry(registry_path: Path) -> list[dict[str, str]]:
-    data = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
-    bindings = data.get("bindings") if isinstance(data, dict) else None
-    if not isinstance(bindings, list) or not bindings:
-        raise NewIterationError(f"schema registry {registry_path} has no bindings")
-    for binding in bindings:
-        for key in ("artifact", "path_pattern", "schema"):
-            if not isinstance(binding.get(key), str) or not binding[key]:
-                raise NewIterationError(
-                    f"schema registry binding is missing string field {key!r}: {binding}"
-                )
-    return bindings
+def load_registry(registry_path: Path = REGISTRY_PATH) -> list[dict[str, Any]]:
+    try:
+        return _load_registry(registry_path)  # type: ignore[arg-type]
+    except RegistryError as exc:
+        raise NewIterationError(str(exc)) from exc
 
 
-def binding_for(bindings: list[dict[str, str]], relative_path: str) -> dict[str, str] | None:
-    for binding in bindings:
-        if fnmatch.fnmatch(relative_path, binding["path_pattern"]):
-            return binding
-    return None
+def binding_for(bindings: list[dict[str, Any]], relative_path: str) -> dict[str, Any] | None:
+    """Kept for callers that already hold a bindings list."""
+    from _registry_lib import binding_for as _binding_for
+
+    return _binding_for(bindings, relative_path)
 
 
 def validate_artifact(
     canonical_path: str,
     document: Any,
     registry_path: Path = REGISTRY_PATH,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Validate a document against the schema its canonical artifact path is
     bound to in the registry. Raises NewIterationError for unregistered paths
     or validation failures, naming the exact JSON path of each violation."""
-    bindings = load_registry(registry_path)
-    binding = binding_for(bindings, canonical_path)
-    if binding is None:
-        raise NewIterationError(f"unregistered artifact path: {canonical_path}")
-    schema_path = REPO_ROOT / binding["schema"]
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    validator = Draft7Validator(schema, format_checker=FormatChecker())
-    errors = sorted(validator.iter_errors(document), key=lambda e: list(e.absolute_path))
+    try:
+        bindings = _load_registry(registry_path)
+        from _registry_lib import binding_for as _binding_for
+
+        binding = _binding_for(bindings, canonical_path)
+        if binding is None:
+            raise NewIterationError(f"unregistered artifact path: {canonical_path}")
+        errors = schema_errors(binding, document)
+    except RegistryError as exc:
+        raise NewIterationError(str(exc)) from exc
     if errors:
-        details = "; ".join(
-            f"{'/'.join(str(p) for p in err.absolute_path) or '<root>'}: {err.message}"
-            for err in errors
+        raise NewIterationError(
+            f"{canonical_path} failed {binding['artifact']}: {'; '.join(errors)}"
         )
-        raise NewIterationError(f"{canonical_path} failed {binding['schema']}: {details}")
     return binding
 
 

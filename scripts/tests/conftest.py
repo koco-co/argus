@@ -19,6 +19,8 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 def _load_script(module_name: str) -> Any:
     module_path = SCRIPTS_DIR / f"{module_name}.py"
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS_DIR))
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:  # pragma: no cover - defensive
         raise ImportError(f"cannot load {module_path}")

@@ -53,14 +53,26 @@ def test_fresh_iteration_validates_green_via_registry(new_iteration: Any, tmp_pa
 def test_registry_binding_matches_data_model_placement(
     new_iteration: Any,
 ) -> None:
-    bindings = new_iteration.load_registry(new_iteration.REGISTRY_PATH)
-    assert bindings == [
-        {
-            "artifact": "iteration",
-            "path_pattern": "iterations/*/iteration.yaml",
-            "schema": "scripts/schemas/iteration.schema.json",
-        }
-    ]
+    _FTD = ".agents/skills/functional-test-design/schemas/"
+    bindings = {b["artifact"]: b for b in new_iteration.load_registry(new_iteration.REGISTRY_PATH)}
+    expected_schemas = {
+        "iteration": "scripts/schemas/iteration.schema.json",
+        "requirements": _FTD + "requirements.schema.json",
+        "exemptions": "scripts/schemas/exemptions.schema.json",
+        "test_points": _FTD + "test_points.schema.json",
+        "functional_cases": _FTD + "functional_cases.schema.json",
+        "api_spec": ".agents/skills/api-test-design/schemas/api_spec.schema.json",
+        "api_cases": ".agents/skills/api-test-design/schemas/api_cases.schema.json",
+        "traceability": "scripts/schemas/traceability.schema.json",
+        "run_summary": "scripts/schemas/run_summary.schema.json",
+    }
+    assert set(bindings) == (set(expected_schemas) | {"source_payload"})
+    for artifact, schema in expected_schemas.items():
+        binding = bindings[artifact]
+        assert binding["path_pattern"].startswith("iterations/"), artifact
+        assert binding["schema"] == schema, artifact
+    payload = bindings["source_payload"]
+    assert "any_of" in payload and "schema" not in payload
     schema = json.loads(
         (new_iteration.REPO_ROOT / "scripts/schemas/iteration.schema.json").read_text()
     )
