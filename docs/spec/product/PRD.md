@@ -2,7 +2,7 @@
 
 ## AI-Driven Automation Framework
 
-Version: 1.5 · Status: Revised baseline (v1.0 + Claude/Grok/GPT/orphan-test-review adoptions) · Performance/load testing is reserved for post-v1 · Companion docs: ARCHITECTURE.md, DATA_MODEL.md, GLOSSARY.md, ROADMAP.md
+Version: 1.6 · Status: Revised baseline (v1.0 + Claude/Grok/GPT/post-v1.4/orphan-test/session-recovery review adoptions) · Performance/load testing is reserved for post-v1 · Companion docs: ARCHITECTURE.md, DATA_MODEL.md, GLOSSARY.md, ROADMAP.md
 
 > **Reading rule**: machine contracts (JSON Schemas, field dictionaries) are defined authoritatively in [DATA_MODEL](../architecture/DATA_MODEL.md); IDs and naming formats in [GLOSSARY.md](./GLOSSARY.md). This PRD defines *what* and *in which state*; it does not restate schema fields.
 
@@ -193,6 +193,7 @@ Same shape as 4.5; input `api/cases.yaml` (or a HAR pre-normalized through M4/M5
 - **Affected-module regression**: after a patch, compute the AST import closure of changed project modules, then run the complete test directory for every business module in that closure using the same `automation/{web,api}/tests/<module>/` selection rule; this is broader than the failing subset and narrower than the whole repository.
 - **Output**: `iterations/<id>/runs/<run_id>/` — `run-summary.yaml`, allure-results/, logs/, per-attempt patch refs (ADR-010); nothing under `runs/` is ever overwritten by a later run. **Storage policy (ADR-012)**: `run-summary.yaml` and the patch texts behind `attempts[].diff_ref` are committed (they are the acceptance-reconstruction minimum); allure-results/, traces/, and logs/ stay out of git — local-session evidence is reviewed inside the session before acceptance, CI evidence lives as workflow artifacts with a retention window and a link from the PR.
 - **Runtime rule**: the self-debug loop is **session-side only** (agent-driven skill). CI never runs self-debug — CI executes committed tests read-only. Write-actor separation inside the loop: the *repair actor* may touch only the allow-listed paths below; all bookkeeping (`attempts[]` appends, scratch-report archiving into `runs/<run_id>/`) is performed exclusively by `scripts/self_debug_helper.py` acting as *evidence recorder* and never counts as a patch (`check_patch_scope.py` excludes recorder paths).
+- **Session-recovery protocol**: a debug loop may outlive the session that started it (timeout, crash, hand-off). The evidence recorder therefore checkpoints resumable state into the run directory (`runs/<run_id>/state.json`: `attempt_number`, `patched_files[]`, `verification_pending`) before each attempt boundary — after a patch is applied and before its re-run. A fresh session must read this state first: `verification_pending: true` means the verification battery runs **before** any new patch decision; budget counting resumes from the checkpointed attempt number, never restarts. The checkpoint joins the committed evidence set (ADR-012), so recovery itself is auditable.
 
 |State|Entry condition|Exit condition → Next state|Actor|
 |---|---|---|---|
@@ -205,7 +206,7 @@ Same shape as 4.5; input `api/cases.yaml` (or a HAR pre-normalized through M4/M5
 
 **Patch scope (hard rule):**
 
-- May modify: locator/wait/type/import implementation in `automation/web/{pages,components}/**` and `automation/api/{clients,models}/**`. A `data_issue` may only adjust reseed-hook wiring or namespace arguments; it may not change seed formulas, seeded fixture `expected_*` values, or test data meaning.
+- May modify: locator/wait/type/import implementation in `automation/web/{pages,components}/**` and `automation/api/{clients,models}/**`. A `data_issue` may only adjust reseed-hook wiring or namespace arguments; it may not change seed formulas, seeded fixture `expected_*` values, or test data meaning. Seed-registry formulas are frozen **by design**: the expected values are derived from them, so a suspected wrong formula is a product/requirement question and escalates with diagnosis — the user corrects the registry through the reopen protocol (auto-editing it would let the repair loop rewrite its own oracle).
 - Must never modify: any `assert`/`expect` expression or expected value under `automation/**/tests/**`; expected-result formulas or `expected_*` fields under `automation/**/fixtures/**` and `shared/testdata/**`; case expectations in `iterations/**`; markers/tags, pytest collection configuration, `config/**`, `.agents/skills/**` (incl. schemas), `AGENTS.md`, or any file outside the allow-list.
 - Banned patterns: `pytest.skip`/`pytest.xfail`/`@pytest.mark.skip|xfail`, `assert True`, bare `try/except Exception: pass`, deleting or loosening existing assertions, moving tests out of collection.
 
@@ -287,7 +288,7 @@ Aligned with Roadmap Phase 9; a release can claim v1 when all hold:
 1. Two independent iterations have gone end-to-end from raw requirement to merged, passing, traceable automation — one UI-led, one API-led — with **no hand-written automation for iteration cases** (framework infrastructure is hand-written by design: `shared/` utilities, conftest files, harness smoke tests, `scripts/tests`; enforced mechanically by `check_orphan_tests.py`). The UI iteration proves R→T→C→nodeid; the API iteration proves R→A→nodeid.
 2. Every confirmation-gated transition in those iterations is reconstructable from their `iterations/<id>/` directories alone (approvals + events + manifests present).
 3. `check_coverage.py --tier from-iteration` proves the complete branch-specific chain for both merged iterations; every exemption carries a reason.
-4. Self-debug transcripts show zero mid-loop user contact and zero patches touching forbidden scope; every cycle has a passing patch-scope verdict and the final diff review confirms no assertion weakening (audit rule §4.7).
+4. The persisted run evidence — `attempts[]` failure classes, per-cycle patch refs (`diff_ref`), patch-scope verdicts, and the session-recovery checkpoints — shows zero mid-loop user contact and zero patches touching forbidden scope; the final diff review confirms no assertion weakening (audit rule §4.7). Free-form chat history is not an audit artifact: decision-bearing content (clarifications, acceptances, transitions) is persisted structurally via `ambiguities[]`, `approvals[]`, and `events[]`.
 5. CI green on GitHub Actions: static-checks job (schemas, state/staleness, layering, POM boundary, DB read-only, secret scan, branch-specific coverage, export semantics, and patch scope) on every PR; e2e runs for release-targeted PRs and for other PRs that change `automation/**` or `iterations/**`, executing the suite against the pinned local target-app harness.
 
 ---

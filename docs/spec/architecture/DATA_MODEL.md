@@ -1,6 +1,6 @@
 # Data Model
 
-Version: 1.5 · Schema contracts updated after the Claude, Grok, GPT, and post-v1.4 review adoptions.
+Version: 1.6 · Schema contracts updated after the Claude, Grok, GPT, and post-v1.5 review adoptions.
 
 Authoritative machine contracts for every YAML artifact crossing a layer boundary. Architecture §1's validation layer enforces these; PRD §2–§5 defines their business meaning. Field-level rules not expressible in JSON Schema (cross-file references, ID uniqueness, staged coverage) live in the **semantic checks** listed in §11 and are enforced by scripts, not prose.
 
@@ -433,6 +433,12 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
         }
       }
     },
+    "normalization_warnings": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["code", "detail"],
+        "properties": {"code": {"type": "string"}, "detail": {"type": "string"}, "location": {"type": "string"}}}
+    },
     "source_refs": {
       "type": "array", "minItems": 1,
       "items": {"type": "object", "additionalProperties": false,
@@ -498,9 +504,13 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
         "enum": {"type": "array", "minItems": 1},
         "required": {"type": "array", "items": {"type": "string"}},
         "properties": {"type": "object", "additionalProperties": {"$ref": "#/definitions/schema_fragment"}},
-        "items": {"$ref": "#/definitions/schema_fragment"}
+        "items": {"$ref": "#/definitions/schema_fragment"},
+        "allOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "oneOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "anyOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}}
       },
-      "oneOf": [{"required": ["type"]}, {"required": ["$ref"]}]
+      "oneOf": [{"required": ["type"]}, {"required": ["$ref"]},
+                 {"anyOf": [{"required": ["allOf"]}, {"required": ["oneOf"]}, {"required": ["anyOf"]}]}]
     },
     "generated_from": {
       "type": "object", "additionalProperties": false,
@@ -513,6 +523,8 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
 ```
 
 Semantic check: when an OpenAPI source uses `components.schemas`, the normalized spec must retain every referenced component schema (including nested `$ref` links) and reject dangling references. Inline parameter, request-body, and response schemas remain valid when the source has no component references; the normalizer may inline only when it can preserve equivalent type information.
+
+**Reference-resolution rules**: the normalizer enforces a **maximum `$ref` resolution depth of 5** (flattening depth, not document depth — mutually recursive components are preserved as `$ref` links, never inlined into a cycle). Beyond the limit, a branch degrades to `type: object` and records an entry in the top-level `normalization_warnings[]` (`code`, `detail`, `location`) instead of failing or silently truncating. Combinators (`allOf`/`oneOf`/`anyOf`) are preserved verbatim as legal `schema_fragment` properties — dropping or flattening them into pseudo-objects is prohibited because their semantics drive negative-case generation in M5. `check_api_models.py` treats a warning-degraded branch as "structure not sufficient", so M7 escalates instead of inventing typed models for it.
 
 **Test projection, not lossless replacement**: `spec.normalized.yaml` is a *derived view* of the original interface description. The untouched source OpenAPI document (or HAR/postman export) is committed under the iteration's `00-raw/` with its sha256 in `iteration.yaml.source_manifest[]`, and the matching `source_refs[].location` points there. Structures this projection cannot carry (servers, security schemes/scopes, media-type variants beyond `content_type`, headers on responses, callbacks/webhooks) remain authoritative in the source file; M7 generates typed request/response models only for operations whose structures survived normalization intact, and escalates to the user instead of inventing types where they did not. Unrecoverable unknowns are recorded as explicit notes on the endpoint (`authentication` prose, missing examples), never silently filled.
 
@@ -596,9 +608,13 @@ Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json`. Fixes vs
         "enum": {"type": "array", "minItems": 1},
         "required": {"type": "array", "items": {"type": "string"}},
         "properties": {"type": "object", "additionalProperties": {"$ref": "#/definitions/schema_fragment"}},
-        "items": {"$ref": "#/definitions/schema_fragment"}
+        "items": {"$ref": "#/definitions/schema_fragment"},
+        "allOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "oneOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "anyOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}}
       },
-      "oneOf": [{"required": ["type"]}, {"required": ["$ref"]}]
+      "oneOf": [{"required": ["type"]}, {"required": ["$ref"]},
+                 {"anyOf": [{"required": ["allOf"]}, {"required": ["oneOf"]}, {"required": ["anyOf"]}]}]
     },
     "generated_from": {
       "type": "object", "additionalProperties": false,
@@ -755,7 +771,7 @@ Plugins emit a **normalized source envelope**, deliberately distinct from intern
 }
 ```
 
-A successful fetch persists `{...payload}`; a failed fetch persists `{..., error: {code, message}}` instead of raising a raw exception across the boundary — the two variants are mutually exclusive by schema (`error` present ⇒ no `content`). The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; this path is therefore the *quarantine slot*: downstream skills may consume it only after schema validation succeeds, while unrelated raw inputs remain exempt from artifact-schema validation and are revalidated on the exact payload path by pre-commit and CI. Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s) plus response-size and decompression limits enforced by the runner; fetched content is **untrusted data** — instruction-like text inside it is clarification material for M1/M4, never a directive the agent executes, and it never flows verbatim into `knowledge/`.
+A successful fetch persists `{...payload}`; a failed fetch persists `{..., error: {code, message}}` instead of raising a raw exception across the boundary — the two variants are mutually exclusive by schema (`error` present ⇒ no `content`). The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; this path is therefore the *quarantine slot*: downstream skills may consume it only after schema validation succeeds, while unrelated raw inputs remain exempt from artifact-schema validation and are revalidated on the exact payload path by pre-commit and CI. **Schema evolution note**: these envelope schemas have never run against a real connector (v1 ships zero plugins); during v1 they may extend **additively only** (new optional fields) without a `schema_version` bump — breaking changes wait for the first real integration (RISKS #17). Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s) plus response-size and decompression limits enforced by the runner; fetched content is **untrusted data** — instruction-like text inside it is clarification material for M1/M4, never a directive the agent executes, and it never flows verbatim into `knowledge/`.
 
 ## 11. What JSON Schema deliberately does not cover
 

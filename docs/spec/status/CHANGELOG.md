@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-27 — v1.5 baseline review adoption (v1.5 → v1.6)
+
+Input: external review of the v1.5 tree (20 findings: P0×2 / P1×6 / P2×9 / P3×3). Adjudication table presented and confirmed before editing. Disposition: 10 adopted, 6 lightweight/partial, 4 rejected with recorded rationale.
+
+Adopted:
+- **Session-recovery protocol** (P0-1): `self_debug_helper.py` checkpoints resumable state (`attempt_number`, `patched_files[]`, `verification_pending`) into `runs/<run_id>/state.json` at attempt boundaries; a fresh session must consume it — pending verification runs before any new patch decision, budget resumes from the checkpoint. Recovery fixture added to Roadmap 5.3.
+- **CI secrets injection rule** (P0-2): secrets travel only via workflow `env:` mapping — never shell args or inline `echo` (the v1.4 skeleton's `echo > env.ci.yaml` replaced with in-process `settings.py assemble --env ci`); `settings.py` gains env-var overrides so most jobs need no secrets file at all.
+- Optimizer candidate registry `knowledge/optimization-candidates.yaml` (M12-maintained feed; 8.2 reads candidates from it, threshold counted by the registry).
+- OpenAPI projection: `schema_fragment` now legally carries `allOf`/`oneOf`/`anyOf` (previously rejected by `additionalProperties: false` — the review's "already supported" claim was wrong and is corrected in the record), `$ref` flattening capped at depth 5 with `normalization_warnings[]` for degradations, and warning-degraded branches make M7 escalate rather than invent typed models.
+- Failure-classification decision tree (element-absent vs element-present mismatch etc.) with fabricated-evidence fixtures in 5.3; Dependabot monthly cadence + immediate security path; weekly-run failure escalation (notify → 2×issue; scheduled runs never gate merges); `<behavior>` naming rule in GLOSSARY + 5.4 check; skill version SemVer semantics + regenerate-old-iterations constraint + recorded merge-evaluation criteria for the four generation skills; non-binding minimum model-capability guidance in AGENT_BRIEF (5.5 quartet as benchmark); RISKS additions #17 (plugin envelope untested, additive-only during v1) and #18 (iterations/ scan cost, archival deferred); iteration_id time prefix marked recommended-not-mandatory.
+
+Rejected with rationale (see RISKS rejected-proposals posture): letting the repair loop edit seed-registry formulas (the formula defines the expected value — self-certifying; wrong formula escalates to the user via reopen, now stated explicitly in PRD §4.7 + CODING_STANDARDS); restructuring `.agents/skills/` + symlinks into an agent-agnostic resolver (symlinks are the documented Claude Code adapter; multi-agent resolver is post-v1, Deferred); structured precondition objects (no mechanical consumer in v1); a `conversation-log.jsonl` subsystem (decision-bearing content is already persisted structurally — PRD §7.4 reworded to reference persisted run evidence instead of the unverifiable "transcripts").
+
 ## 2026-08-27 — v1.4 baseline review adoption (v1.4 → v1.5)
 
 Input: external review of the v1.4 snapshot (20 findings: P1×7 / P2×8 / P3×5, no P0). Plan presented and confirmed before editing; every finding re-verified against the working tree first. All 20 dispositioned: 14 adopted, 5 lightweight/partial, 1 sub-item rejected (core/adapter ADR draft stays deferred).

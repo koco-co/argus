@@ -12,7 +12,7 @@ Prerequisites, initialization steps, and every operational command the framework
 | Playwright browsers | **Chromium only** (v1 decision; Firefox/WebKit installs are not performed) | single validated browser matrix |
 | Network access to PyPI + GitHub Actions runners | build time only | dependency sync, CI |
 
-Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples.
+Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. **CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process.
 
 ## Planned Base Configuration (authored in Phase 0)
 
