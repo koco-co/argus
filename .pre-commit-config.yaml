@@ -1,0 +1,45 @@
+# Pre-commit guardrails (Roadmap 0.3; finalized at 1.16).
+#
+# - Remote ruff hooks enforce immediately.
+# - The four local validator hooks no-op-clean until their backing logic is
+#   authored across Phases 0-2: each entry script exists as an explicit stub
+#   that names its implementing Roadmap task and exits 0 (the prescribed
+#   entry paths are final — Phase 1+ fills the same files with real logic).
+#   Hook `files:` filters scope each hook to the artifacts it guards.
+# - No hook may mutate tracked files during a check: ruff-format runs with
+#   --check; local hooks are read-only validators (fix modes are explicit,
+#   separate CLI invocations committed by a human/bot afterwards).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.4
+    hooks:
+      - id: ruff
+      - id: ruff-format
+        args: [--check]
+
+  - repo: local
+    hooks:
+      - id: validate-schema
+        name: validate-schema (registered iteration artifacts via schema_registry.yaml)
+        entry: uv run python scripts/validate_schema.py
+        language: system
+        files: ^iterations/.*\.yaml$
+        require_serial: true
+      - id: validate-iteration-state
+        name: validate-iteration-state (state machine + staleness)
+        entry: uv run python scripts/validate_iteration.py
+        language: system
+        files: ^iterations/[^/]+/iteration\.yaml$
+        require_serial: true
+      - id: no-db-writes
+        name: no-db-writes (write-verb scan on DB-touching code)
+        entry: uv run python scripts/check_db_readonly.py
+        language: system
+        files: ^(shared/(db|assertions)|automation)/.*\.py$
+        require_serial: true
+      - id: check-secrets
+        name: check-secrets (credential-pattern scan over iteration text incl. 00-raw)
+        entry: uv run python scripts/check_secrets.py
+        language: system
+        files: ^iterations/.+/
+        require_serial: true
