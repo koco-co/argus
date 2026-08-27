@@ -1,0 +1,320 @@
+# Architecture Design Document
+
+## AI-Driven Automation & Performance Testing Framework
+
+Version: 1.1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
+
+> Machine contracts (JSON Schemas) are defined authoritatively in [DATA_MODEL.md](./DATA_MODEL.md); this document owns layering, directory structure, and dependency rules.
+
+---
+
+## 1. Layered Architecture Overview
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  Plugin Interface Layer            plugins/                        │
+│  fetch(source_ref) -> normalized SOURCE PAYLOAD envelope.           │
+│  run_plugin.py persists the envelope to disk BEFORE validation      │
+│  against *_source_payload.schema.json. No test-design logic.        │
+│  No LLM calls inside a plugin.                                      │
+└───────────────────────────────────────────────────────────────────┘
+                              │ persisted source-payload YAML
+                              ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  Skill Driving Layer                .agents/skills/                │
+│  Markdown instruction packages (no importable Python). Convert      │
+│  source payloads into internal workflow YAMLs; generate automation  │
+│  code only from schema-valid case data (HAR paths route through     │
+│  M4/M5 normalization first — PRD §3 M7). Skills invoke plugins      │
+│  ONLY via scripts/run_plugin.py (process rule, §3).                 │
+└───────────────────────────────────────────────────────────────────┘
+                              │ schema-valid internal YAML only
+                              ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  Data Schema Validation Layer       skills' schemas/ +              │
+│                                     scripts/schemas/ +              │
+│                                     scripts/schema_registry.yaml    │
+│  validate_schema.py = single implementation; called by skills,      │
+│  pre-commit, CI. Explicit filename↔schema registry — never          │
+│  filename-similarity inference.                                     │
+└───────────────────────────────────────────────────────────────────┘
+                              │ generates code into ↓
+                              ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  Long-Term Automation Asset Layer   automation/                     │
+│  Organized by business module, independent of iteration lifecycle.  │
+│  Linked back to iterations/ only through traceability.yaml row ids; │
+│  never reads iteration YAML at test runtime (tests read their own   │
+│  pytest.mark metadata).                                             │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**Two distinct rule families** (v1.0 conflated them):
+
+- **Data-flow direction** (arrows above): how information moves between layers.
+- **Dependency rules** (§3 table): what each *Python-code* directory may import. These apply to real code only (`plugins/`, `scripts/`, `shared/`, `automation/`); `.agents/skills/` is Markdown and cannot be import-scanned — its boundary rules are process rules verified by review plus a lightweight grep check that skills never name direct platform-SDK usage outside `run_plugin.py` invocation.
+
+---
+
+## 2. Complete Directory Structure
+
+Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 scaffolds exactly this; additions vs v1.0 flagged ⭐):
+
+```
+<target-app>-automation/
+├── AGENTS.md                        # ⭐ single source of operating rules (Phase plan: Roadmap 0.6)
+├── CLAUDE.md                        # `@AGENTS.md` include only
+├── README.md
+├── .agents/skills/                  # canonical: test-design, api-test-design,
+│   │                                # web-automation-generation, api-automation-generation,
+│   │                                # self-debug-runner, skill-self-optimizer
+│   │                                # each: SKILL.md + schemas/ + examples/
+│   └── <skill>/versions/            # ⭐ prior SKILL.md snapshots kept by optimizer (Roadmap 8.2)
+├── .claude/skills/                  # one symlink per skill → .agents/skills/<name>
+├── plugins/
+│   ├── README.md
+│   ├── registry.yaml
+│   ├── _interface/
+│   │   ├── contract.md
+│   │   └── schemas/                 # ⭐ requirement_source_payload.schema.json,
+│   │                                #    api_source_payload.schema.json (DATA_MODEL §10)
+│   ├── requirement-sources/         # placeholder
+│   └── api-sources/                 # placeholder
+├── config/
+│   ├── env.example.yaml             # committed placeholder shape (incl. read-only-role comment)
+│   ├── env.local.yaml               # gitignored
+│   ├── env.test.yaml                # gitignored
+│   ├── env.prod.yaml                # gitignored (read-only-marked tests only)
+│   ├── env.ci.yaml                  # ⭐ generated by CI from repository secrets; never committed
+│   ├── notify.example.yaml          # ⭐ committed; notify.yaml remains gitignored
+│   └── notify.yaml                  # gitignored
+├── iterations/<iteration-id>/
+│   ├── iteration.yaml               # ⭐ global state + approvals/events/source_manifest (DATA_MODEL §3)
+│   ├── 00-raw/                      # text inputs tracked w/ secret scan; binaries/large ignored,
+│   │                                # recorded instead in iteration.yaml.source_manifest[]
+│   ├── requirements.yaml / requirement.md
+│   ├── test_points.yaml / test_points.md
+│   ├── functional-cases.yaml
+│   ├── api/spec.normalized.yaml, api/cases.yaml
+│   ├── exports/*.xmind, exports/*.xlsx
+│   ├── traceability.yaml
+│   └── run-summary.yaml
+├── automation/
+│   ├── web/{pages,components,fixtures,tests}/<module>/, web/conftest.py
+│   ├── mobile/{android,ios,screens,tests}/<module>/, mobile/conftest.py
+│   ├── miniprogram/{pages,tests}/<module>/, miniprogram/conftest.py
+│   ├── api/{clients,models,tests}/<module>/, api/har/ (gitignored), api/conftest.py
+│   ├── perf/{locustfiles,scenarios}/<module>/
+│   └── conftest.py                  # ⭐ root conftest: TEST_ENV=prod read-only collection gate,
+│                                    #    marker registration (--strict-markers)
+├── shared/
+│   ├── utils/
+│   ├── assertions/
+│   ├── config/settings.py           # ⭐ now part of the canonical tree (was undeclared in v1.0)
+│   ├── db/readonly_client.py        # sole sanctioned DB access path (§6)
+│   ├── notify/{base,dispatcher}.py  # adapters dingtalk/feishu/wecom/email + dispatcher
+│   └── testdata/                    # ⭐ seeding/cleanup hooks per environment (PRD M8/M9 data_issue;
+│                                    #    policy: engineering/TESTING_STRATEGY harness & seed section)
+├── reports/{allure-results,allure-report}/   # gitignored content, tracked .gitkeep
+├── knowledge/{patterns.md,anti-patterns.md,target-app-notes/<target-app>.md}
+├── scripts/
+│   ├── new_iteration.py             # scaffolds iterations/<id>/ incl. iteration.yaml
+│   ├── schema_registry.yaml         # ⭐ explicit artifact-path ↔ schema binding
+│   ├── schemas/                     # ⭐ iteration / traceability / run_summary schemas (DATA_MODEL §3,8,9)
+│   ├── validate_schema.py
+│   ├── validate_iteration.py        # ⭐ state-transition legality + staleness (hash chain) checks
+│   ├── render_md.py
+│   ├── export_xmind.py
+│   ├── export_xlsx.py
+│   ├── check_coverage.py            # tiered coverage gate (PRD §5.1)
+│   ├── check_api_coverage.py        # ⭐ endpoint happy/negative coverage
+│   ├── check_db_readonly.py
+│   ├── check_pom_boundary.py        # selectors-in-tests + assertions-in-pages
+│   ├── check_api_models.py          # ⭐ client methods ↔ pydantic models, no raw dicts
+│   ├── check_test_markers.py        # ⭐ module/case_id/iteration markers present & consistent
+│   ├── check_layering.py
+│   ├── check_secrets.py             # ⭐ credential-pattern scan over trackable text
+│   ├── run_plugin.py
+│   ├── notify.py                    # ⭐ CLI wrapper around shared/notify/dispatcher.py
+│   ├── self_debug_helper.py         # ⭐ budget bookkeeping/attempt-log helper used by the agent-driven loop;
+│   │                                #    the LOOP ITSELF is the skill (session-side), never CI (ADR-004)
+│   ├── target_app_up.py / seed.py / reset.py / healthcheck.py / down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
+│   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
+│       └── fixtures/                # incl. a checked-in hand-written sample iteration
+├── .github/workflows/{ci.yml,regression.yml}
+├── Jenkinsfile
+├── pyproject.toml, uv.lock, .python-version
+├── .pre-commit-config.yaml, Makefile, .gitignore
+└── docs/                            # development documentation set (see AGENT_BRIEF index)
+```
+
+Gitignore rules resolve the v1.0 conflict between "reports/ ignored" and ".gitkeep committed": ignore directory *contents*, re-include keepers — `reports/**`, `!reports/**/.gitkeep`; same pattern for `automation/api/har/`.
+
+---
+
+## 3. Module Decoupling Rules
+
+|Directory|May depend on|Must NOT depend on|Enforcement|
+|---|---|---|---|
+|`plugins/`|stdlib, `httpx`, target-platform SDKs|`.agents/skills/` internals, `automation/`, `iterations/`|import scan (`check_layering.py`)|
+|`scripts/`|`plugins/` (loader), `shared/`, schemas, `iterations/` files as **data**|direct platform SDKs beyond loading registered plugins|import scan + path-read lint on `automation` writing side|
+|`shared/`|stdlib, declared deps (`httpx`, `pydantic`, `yaml`)|`iterations/**` at runtime, `scripts/`, `plugins/`, `.agents/skills/`|import scan|
+|`automation/`|`shared/`, pytest stack, playwright/appium/httpx|`iterations/**` (import OR path-open at test time), `.agents/skills/`, `scripts/`|import scan + AST/path-open scan in CI|
+|Skills (Markdown)|— as process rules —|direct platform calls (only via `run_plugin.py`); editing other skills (except optimizer after confirmation)|review + grep check in CI|
+
+Corrections vs v1.0: the prose arrows "`plugins/` → `skills`" described **data flow**, while the table forbade skills-side direct plugin imports — both statements were right but indistinguishable; they are now explicitly separated (§1). The scanner targets Python directories only; "skills call scripts" stays a documented process constraint because there is nothing to import-scan. Honest limit noted: import scanning cannot catch every runtime path-read of iteration YAML by devious means; the check covers AST-level `open()`/`Path()` literals referencing `iterations/` inside `automation/` and accepts residual risk (tracked in RISKS_AND_KNOWN_ISSUES).
+
+---
+
+## 4. Data Contracts
+
+All artifact schemas, the registry binding, and semantic-check ownership live in [DATA_MODEL.md](./DATA_MODEL.md) (single authority — v1.0's "as previously specified" dangling reference is retired).
+
+---
+
+## 5. Code Conventions for Generated Assets
+
+POM structure/rules (page objects carry locators+actions only; tests carry assertions only; selector-free test files; reuse-before-create) and API-client conventions (every method ↔ typed pydantic models, no raw dicts) are specified in [CODING_STANDARDS](../engineering/CODING_STANDARDS.md) with examples. Mechanical enforcement summary here:
+
+|Rule|Checker|Scope|
+|---|---|---|
+|No locator call inside `*/tests/` (`get_by_*`, `locator(`, `page.click(".sel")`, `page.fill("#id",…)`, XPath helpers)|`check_pom_boundary.py` (AST + call-pattern scan)|`automation/{web,miniprogram,mobile}/tests/**`|
+|No `assert`/`expect` inside page/component/screen objects|same script, mirrored rule|`**/{pages,components,screens}/**`|
+|Markers present & consistent with path/module tag|`check_test_markers.py`|all generated tests|
+|API clients dict-free, model-linked|`check_api_models.py`|`automation/api/{clients,tests}/**`|
+
+---
+
+## 6. DB Read-Only Assertion Interception
+
+Three independent layers, so a single mistake can't cause a write. **The authoritative control is Layer 1** — the regex/wrapper layers are defense-in-depth, never treated as the security boundary (stakeholder decision retained; rationale: SQL syntax evasion makes static matching incomplete — see RISKS_AND_KNOWN_ISSUES).
+
+**Layer 1 — DB role.** Every `config/env.*.yaml` DSN points to a SELECT-only-granted role. Documented in `env.example.yaml` comments; deployment concern, not code-enforced.
+
+**Layer 2 — wrapper class.** `shared/db/readonly_client.py` is the only sanctioned DB access path for test/assertion code:
+
+```python
+_STATEMENT_VERBS = {"select", "with", "explain", "show", "describe", "table", "pragma"}
+
+class ReadOnlyDBClient:
+    def query(self, sql: str, params: tuple = ()) -> list[dict]:
+        head = sql.lstrip("( \n\t").split(None, 1)[0].lower().rstrip(";")
+        if head not in _STATEMENT_VERBS:            # leading-keyword allow-list,
+            raise PermissionError(f"Blocked by ReadOnlyDBClient: {sql[:80]!r}")
+        return self._conn.execute(sql, params).fetchall()
+```
+
+Design change vs v1.0: the denylist regex scanned the whole statement and false-blocked legitimate reads containing words like `'INSERT'` inside string literals; an allow-list on the statement's leading keyword fixes the common false positive without a SQL-parser dependency. Multi-statement strings (e.g. `"SELECT 1; DROP TABLE x"`) are rejected outright by refusing any `;` followed by non-whitespace. The connection object comes from a driver chosen per target app (Medusa ⇒ PostgreSQL, e.g. psycopg) — v1.0's `import httpx` comment was a placeholder error.
+
+**Layer 3 — static scans.**
+- Pre-commit: `check_db_readonly.py` scans `shared/db/**` for write verbs appearing as executable code identifiers; uses the unified denylist (`INSERT UPDATE DELETE MERGE REPLACE UPSERT CALL EXEC COPY GRANT ALTER DROP TRUNCATE CREATE`), implemented over AST tokens so string/comment literals don't trip it; explicit escape hatch only via reviewed `# db-write-ok: <reason>` (used solely by the checker's own unit tests).
+- CI additionally scans `automation/` + `shared/assertions/`: **any direct import of DB drivers** (`psycopg`, `pymysql`, `sqlite3`, …) fails, ensuring every query flows through the wrapper. Scope now matches everywhere (v1.0 said `shared/db/` in one place and whole-tree elsewhere).
+
+---
+
+## 7. Configuration & Notification
+
+### 7.1 Config loading (`shared/config/settings.py`)
+
+```python
+class AuthConfig(BaseModel):
+    username: str
+    password: str
+
+class DBConfig(BaseModel):
+    dsn: str
+
+class EnvConfig(BaseModel):
+    base_url: str
+    auth: AuthConfig | None = None      # optional: guest flows need neither auth nor db
+    db: DBConfig | None = None
+    cookies: dict[str, str] = {}
+
+def load_env(env_name: str | None = None, cli_flag: str | None = None) -> EnvConfig:
+    # precedence: CLI --env > TEST_ENV env var > "local"
+    env_name = cli_flag or os.environ.get("TEST_ENV") or "local"
+    path = Path(f"config/env.{env_name}.yaml")
+    if not path.exists():
+        raise FileNotFoundError(f"{path} missing — copy config/env.example.yaml")
+    data = yaml.safe_load(path.read_text()) or {}   # empty-file guard (safe_load returns None)
+    return EnvConfig(**data)
+```
+
+Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows.
+
+**prod protection is mechanical**: `automation/conftest.py` registers markers strict and, when `TEST_ENV=prod`, implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only` — collection-level enforcement, so generated regression cannot create orders/users/discounts against prod even if misconfigured. The AGENTS.md prose rule remains, but no longer carries the risk alone.
+
+### 7.2 Notification
+
+Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Feishu/WeCom/Email; dispatcher fans one run result to all configured channels; per-channel retry with exponential backoff (1s/2s/4s); a failing channel is logged and never blocks others nor the run. Entrypoints are unified (v1.0 had two competing ones): `shared/notify/dispatcher.py` holds the logic, `scripts/notify.py` is the CLI wrapper consuming either `run-summary.yaml` or a CI job status. CI invokes it under `if: ${{ always() }}` so failures notify too (a plain step after a failed step would be skipped), and notification steps themselves carry `continue-on-error: true` per best-effort policy.
+
+### 7.3 Extending environments/channels
+
+- New environment: add gitignored `config/env.<name>.yaml` matching `EnvConfig`; zero code change.
+- New channel: implement `Notifier`, register in `dispatcher.py`'s channel map, extend `config/notify.example.yaml`. One intentional code-touch point keeps the fan-out explicit.
+
+---
+
+## 8. CI Shape (summary; task details in Roadmap Phase 7)
+
+Two jobs, deliberately split because their prerequisites differ:
+
+- **static-checks**: schema validation, state/staleness validation, tiered coverage, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, ruff/pyright. Needs no target app, runs on every PR.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, uploads Allure results/run-summary/patch history as artifacts, notifies under `always()`. Runs when the e2e label/branch conditions are met.
+
+---
+
+## 9. Key Structural Decisions (ADR index)
+
+| Decision | ADR |
+| --- | --- |
+| Single long-lived `release` branch; PR-only merges from `test/<iteration-id>` | [ADR-001](./adr/adr-001-single-release-branch.md) |
+| Medusa pinned as first target app | [ADR-002](./adr/adr-002-medusa-first-target-app.md) |
+| Skills vendored in-repo for v1 | [ADR-003](./adr/adr-003-vendored-skills-deferred-to-post-v1.md) |
+| Self-debug session-side only; CI never patches tests | [ADR-004](./adr/adr-004-self-debug-is-session-side-only.md) |
+| Sparse traceability rows, derived coverage | [ADR-005](./adr/adr-005-derived-coverage-sparse-traceability.md) |
+| Source-payload plugin envelopes on a disk-first boundary | [ADR-006](./adr/adr-006-source-payload-boundary.md) |
+| Consolidated repo layout: 6 skills, plugins layer, iterations↔module split, YAML sources + derived views | [ADR-007](./adr/adr-007-repo-layout-redesign.md) |
+
+CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
+
+```yaml
+# .github/workflows/ci.yml — static checks, every PR, no target app needed
+jobs:
+  static-checks:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group dev
+      - run: uv run pre-commit run --all-files   # schemas/state/staleness/POM/
+                                                  # models/markers/db/secrets/lint
+      - run: uv run pytest scripts/tests          # framework's own suites
+      - run: uv run python scripts/check_coverage.py --tier auto
+
+# .github/workflows/regression.yml — e2e behind branch/label conditions
+jobs:
+  e2e:
+    services:            # or compose-up step driven by the lockfile
+      postgres: {}
+      redis: {}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run python scripts/target_app_up.py
+      - run: uv run python scripts/target_app_seed.py
+      - run: uv run python scripts/target_app_healthcheck.py
+      - run: echo "base_url: $MEDUSA_URL" > config/env.ci.yaml   # assembled from secrets (+ auth/dsn blocks)
+      - run: TEST_ENV=ci uv run pytest automation/web automation/api --alluredir=reports/allure-results
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-and-run-summary
+          path: reports/allure-results/
+      - if: always()
+        continue-on-error: true
+        run: uv run python scripts/notify.py --summary latest-run-summary
+      - if: always()
+        run: uv run python scripts/target_app_down.py
+```

@@ -1,0 +1,64 @@
+# Environment Setup (Target-State)
+
+Prerequisites, initialization steps, and every operational command the framework will expose. **Status honesty**: this repo currently contains documentation only — no `pyproject.toml`, scripts, or Makefile exist yet. Everything below is a *defined plan* (agreed design from ARCHITECTURE/DATA_MODEL/TESTING_STRATEGY); nothing is marked "已运行/executed" until Roadmap Phases 0–2 complete and the command has actually been run once. Verification status column reflects that.
+
+## Prerequisites
+
+| Requirement | Version / note | Why |
+| --- | --- | --- |
+| uv | current stable | project/env management |
+| Python | 3.12.x (`.python-version` pin) | language baseline |
+| Docker + compose v2 | for target-app harness | Medusa stack (backend, Postgres, Redis) runs in its own containers |
+| Playwright browsers | **Chromium only** (v1 decision; Firefox/WebKit installs are not performed) | single validated browser matrix |
+| Network access to PyPI + GitHub Actions runners | build time only | dependency sync, CI |
+
+Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples.
+
+## Planned Base Configuration (authored in Phase 0)
+
+Authoritative skeletons to be created verbatim-shaped in Phase 0 tasks:
+
+**pyproject.toml** — core deps: pytest≥8.3, pytest-playwright≥0.5, pytest-xdist≥3.6, **allure-pytest**≥2.15 (v1.0's `pytest-allure-adapter` does not exist on PyPI), httpx≥0.27, pydantic≥2.9, rich≥13.9, pyyaml≥6.0, jsonschema≥4.23, openpyxl≥3.1 (xlsx round-trip needs it). Optional groups (moved out of core per review): `[dependency-groups] dev=[ruff, pyright, pre-commit]`, `mobile=[appium-python-client]`, `perf=[locust]`. Tool tables: pytest markers with `--strict-markers`, ruff select `E,F,I,UP,B,SIM` line-length 100, pyright basic.
+
+**pre-commit hooks**: ruff/ruff-format remote hooks; local hooks `validate-schema` (entry `scripts/validate_schema.py`, files matcher excludes `iterations/*/00-raw/**` — raw inputs aren't schema artifacts), `validate-iteration-state` (`validate_iteration.py`), `no-db-writes`, `check-secrets`.
+
+**Makefile targets** (v1.0 renames applied):
+
+```makefile
+setup:            uv sync && pre-commit install && playwright install chromium
+new-iteration ID=:  uv run python scripts/new_iteration.py $(ID)
+validate-iteration ID=:  uv run python scripts/validate_schema.py iterations/$(ID)   # renamed from gen-cases
+export ID=:       export_xmind + export_xlsx + render_md for iterations/$(ID)
+web-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/web/tests/$(MODULE) --alluredir=reports/allure-results
+api-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/api/tests/$(MODULE) --alluredir=reports/allure-results
+lint:             uv run ruff check . && uv run pyright
+target-app-up/seed/reset/healthcheck/down:  harness scripts (policy: TESTING_STRATEGY harness section)
+```
+
+Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pytest cannot filter parameterized marks that way — reviewed & confirmed error); no `debug` target exists (self-debug is the agent-session flow, ADR-004).
+
+**.gitignore essentials**: gitignored env/notify YAMLs; `reports/**` + `!reports/**/.gitkeep`; `automation/api/har/**` + keeper; `config/env.ci.yaml`; `.venv/`. Raw inputs: tracked text under `iterations/*/00-raw/` (subject to secret scan), binaries/large-file patterns ignored there with manifest fallback (PRD §6).
+
+## Installation & Initialization
+
+| Step | Directory | Command | Precondition / effect | Status |
+| --- | --- | --- | --- | --- |
+| Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 待实现 (tooling expected present) |
+| Project init | root | create `pyproject.toml`, `uv python pin 3.12` then `make setup` | creates `.venv`, installs deps + chromium + hooks | 待实现 (Roadmap 0.1–0.4) |
+| Scaffold iteration | root | `make new-iteration ID=test-fixture-001` | builds full `iterations/<id>/` tree incl. `iteration.yaml`; second same-ID call errors unless `--force` | 待实现 (Roadmap 0.7) |
+| Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 待实现 (harness task, pre-Phase-5) |
+
+## Development & Verification Commands
+
+| Purpose | Directory | Command | Expected result | Status |
+| --- | --- | --- | --- | --- |
+| Lint | root | `make lint` | clean on skeleton and after generation | 已定义 / 待实现 |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips | 已定义 / 待实现 |
+| Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现 |
+| Coverage gate | root | `uv run python scripts/check_coverage.py --tier <t> iterations/<id>` | tier verdict per PRD §5.1 | 已定义 / 待实现 |
+| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken fixture (smoke-tested then reverted) | 已定义 / 待实现 |
+| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
+| Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
+| CI equivalent | CI | static-checks job / e2e job (split) | see ARCHITECTURE §8 | 已定义 / 待实现 |
+
+Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.
