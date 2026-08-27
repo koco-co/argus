@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "status", "exemptions"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "status": {"enum": ["draft", "review", "accepted"]},
+    "generated_from": {"$ref": "#/definitions/generated_from"},
+    "exemptions": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["requirement_id", "kind", "reason"],
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^R[0-9]{4}$"},
+          "kind": {"enum": ["not_testable", "manual_only"]},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "accepted"}}, "required": ["status"]},
+      "then": {"required": ["generated_from"]}
+    }
+  ],
+  "definitions": {
+    "generated_from": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact", "sha256"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "inputs": {"$ref": "#/definitions/generated_from_inputs"}
+      }
+    },
+    "generated_from_inputs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["artifact", "sha256", "role"],
+        "properties": {
+          "artifact": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+links:
+  - requirement_id: R0001
+    functional_case_id: C0001
+    api_case_id: A0001

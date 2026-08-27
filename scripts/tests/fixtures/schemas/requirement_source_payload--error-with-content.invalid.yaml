@@ -1,0 +1,7 @@
+schema_version: "1.0"
+source_type: jira
+fetched_at: "2026-08-28T09:00:00Z"
+content: "should not be here"
+error:
+  code: UPSTREAM_UNAVAILABLE
+  message: Jira returned 503.

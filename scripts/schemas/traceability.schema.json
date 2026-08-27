@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "links"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "links": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["requirement_id"],
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^R[0-9]{4}$"},
+          "test_point_id": {"type": "string", "pattern": "^T[0-9]{4}$"},
+          "functional_case_id": {"type": "string", "pattern": "^C[0-9]{4}$"},
+          "api_case_id": {"type": "string", "pattern": "^A[0-9]{4}$"},
+          "automation_test_ids": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+          },
+          "retires_nodeids": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+          }
+        },
+        "oneOf": [
+          {"required": ["functional_case_id"], "not": {"required": ["api_case_id"]}},
+          {"required": ["api_case_id"], "not": {"required": ["functional_case_id"]}},
+          {"not": {"anyOf": [{"required": ["functional_case_id"]}, {"required": ["api_case_id"]}]}}
+        ]
+      }
+    }
+  }
+}

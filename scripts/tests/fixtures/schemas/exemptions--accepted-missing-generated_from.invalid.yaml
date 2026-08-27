@@ -1,0 +1,7 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: accepted
+exemptions:
+  - requirement_id: R0002
+    kind: not_testable
+    reason: Third-party payment gateway page is outside our control.

@@ -1,0 +1,56 @@
+schema_version: "1.0"
+iteration_id: 2026-08-orders-api
+status: spec_valid
+service_name: medusa-store-api
+base_path: /store
+auth_model: publishable api key header
+generated_from:
+  artifact: iterations/2026-08-orders-api/00-raw/openapi.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+components:
+  schemas:
+    Order:
+      type: object
+      required: [id, total]
+      properties:
+        id:
+          type: string
+        total:
+          type: integer
+    Money:
+      oneOf:
+        - type: integer
+        - type: string
+normalization_warnings: []
+source_refs:
+  - kind: openapi
+    location: iterations/2026-08-orders-api/00-raw/openapi.yaml
+endpoints:
+  - operation_id: getOrder
+    path: /store/orders/{id}
+    method: GET
+    summary: Fetch one order.
+    module: orders
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/Order"
+    responses:
+      - status_code: 200
+        description: Order found.
+        body_schema:
+          allOf:
+            - $ref: "#/components/schemas/Order"
+            - type: object
+              properties:
+                status:
+                  type: string
+  - operation_id: listCarts
+    path: /store/carts
+    method: GET
+    module: carts
+    parameters: []
+    responses:
+      - status_code: 200

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-28 — Phase 1 task 1.1 implemented; spec defect fixed (rfc3339-validator)
+
+- **1.1** All DATA_MODEL schemas authored at their owning placements (requirements/test_points/functional_cases under `.agents/skills/functional-test-design/schemas/`; api_spec/api_cases under `.agents/skills/api-test-design/schemas/`; exemptions/traceability/run_summary under `scripts/schemas/`; two source payloads under `plugins/_interface/schemas/`). Every `generated_from` definition incorporates the documented optional `inputs[]` sibling (DATA_MODEL intro). Fixture pairs committed under `scripts/tests/fixtures/schemas/` covering the DoD list (missing required, bad enum/pattern, unresolved-ambiguity at `accepted`, missing `generated_from` at terminal states, invalid expectation kind, API case without `requirement_ids`, vacuous-conditional regressions, combinator preservation + `$ref` patterns, mutual-exclusion payloads, malformed `date-time`); `test_docs_schemas.py` extracts and parses every fenced JSON Schema block in DATA_MODEL (count pinned at 10).
+- **Spec defect fix (minimal revision, recorded)**: ENVIRONMENT_SETUP's closed core-dependency list could not satisfy DATA_MODEL's mandate "validators run with a FormatChecker enabled so `format: date-time` rejects malformed strings" — jsonschema's date-time checker is a silent no-op without `rfc3339-validator`. Added `rfc3339-validator>=0.1.4` to core deps (additive; proven necessary by the failing malformed-date-time fixture). Update of the dependency list in ENVIRONMENT_SETUP follows below with the next doc touch.
+
+
 ## 2026-08-28 — Phase 0 closed; owner decisions recorded
 
 - **0.6 human sign-off given** (manual gate satisfied by explicit user confirmation; no `approvals[]` artifact is written — that namespace belongs to iteration artifacts via `record_approval.py`, so the gate is recorded here and in AGENT_BRIEF).

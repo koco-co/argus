@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "status", "requirements"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "status": {"enum": ["draft", "clarifying", "clarified", "accepted"]},
+    "generated_from": {"$ref": "#/definitions/generated_from"},
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement_id", "title", "description"],
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^R[0-9]{4}$"},
+          "title": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "priority": {"type": "integer", "enum": [1, 2, 3], "default": 2},
+          "source": {"type": "string"}
+        }
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/ambiguity"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "accepted"}}, "required": ["status"]},
+      "then": {"required": ["generated_from"]}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["clarified", "accepted"]}}, "required": ["status"]},
+      "then": {"properties": {"ambiguities": {"items": {"properties": {"resolved": {"const": true}}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "clarifying"}}, "required": ["status"]},
+      "then": {"properties": {"ambiguities": {"minItems": 1}}}
+    }
+  ],
+  "definitions": {
+    "generated_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sha256"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "inputs": {"$ref": "#/definitions/generated_from_inputs"}
+      }
+    },
+    "generated_from_inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact", "sha256", "role"],
+        "properties": {
+          "artifact": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "ambiguity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "resolved"],
+      "properties": {
+        "question": {"type": "string", "minLength": 1},
+        "asked_at": {"type": "string"},
+        "resolved": {"type": "boolean"},
+        "resolution": {"type": "string"}
+      },
+      "allOf": [
+        {"if": {"properties": {"resolved": {"const": true}}},
+         "then": {"required": ["resolution"], "properties": {"resolution": {"minLength": 1}}}}
+      ]
+    }
+  }
+}

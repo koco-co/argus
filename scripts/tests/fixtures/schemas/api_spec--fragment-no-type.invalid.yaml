@@ -1,0 +1,17 @@
+schema_version: "1.0"
+iteration_id: 2026-08-orders-api
+status: spec_draft
+service_name: medusa-store-api
+endpoints:
+  - operation_id: listCarts
+    path: /store/carts
+    method: GET
+    module: carts
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          format: int32
+    responses:
+      - status_code: 200

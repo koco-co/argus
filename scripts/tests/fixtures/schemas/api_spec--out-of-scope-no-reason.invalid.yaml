@@ -1,0 +1,16 @@
+schema_version: "1.0"
+iteration_id: 2026-08-orders-api
+status: spec_valid
+service_name: medusa-store-api
+generated_from:
+  artifact: iterations/2026-08-orders-api/00-raw/openapi.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+endpoints:
+  - operation_id: adminSync
+    path: /admin/sync
+    method: POST
+    module: admin
+    parameters: []
+    responses:
+      - status_code: 200
+    out_of_scope: true

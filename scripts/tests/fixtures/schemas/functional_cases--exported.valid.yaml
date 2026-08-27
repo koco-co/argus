@@ -1,0 +1,23 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: exported
+generated_from:
+  artifact: iterations/2026-08-checkout-flow/test_points.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+cases:
+  - case_id: C0001
+    title: Discount code reduces total
+    priority: 1
+    precondition: Storefront open with seeded product in cart.
+    steps:
+      - action: Enter discount code QA-DISCOUNT and apply.
+        expected: A confirmation message is displayed.
+        expected_kind: copy
+      - action: Read the order total.
+        expected: Total equals seeded price minus 10 percent.
+        expected_kind: derived_value
+        derived_from:
+          seed: product_price_usd
+          rule: price * 0.9 rounded to cents
+    tags: [checkout, "module:checkout"]
+    test_point_ids: [T0001]

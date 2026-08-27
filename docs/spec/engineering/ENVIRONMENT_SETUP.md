@@ -18,7 +18,7 @@ Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitigno
 
 Authoritative skeletons to be created verbatim-shaped in Phase 0 tasks:
 
-**pyproject.toml** — core deps: pytest≥8.3, pytest-playwright≥0.5, pytest-xdist≥3.6, **allure-pytest**≥2.15 (v1.0's `pytest-allure-adapter` does not exist on PyPI), httpx≥0.27, pydantic≥2.9, rich≥13.9, pyyaml≥6.0, jsonschema≥4.23, openpyxl≥3.1 (xlsx round-trip needs it). Optional groups (moved out of core per review): `[dependency-groups] dev=[ruff, pyright, pre-commit]`, `mobile=[appium-python-client]`, `perf=[locust]`. Tool tables: pytest markers with `--strict-markers`, ruff select `E,F,I,UP,B,SIM` line-length 100, pyright basic.
+**pyproject.toml** — core deps: pytest≥8.3, pytest-playwright≥0.5, pytest-xdist≥3.6, **allure-pytest**≥2.15 (v1.0's `pytest-allure-adapter` does not exist on PyPI), httpx≥0.27, pydantic≥2.9, rich≥13.9, pyyaml≥6.0, jsonschema≥4.23, **rfc3339-validator≥0.1.4** (added 2026-08-28: without it jsonschema's `date-time` FormatChecker is a silent no-op, contradicting DATA_MODEL's validator mandate; see CHANGELOG), openpyxl≥3.1 (xlsx round-trip needs it). Optional groups (moved out of core per review): `[dependency-groups] dev=[ruff, pyright, pre-commit]`, `mobile=[appium-python-client]`, `perf=[locust]`. Tool tables: pytest markers with `--strict-markers`, ruff select `E,F,I,UP,B,SIM` line-length 100, pyright basic.
 
 **pre-commit hooks**: ruff/ruff-format remote hooks; local hooks `validate-schema` (entry `scripts/validate_schema.py`, matches registered artifacts plus the exact `iterations/*/00-raw/source-payload.yaml` path; unrelated raw inputs aren't schema artifacts), `validate-iteration-state` (`validate_iteration.py`), `no-db-writes`, `check-secrets`.
 

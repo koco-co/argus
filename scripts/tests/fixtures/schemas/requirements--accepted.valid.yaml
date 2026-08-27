@@ -1,0 +1,21 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: accepted
+generated_from:
+  artifact: iterations/2026-08-checkout-flow/00-raw/requirements-dump.md
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  inputs:
+    - artifact: iterations/2026-08-checkout-flow/00-raw/source-payload.yaml
+      sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      role: raw_requirement_source
+requirements:
+  - requirement_id: R0001
+    title: Guest checkout with discount code
+    description: A guest can complete checkout applying one discount code.
+    priority: 1
+    source: 00-raw/requirements-dump.md
+ambiguities:
+  - question: Is the discount code case-sensitive?
+    asked_at: "2026-08-27T09:00:00Z"
+    resolved: true
+    resolution: Confirmed case-insensitive by user.

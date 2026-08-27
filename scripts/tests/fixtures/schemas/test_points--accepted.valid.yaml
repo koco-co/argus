@@ -1,0 +1,17 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: accepted
+generated_from:
+  artifact: iterations/2026-08-checkout-flow/requirements.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+test_points:
+  - test_point_id: T0001
+    requirement_ids: [R0001]
+    description: Applying a valid discount code reduces the order total.
+    type: happy
+    priority: 1
+  - test_point_id: T0002
+    requirement_ids: [R0001]
+    description: An expired discount code is rejected with a visible error.
+    type: negative
+    priority: 1

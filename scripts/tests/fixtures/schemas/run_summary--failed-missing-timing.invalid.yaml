@@ -1,0 +1,11 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+run_id: run-20260828T101500Z-a3f2
+modules: [checkout]
+status: failed
+retry_budget: 5
+attempts:
+  - attempt_number: 1
+    result: fail
+    failure_class: backend_5xx
+    summary: Storefront returned 500 on checkout.

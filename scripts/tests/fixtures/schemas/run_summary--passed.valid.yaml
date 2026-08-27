@@ -1,0 +1,20 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+run_id: run-20260828T101500Z-a3f2
+started_at: "2026-08-28T10:15:00Z"
+finished_at: "2026-08-28T10:31:00Z"
+env: local
+scope: module_set
+modules: [checkout]
+status: passed
+retry_budget: 5
+attempts:
+  - attempt_number: 1
+    result: fail
+    failure_class: locator_drift
+    summary: Apply button moved; selector updated in checkout_page.
+    diff_ref: runs/run-20260828T101500Z-a3f2/patches/attempt-1.patch
+  - attempt_number: 2
+    result: pass
+    failure_class: none
+    summary: Green after locator fix.

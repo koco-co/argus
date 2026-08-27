@@ -181,7 +181,14 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "schemas",
         "tests",
     },
-    "scripts/tests": {"conftest.py", "fixtures", "test_new_iteration.py", "test_repo_structure.py"},
+    "scripts/tests": {
+        "conftest.py",
+        "fixtures",
+        "test_new_iteration.py",
+        "test_repo_structure.py",
+        "test_schemas.py",
+        "test_docs_schemas.py",
+    },
     "target-app": set(),
 }
 

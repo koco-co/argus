@@ -1,0 +1,7 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+links:
+  - requirement_id: R0001
+    functional_case_id: C0001
+    automation_test_ids:
+      - "tests/checkout/test_missing_prefix.py::test_x"

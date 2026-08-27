@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "status", "service_name", "endpoints"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "status": {"enum": ["spec_draft", "spec_valid"]},
+    "generated_from": {"$ref": "#/definitions/generated_from"},
+    "service_name": {"type": "string", "minLength": 1},
+    "base_path": {"type": "string"},
+    "auth_model": {"type": "string"},
+    "components": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemas": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"$ref": "#/definitions/schema_fragment"}
+        }
+      }
+    },
+    "normalization_warnings": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["code", "detail"],
+        "properties": {"code": {"type": "string"}, "detail": {"type": "string"}, "location": {"type": "string"}}}
+    },
+    "source_refs": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["kind", "location"],
+        "properties": {"kind": {"enum": ["openapi", "har", "postman", "source_code", "dev_docs", "plugin"]},
+                        "location": {"type": "string"}}}
+    },
+    "endpoints": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["operation_id", "path", "method", "module", "parameters", "responses"],
+        "properties": {
+          "operation_id": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "pattern": "^/"},
+          "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
+          "summary": {"type": "string"},
+          "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "authentication": {"type": "string"},
+          "parameters": {"type": "array", "items": {"$ref": "#/definitions/param"}},
+          "request_body": {
+            "type": "object", "additionalProperties": false,
+            "required": ["content_type", "schema"],
+            "properties": {"content_type": {"type": "string"}, "schema": {"$ref": "#/definitions/schema_fragment"}, "example": {}}
+          },
+          "responses": {"type": "array", "minItems": 1, "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["status_code"],
+            "properties": {"status_code": {"type": "integer"}, "description": {"type": "string"}, "body_schema": {"$ref": "#/definitions/schema_fragment"}}}},
+          "out_of_scope": {"type": "boolean", "default": false},
+          "out_of_scope_reason": {"type": "string"}
+        },
+        "allOf": [
+          {"if": {"properties": {"out_of_scope": {"const": true}}, "required": ["out_of_scope"]},
+           "then": {"required": ["out_of_scope_reason"],
+                     "properties": {"out_of_scope_reason": {"minLength": 1}}}}
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "spec_valid"}}, "required": ["status"]},
+      "then": {"required": ["generated_from"]}
+    }
+  ],
+  "definitions": {
+    "param": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "in", "required", "schema"],
+      "properties": {"name": {"type": "string", "minLength": 1},
+                      "in": {"enum": ["path", "query", "header", "cookie"]},
+                      "required": {"type": "boolean"},
+                      "schema": {"$ref": "#/definitions/schema_fragment"},
+                      "example": {}}
+    },
+    "schema_fragment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "$ref": {"type": "string", "pattern": "^#/components/schemas/[A-Za-z0-9_.-]+$"},
+        "type": {"enum": ["object", "array", "string", "integer", "number", "boolean"]},
+        "format": {"type": "string"},
+        "enum": {"type": "array", "minItems": 1},
+        "required": {"type": "array", "items": {"type": "string"}},
+        "properties": {"type": "object", "additionalProperties": {"$ref": "#/definitions/schema_fragment"}},
+        "items": {"$ref": "#/definitions/schema_fragment"},
+        "allOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "oneOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}},
+        "anyOf": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/schema_fragment"}}
+      },
+      "oneOf": [{"required": ["type"]}, {"required": ["$ref"]},
+                 {"anyOf": [{"required": ["allOf"]}, {"required": ["oneOf"]}, {"required": ["anyOf"]}]}]
+    },
+    "generated_from": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact", "sha256"],
+      "properties": {"artifact": {"type": "string", "minLength": 1},
+                     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                     "inputs": {"$ref": "#/definitions/generated_from_inputs"}}
+    },
+    "generated_from_inputs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["artifact", "sha256", "role"],
+        "properties": {
+          "artifact": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

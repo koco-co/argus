@@ -1,0 +1,14 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: draft
+cases:
+  - case_id: C0001
+    title: Discount code reduces total
+    priority: 1
+    precondition: none
+    steps:
+      - action: Read the order total.
+        expected: Total equals 90.00 USD.
+        expected_kind: derived_value
+    tags: ["module:checkout"]
+    test_point_ids: [T0001]

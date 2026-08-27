@@ -1,0 +1,15 @@
+schema_version: "1.0"
+iteration_id: 2026-08-orders-api
+status: exported
+cases:
+  - api_case_id: A0001
+    requirement_ids: [R0001]
+    operation_id: getOrder
+    endpoint: /store/orders/{id}
+    method: GET
+    title: Fetch seeded order returns 200
+    case_type: happy_path
+    module: orders
+    request: {}
+    expected_response:
+      status_code: 200

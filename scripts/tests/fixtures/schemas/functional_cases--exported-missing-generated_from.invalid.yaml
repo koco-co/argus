@@ -1,0 +1,14 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: exported
+cases:
+  - case_id: C0001
+    title: Discount code reduces total
+    priority: 1
+    precondition: none
+    steps:
+      - action: Apply code.
+        expected: Total is reduced.
+        expected_kind: ui_state
+    tags: ["module:checkout"]
+    test_point_ids: [T0001]

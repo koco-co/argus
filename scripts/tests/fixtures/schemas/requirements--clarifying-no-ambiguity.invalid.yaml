@@ -1,0 +1,8 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: clarifying
+requirements:
+  - requirement_id: R0001
+    title: Guest checkout
+    description: Guest checkout works.
+ambiguities: []

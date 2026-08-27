@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "iteration_id", "status", "cases"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "status": {"enum": ["draft", "validating", "valid", "exported"]},
+    "generated_from": {"$ref": "#/definitions/generated_from"},
+    "cases": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["case_id", "title", "priority", "precondition", "steps", "tags", "test_point_ids"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^C[0-9]{4}$"},
+          "title": {"type": "string", "minLength": 1},
+          "priority": {"type": "integer", "enum": [1, 2, 3]},
+          "precondition": {"type": "string", "minLength": 1},
+          "steps": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["action", "expected", "expected_kind"],
+              "properties": {
+                "action": {"type": "string", "minLength": 1},
+                "expected": {"type": "string", "minLength": 1},
+                "expected_kind": {"enum": ["ui_state", "copy", "derived_value"]},
+                "derived_from": {"$ref": "#/definitions/derived_from"}
+              },
+              "allOf": [
+                {
+                  "if": {"properties": {"expected_kind": {"const": "derived_value"}}, "required": ["expected_kind"]},
+                  "then": {"required": ["derived_from"]}
+                }
+              ]
+            }
+          },
+          "tags": {
+            "type": "array", "items": {"type": "string"}, "minItems": 1,
+            "contains": {"type": "string", "pattern": "^module:[a-z][a-z0-9_]*$"}
+          },
+          "test_point_ids": {"type": "array", "minItems": 1,
+            "items": {"type": "string", "pattern": "^T[0-9]{4}$"}}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["valid", "exported"]}}, "required": ["status"]},
+      "then": {"required": ["generated_from"]}
+    }
+  ],
+  "definitions": {
+    "generated_from": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact", "sha256"],
+      "properties": {"artifact": {"type": "string", "minLength": 1},
+                     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                     "inputs": {"$ref": "#/definitions/generated_from_inputs"}}
+    },
+    "generated_from_inputs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["artifact", "sha256", "role"],
+        "properties": {
+          "artifact": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "derived_from": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seed", "rule"],
+      "properties": {
+        "seed": {"type": "string", "minLength": 1},
+        "rule": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+schema_version: "1.0"
+iteration_id: 2026-08-checkout-flow
+status: draft
+generated_from:
+  artifact: iterations/2026-08-checkout-flow/requirements.yaml
+  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+test_points:
+  - test_point_id: TP001
+    requirement_ids: [R0001]
+    description: Wrong id format.
+    type: happy

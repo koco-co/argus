@@ -1,0 +1,17 @@
+schema_version: "1.0"
+iteration_id: 2026-08-orders-api
+status: spec_draft
+service_name: medusa-store-api
+endpoints:
+  - operation_id: getOrder
+    path: /store/orders/{id}
+    method: GET
+    module: orders
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: "#/definitions/Order"
+    responses:
+      - status_code: 200
