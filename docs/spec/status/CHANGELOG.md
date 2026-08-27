@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-27 — Phase 0 infrastructure implemented & accepted (docs v1.6 → +code)
+
+First product code in the repo. ROADMAP Phase 0 executed task-by-task per its own discipline; every claimed DoD was mechanically verified in the same session. Scope decision delegated to the session by the owner's instruction ("自己设定一个goal，明确目标边界"): build directly in this repo (the `<target-app>-automation` alternative remains available post-hoc — the ARCHITECTURE §2 tree is relative).
+
+Implemented (Roadmap tasks):
+- **0.1** `uv python pin 3.12` → `.python-version`; fresh `uv sync` exits 0 on CPython 3.12.12.
+- **0.2** `pyproject.toml`: core deps exactly per spec; `[dependency-groups]` dev(ruff/pyright/pre-commit) + optional mobile/perf; pytest markers `module/case_id/iteration` with `--strict-markers`; ruff `E,F,I,UP,B,SIM` ll=100; pyright basic. Verified: ruff+pyright clean; `appium-python-client`/`locust` not installed by default; `uv.lock` committed; `pytest --collect-only scripts/tests` green with all plugins loading. `docs/` excluded from ruff so formatter churn never touches the spec baseline (caught live during setup).
+- **0.3** `.pre-commit-config.yaml`: remote ruff hooks (format check-only — no hook mutates tracked files) + four local hooks at their prescribed entries. Interpretation recorded: the local validator scripts exist as explicit **stubs naming their implementing task (1.2/1.3/1.9/1.13)** so hooks are no-op-clean on the skeleton while the file paths stay final; `check-secrets` scoped to `^iterations/.+/` (keeper files excluded). Verified: `pre-commit install` + `run --all-files` green.
+- **0.4** `Makefile` per the ENVIRONMENT_SETUP target table (no `debug` target; module selection by path; `BRANCH` variable passes the branch declaration to `new-iteration`).
+- **0.5** `.gitignore` per ADR-012 + ENVIRONMENT_SETUP: env/notify secrets, `reports/**` + keeper re-include, `automation/api/har/**` + keeper, `config/env.ci.yaml`, run-evidence rules (`runs/*/allure-results|logs|traces` ignored; `run-summary.yaml`/patches tracked), 00-raw binary patterns with manifest fallback. Verified: dummy `config/env.local.yaml` invisible to `git status`; `git add reports/` stages both keepers.
+- **0.6** Full `AGENTS.md` operating rulebook (confirmation points, sole-writer approval rule, branch routing, reopen protocol, ≤3-question clarification protocol with recommendations, prod read-only rule, toolchain quick reference) + `CLAUDE.md` = `@AGENTS.md`. **Human sign-off pending — the acceptance gate is left to the user; agents must not fabricate approval records.**
+- **0.7** `scripts/schemas/iteration.schema.json` (DATA_MODEL §3 verbatim) + `scripts/schema_registry.yaml` (single binding) + `scripts/new_iteration.py` (GLOSSARY id validation, single-in-progress rule, typed-confirmation `--force` resetting only scaffolder-owned paths, post-scaffold validation through the shared registry path with `FormatChecker`). Design decision recorded: the scaffolder creates `iteration.yaml` + directory tree only — artifact YAMLs beyond the iteration aggregate are NOT stubbed because most DATA_MODEL schemas have no schema-valid empty form (`minItems: 1`), and an invalid placeholder would fail Phase 1 gates; owning skills create them at their phase. Validated by 14 pytest cases (expected-tree fixture diff, duplicate/ID/single-in-progress/branch rules, hybrid-branch schema rejection, force flows).
+- **0.8** Full ARCHITECTURE §2 skeleton (six skill dirs with schemas/examples/versions, plugins layer, automation module trees, shared/, reports keepers, knowledge files, config examples with read-only-role comment, target-app home, `.github/workflows`), locked by `scripts/tests/test_repo_structure.py` (expected-set + governed-children drift guards).
+
+Not done / deferred: **0.9** branch protection — `release` first materializes at the first iteration PR; protection completes at 7.5 per the task's own cross-reference. **0.6 sign-off** awaits the user.
+
+Acceptance evidence: fresh `git clone` → `make setup` → `make new-iteration ID=2026-08-acceptance-check BRANCH=ui` → `make lint` all green with zero manual steps (the Phase 0 exit condition); `uv run pytest scripts/tests` 43 passed; ruff/pyright clean; `pre-commit run --all-files` green. Environment note (host-specific, not a repo defect): the machine's system proxy breaks TLS to github.com/pypi/CDN intermittently — PyPI and the Playwright CDN need direct connections (`NO_PROXY=pypi.org,files.pythonhosted.org` / cleared proxy env for `playwright install`); recorded here because ENVIRONMENT_SETUP's statuses above were verified under that workaround.
+
+
 ## 2026-08-27 — v1.5 baseline review adoption (v1.5 → v1.6)
 
 Input: external review of the v1.5 tree (20 findings: P0×2 / P1×6 / P2×9 / P3×3). Adjudication table presented and confirmed before editing. Disposition: 10 adopted, 6 lightweight/partial, 4 rejected with recorded rationale.

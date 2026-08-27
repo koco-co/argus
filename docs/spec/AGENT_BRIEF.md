@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）处于**设计基线完成、实现未开始**阶段：全套规范文档按 product / architecture / engineering / status 四域组织于 `docs/spec/`，已完成 v1.6 契约闭环（吸收 Claude、Grok、外部 GPT、v1.4 复审与会话恢复/secrets 注入审查建议 + 原有审查共识 + 行业实践校准）。本仓库目前仅含文档，无产品代码。
+AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）处于 **Phase 0 基础设施已建成、Phase 1 待启动**阶段。2026-08-27 完成 ROADMAP Phase 0（任务 0.1–0.5、0.7、0.8 已按 DoD 验证）：uv + Python 3.12 工具链、pyproject/Makefile/.gitignore、pre-commit 守卫（远程 ruff 强制，四个本地校验钩子为指向 1.2/1.3/1.9/1.13 的显式桩）、ARCHITECTURE §2 目录骨架、`iteration.schema.json`（DATA_MODEL §3 逐字）+ schema registry + `scripts/new_iteration.py`（43 个 pytest 全绿，含全新 clone 退出条件验收）。规范文档 v1.6 契约闭环维持不变。范围决策留痕：经会话自治决策**在本仓库直接施工**（AGENT_BRIEF 原留待用户确认的备选"新建 `<target-app>-automation` 仓库"仍可后置执行，架构树为相对布局，机械搬移即可）。
 
 运行模型要求（非约束性建议）：驱动会话的模型应具备可靠的代码理解、AST 级结构与测试框架知识（参考 NIST Agent Evaluation 的任务能力框架）；Roadmap 5.5 的四个自调试证明用例可直接用作模型验收基准。
 
 ## 已完成与下一步
 
-- 已完成：v1.0–v1.5 文档修订为 v1.6（消化针对 v1.5 的审查 20 项：会话恢复协议、CI secrets 注入规范、优化候选注册表、OpenAPI 组合器保留与引用深度策略、behavior 命名规则、失败分类决策树、weekly 失败升级、Dependabot 频率、skill 版本语义等；拒绝 seed 公式自改/precondition 结构化/skills 目录重构并留痕）。更早轮次与融合去向见 [CHANGELOG](./status/CHANGELOG.md)。
-- 下一步：执行 [ROADMAP](./product/ROADMAP.md) Phase 0 任务 0.1。唯一待用户确认的范围决策：在本仓库直接施工，还是按 `<target-app>-automation` 新建仓库后搬入本 spec 目录（后者符合设计意图）。
+- 已完成：v1.0–v1.6 文档基线（详见 [CHANGELOG](./status/CHANGELOG.md)）；2026-08-27 Phase 0 施工与验收（同日 CHANGELOG 条目）。
+- 下一步：执行 [ROADMAP](./product/ROADMAP.md) Phase 1（任务 1.1 起，全部 schema + registry 扩充 + checker 脚本，1.16 收口接线）。两项待用户动作：① Phase 0 任务 0.6 的 AGENTS.md human sign-off（内容已提交，批准记录不得由 agent 伪造）；② 任务 0.9 分支保护随首个 `test/<iteration-id>` PR 出现 `release` 分支后在 7.5 收口。
 - 需注意：历史审查记录已消化并按所有者指示删除；被否决的评审建议留痕于 [RISKS_AND_KNOWN_ISSUES](./status/RISKS_AND_KNOWN_ISSUES.md)，不得作为新需求重新引入。
 
 ## 文档索引

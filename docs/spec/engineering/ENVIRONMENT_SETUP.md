@@ -1,6 +1,6 @@
 # Environment Setup (Target-State)
 
-Prerequisites, initialization steps, and every operational command the framework will expose. **Status honesty**: this repo currently contains documentation only — no `pyproject.toml`, scripts, or Makefile exist yet. Everything below is a *defined plan* (agreed design from ARCHITECTURE/DATA_MODEL/TESTING_STRATEGY); nothing is marked "已运行/executed" until Roadmap Phases 0–2 complete and the command has actually been run once. Verification status column reflects that.
+Prerequisites, initialization steps, and every operational command the framework will expose. **Status honesty**: this repo contained documentation only until 2026-08-27, when Roadmap Phase 0 (tasks 0.1–0.8) was implemented and verified — `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `.gitignore`, `.pre-commit-config.yaml`, the directory skeleton, `scripts/new_iteration.py` + `iteration.schema.json` + registry, and the four local pre-commit hook stubs now exist. Commands below flip from "已定义" to "已运行 (date)" only after an actual recorded run; later-phase scripts (`validate_schema.py` real logic, exporters, checkers, harness) are stubs or absent until their Roadmap tasks land.
 
 ## Prerequisites
 
@@ -43,20 +43,20 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 
 | Step | Directory | Command | Precondition / effect | Status |
 | --- | --- | --- | --- | --- |
-| Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 待实现 (tooling expected present) |
-| Project init | root | create `pyproject.toml`, `uv python pin 3.12` then `make setup` | creates `.venv`, installs deps + chromium + hooks | 待实现 (Roadmap 0.1–0.4) |
-| Scaffold iteration | root | `make new-iteration ID=test-fixture-001` | builds full `iterations/<id>/` tree incl. `iteration.yaml`; second same-ID call errors unless `--force` | 待实现 (Roadmap 0.7) |
+| Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 已运行 2026-08-27（uv ✓；docker 未验证 — Phase 0 无靶应用步骤，Phase 5 前置） |
+| Project init | root | create `pyproject.toml`, `uv python pin 3.12` then `make setup` | creates `.venv`, installs deps + chromium + hooks | 已运行 2026-08-27（fresh-clone 验收通过；本机 playwright 下载需绕过系统代理，见 CHANGELOG） |
+| Scaffold iteration | root | `make new-iteration ID=test-fixture-001` | builds full `iterations/<id>/` tree incl. `iteration.yaml`; second same-ID call errors unless `--force` | 已运行 2026-08-27（BRANCH=ui\|api 声明分支；测试覆盖重复/ID/单迭代规则） |
 | Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 待实现 (harness task, pre-Phase-5) |
 
 ## Development & Verification Commands
 
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
-| Lint | root | `make lint` | clean on skeleton and after generation | 已定义 / 待实现 |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已定义 / 待实现 |
-| Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现 |
+| Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-27（43 passed；Phase 0 范围 = scaffolder + 结构 diff；DATA_MODEL 块解析测试属 1.1） |
+| Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现（`validate_schema.py` 目前为 0.3 桩，1.2 落地） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已定义 / 待实现 |
-| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已定义 / 待实现 |
+| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-27（骨架绿：ruff 实际执行；四个本地钩子按 0.3 为 no-op 桩） |
 | Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
 | Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
 | Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive --run-id <rid>` | summary/allure/logs copied into `iterations/<id>/runs/<rid>/`, previous runs untouched | 已定义 / 待实现 |
