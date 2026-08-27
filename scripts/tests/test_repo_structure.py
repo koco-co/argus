@@ -203,6 +203,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_export_xlsx.py",
         "test_check_coverage.py",
         "test_check_api_coverage.py",
+        "test_check_db_readonly.py",
     },
     "target-app": set(),
 }
