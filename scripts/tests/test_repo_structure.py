@@ -210,6 +210,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_check_pom_boundary.py",
         "test_check_test_markers.py",
         "test_check_api_models.py",
+        "test_check_secrets.py",
     },
     "target-app": set(),
 }
