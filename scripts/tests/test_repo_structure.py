@@ -181,6 +181,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "validate_iteration.py",
         "check_db_readonly.py",
         "check_secrets.py",
+        "render_md.py",
         "schemas",
         "tests",
     },
@@ -193,6 +194,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_docs_schemas.py",
         "test_schema_validator.py",
         "test_validate_iteration.py",
+        "test_render_md.py",
     },
     "target-app": set(),
 }
