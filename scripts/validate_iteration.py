@@ -112,6 +112,15 @@ def legal_transition(from_state: str, to_state: str, ui: bool, triggered_by: str
             if triggered_by == "user"
             else ("leaving blocked requires a user action (triggered_by=user)")
         )
+    if (
+        triggered_by == "user"
+        and to_state == "requirements_clarifying"
+        and from_state not in ("created", "requirements_clarifying")
+    ):
+        # reopen protocol (PRD §5): a user-triggered reopen may return the
+        # iteration to requirement clarification from any downstream state;
+        # scripts/reopen_iteration.py records it and propagates staleness.
+        return None
     if to_state not in successors(from_state, ui):
         return f"illegal transition {from_state} -> {to_state}"
     if from_state == "requirements_accepted" and to_state == "requirements_clarifying":
