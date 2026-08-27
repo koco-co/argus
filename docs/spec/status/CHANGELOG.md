@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-28 — Phase 0 closed; owner decisions recorded
+
+- **0.6 human sign-off given** (manual gate satisfied by explicit user confirmation; no `approvals[]` artifact is written — that namespace belongs to iteration artifacts via `record_approval.py`, so the gate is recorded here and in AGENT_BRIEF).
+- **Repo placement confirmed**: build directly in this repo (owner-confirmed; the `<target-app>-automation` split stays a post-v1 mechanical option, see ARCHITECTURE §2 future-split boundary).
+- **Notification DoD fallback authorized** (owner decision): M11/7.2's "one real channel receives summary" is executed as dispatcher unit tests + local verification with the deviation recorded; a real webhook upgrade path remains open. Recorded because the fallback is an acceptance-level authorization, not an implementation choice.
+- **Push policy**: one push per completed Phase (owner decision); Phase 0 pushed at close.
+- Phase 0 → Phase 1 transition: ROADMAP 0.6 checkbox flipped; Phase 1 (1.1–1.18) starts next per the one-task-at-a-time discipline.
+
+
 ## 2026-08-27 — Phase 0 infrastructure implemented & accepted (docs v1.6 → +code)
 
 First product code in the repo. ROADMAP Phase 0 executed task-by-task per its own discipline; every claimed DoD was mechanically verified in the same session. Scope decision delegated to the session by the owner's instruction ("自己设定一个goal，明确目标边界"): build directly in this repo (the `<target-app>-automation` alternative remains available post-hoc — the ARCHITECTURE §2 tree is relative).
