@@ -1,6 +1,6 @@
 # Data Model
 
-Version: 1.4 · Schema contracts updated after the Claude, Grok, and GPT review adoptions.
+Version: 1.5 · Schema contracts updated after the Claude, Grok, GPT, and post-v1.4 review adoptions.
 
 Authoritative machine contracts for every YAML artifact crossing a layer boundary. Architecture §1's validation layer enforces these; PRD §2–§5 defines their business meaning. Field-level rules not expressible in JSON Schema (cross-file references, ID uniqueness, staged coverage) live in the **semantic checks** listed in §11 and are enforced by scripts, not prose.
 
@@ -57,6 +57,7 @@ Schema: `.agents/skills/functional-test-design/schemas/requirements.schema.json`
           "requirement_id": {"type": "string", "pattern": "^R[0-9]{4}$"},
           "title": {"type": "string", "minLength": 1},
           "description": {"type": "string", "minLength": 1},
+          "priority": {"type": "integer", "enum": [1, 2, 3], "default": 2},
           "source": {"type": "string"}
         }
       }
@@ -109,7 +110,7 @@ Schema: `.agents/skills/functional-test-design/schemas/requirements.schema.json`
 }
 ```
 
-Resolved ambiguity entries are **audit evidence and are retained**, not deleted; PRD §4.1's earlier "no ambiguity entries remain" wording is superseded by this document (kept-with-resolution). The two status conditionals together enforce: clarified/accepted ⇒ no unresolved entries; clarifying ⇒ at least one question outstanding (prevents skipping the asking step).
+Resolved ambiguity entries are **audit evidence and are retained**, not deleted; PRD §4.1's earlier "no ambiguity entries remain" wording is superseded by this document (kept-with-resolution). The two status conditionals together enforce: clarified/accepted ⇒ no unresolved entries; clarifying ⇒ at least one question outstanding (prevents skipping the asking step). `priority` is proposed by M1 from clarification and confirmed by the user at accept; an omitted value is treated as 2 by every semantic consumer (PRD §4.2's priority-1 rule reads this field).
 
 ## 2.1 `exemptions.yaml`
 
@@ -158,7 +159,7 @@ Schema: `scripts/schemas/exemptions.schema.json`. Exemptions are deliberately se
 }
 ```
 
-Semantic checks: each requirement has at most one exemption; `not_testable` removes it from R→T/R→A demand and `manual_only` permits the case tier but removes it from the automation tier. An accepted UI iteration requires every requirement to have a test point or exemption. An accepted API iteration requires every non-exempt requirement to appear in at least one API case's `requirement_ids[]`.
+Semantic checks: each requirement has at most one exemption; `not_testable` removes it from R→T/R→A demand and `manual_only` permits the case tier but removes it from the automation tier. An accepted UI iteration requires every requirement to have a test point or exemption. An accepted API iteration requires every non-exempt requirement to appear in at least one API case's `requirement_ids[]`; on the API branch exemptions are produced during M4's requirements-mapping sub-stage (there is no M2), so this file's producer is branch-dependent by design.
 
 ## 3. `iteration.yaml`
 
@@ -175,7 +176,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
     "iteration_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
     "state": {"enum": [
       "created", "blocked",
-      "requirements_clarifying", "requirements_accepted",
+      "requirements_clarifying", "requirements_accepted", "requirements_mapped",
       "test_points_review", "test_points_accepted",
       "functional_cases_generating", "functional_cases_exported",
       "spec_normalizing", "spec_valid",
@@ -202,6 +203,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
                     "api_spec", "api_cases", "web_automation", "api_automation", "execution"],
       "properties": {
         "requirements":    {"$ref": "#/definitions/artifact_status"},
+        "exemptions":      {"$ref": "#/definitions/artifact_status"},
         "test_points":     {"$ref": "#/definitions/artifact_status"},
         "functional_cases":{"$ref": "#/definitions/artifact_status"},
         "api_spec":        {"$ref": "#/definitions/artifact_status"},
@@ -271,7 +273,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
 }
 ```
 
-Semantic check (scripts, not schema): transitions follow PRD §5 routes; v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`.
+Semantic check (scripts, not schema): transitions follow PRD §5 routes (`requirements_mapped` applies to the API branch only); v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`. Writer convergence: `state` and `events[]` are written exclusively by `scripts/record_event.py` (called by skills after each legal transition); `approvals[]` exclusively by `scripts/record_approval.py`; hand edits to either namespace are validation errors. `exemptions` in `artifacts` is an optional aggregate mirror — the authoritative exemption state remains `exemptions.yaml` itself.
 
 ## 4. `test_points.yaml`
 
@@ -400,7 +402,7 @@ Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.j
 }
 ```
 
-The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required. Draft-07 has no usable `maxContains`, so `contains` enforces ≥1 at the schema layer and **tag uniqueness is enforced semantically** by `check_functional_expectations.py` (§11); a second `module:` tag fails validation even though raw JSON Schema would accept it.
+The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required. Draft-07 has no usable `maxContains`, so `contains` enforces ≥1 at the schema layer and **tag uniqueness is enforced semantically** by `check_functional_expectations.py` (§11); a second `module:` tag fails validation even though raw JSON Schema would accept it. `derived_from.seed` values must resolve against the target app's seed registry (`shared/testdata/seed-registry.yaml`, produced with the harness per Roadmap 5.0.2): the check is advisory while no registry exists for the target app (early M3 dry-runs) and a hard gate from M6 generation onward, so hallucinated seed names are rejected before any code consumes them.
 
 Export contract for `.xmind`: the root tree is `iteration → module → requirement (R####) → test point (T####) → functional case (C####) → step`. IDs and titles are preserved at each node; a case linked to multiple requirements/test points appears under each applicable source path without changing the source IDs. Golden fixtures assert this hierarchy, not only ZIP validity.
 
@@ -657,7 +659,7 @@ JSON Schema validates *shape*; `check_coverage.py` enforces semantics per branch
 
 ## 9. `run-summary.yaml`
 
-Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by PRD §2.1, timing, scope, and the failure-class taxonomy that powers M9's escalation logic. Since v1.4 each execution persists to its own directory `iterations/<id>/runs/<run_id>/` (`run-summary.yaml` + captured evidence — ADR-010); no later run may overwrite an earlier one, and any copies under global `reports/` are display-only scratch, never the fact source.
+Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by PRD §2.1, timing, scope, and the failure-class taxonomy that powers M9's escalation logic. Since v1.4 each execution persists to its own directory `iterations/<id>/runs/<run_id>/` (`run-summary.yaml` + captured evidence — ADR-010); no later run may overwrite an earlier one, and any copies under global `reports/` are display-only scratch, never the fact source. `failed` exists for single-shot executions without a debug loop — CI's `record-ci` mode (self_debug_helper.py reading junit/allure) writes `scope: full` with one attempt documenting the execution outcome; trace/log artifacts under the run directory are gitignored per ADR-012.
 
 ```json
 {
@@ -676,7 +678,7 @@ Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by
     "scope": {"enum": ["module_set", "failing_subset", "full"]},
     "modules": {"type": "array", "minItems": 1,
       "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}},
-    "status": {"enum": ["running", "passed", "budget_exceeded", "escalated"]},
+    "status": {"enum": ["running", "passed", "failed", "budget_exceeded", "escalated"]},
     "retry_budget": {"type": "integer", "minimum": 0, "default": 5},
     "escalation": {
       "type": "object", "additionalProperties": false,
@@ -702,7 +704,7 @@ Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by
   },
   "allOf": [
     {
-      "if": {"properties": {"status": {"enum": ["passed", "budget_exceeded", "escalated"]}}, "required": ["status"]},
+      "if": {"properties": {"status": {"enum": ["passed", "failed", "budget_exceeded", "escalated"]}}, "required": ["status"]},
       "then": {"required": ["started_at", "finished_at", "env", "scope"],
                 "properties": {"attempts": {"minItems": 1}}}
     },
@@ -764,10 +766,11 @@ Cross-file and stage-dependent semantics belong to dedicated checkers so schemas
 | Every referenced R/T/C/A id exists; exemption requirements exist; ids unique per scope; traceability rows resolve | `check_coverage.py` (referential-integrity pass) | every validation run |
 | Recorded `automation_test_ids` resolve to *collectable* pytest nodeids (`pytest --collect-only` cross-check against the automation tree) | `check_coverage.py` | staged / CI automation tiers |
 | Functional case carries **exactly one** `module:<name>` tag (schema `contains` proves ≥1 only — Draft-07 has no `maxContains`) | `check_functional_expectations.py` | after M3/M6 generation |
-| Run-summary invariants beyond shape: `attempt_number` consecutive and unique from 1; terminal `passed` ⇒ last attempt is a pass; `escalated` ⇒ `escalation.reason_class` matches the taxonomy and its explanation cites evidence; every repair attempt's `diff_ref` resolves | `validate_iteration.py` semantic pass | pre-commit + CI |
+| Run-summary invariants beyond shape: `attempt_number` consecutive and unique from 1; terminal `passed` ⇒ last attempt is a pass; `failed` ⇒ the attempt record documents the execution failure; `escalated` ⇒ `escalation.reason_class` matches the taxonomy and its explanation cites evidence; every repair attempt's `diff_ref` resolves | `validate_iteration.py` semantic pass | pre-commit + CI |
 | Branch-specific coverage: UI R→T / T→C / C→nodeid, or API R→A / A→nodeid; `manual_only` exemptions stop at the case tier | `check_coverage.py --tier from-iteration` | staged, per PRD §5.1 |
 | Endpoint coverage: happy + negative/edge per in-scope endpoint | `check_api_coverage.py` | after M5, PRD §4.4 |
-| Functional expectation kind/seed rule; no unexplained numeric or currency literal for `derived_value` | `check_functional_expectations.py` | after M3/M6 generation |
+| Functional expectation kind/seed rule; no unexplained numeric or currency literal for `derived_value`; `derived_from.seed` resolves against the seed registry (advisory without one, hard gate from M6); exactly one `module:` tag per case | `check_functional_expectations.py` | after M3/M6 generation |
+| Collected automation nodeids are not orphans: every test's `(iteration, case_id)` markers resolve against the owning iteration's cases and its `traceability.yaml` rows (reverse closure — no untracked hand-written tests) | `check_orphan_tests.py` | static-checks + verification battery |
 | Client fields are a subset of source schema fields; variables resolve to seed/path/previous response | `check_api_models.py` + API semantic pass | after M5/M7 generation |
 | Legal iteration-state transitions; approval/event completeness; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
 | Exported implies ≥1 case; `.xmind` tree is iteration→module→R→T→C→step; `.xlsx` columns match the API export contract | exporter round-trip tests + CI byte-repro check | CI |

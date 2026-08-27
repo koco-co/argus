@@ -2,7 +2,7 @@
 
 ## AI-Driven Automation Framework
 
-Version: 1.4 · Performance/load testing is reserved for post-v1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
+Version: 1.5 · Performance/load testing is reserved for post-v1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
 
 > Machine contracts (JSON Schemas) are defined authoritatively in [DATA_MODEL.md](./DATA_MODEL.md); this document owns layering, directory structure, and dependency rules.
 
@@ -95,15 +95,15 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── 00-raw/                      # text inputs tracked w/ secret scan; binaries/large ignored,
 │   │                                # recorded instead in iteration.yaml.source_manifest[]
 │   ├── requirements.yaml / requirement.md  # accepted requirements are immutable
-│   ├── exemptions.yaml                     # reasoned M2 exceptions
+│   ├── exemptions.yaml                     # reasoned exceptions (M2 on UI-led; M4 mapping sub-stage on API-led)
 │   ├── test_points.yaml / test_points.md
 │   ├── functional-cases.yaml
 │   ├── api/spec.normalized.yaml, api/cases.yaml
 │   ├── exports/*.xmind, exports/*.xlsx
 │   ├── traceability.yaml
-│   └── runs/<run-id>/               # ⭐ per-run evidence dir (ADR-010): run-summary.yaml,
-│                                    #    allure-results/, logs/, attempt patch refs —
-│                                    #    append-only; later runs never overwrite earlier ones
+│   └── runs/<run-id>/               # ⭐ per-run evidence dir (ADR-010/012): run-summary.yaml +
+│                                    #    patch refs committed; allure-results/, logs/, traces/
+│                                    #    gitignored — append-only, never overwritten by later runs
 ├── target-app/                      # ⭐ pinned harness home (ADR-002; policy in TESTING_STRATEGY):
 │                                    #    medusa.lock.yaml, compose.yaml
 ├── automation/
@@ -117,11 +117,12 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 ├── shared/
 │   ├── utils/
 │   ├── assertions/
-│   ├── config/settings.py           # ⭐ now part of the canonical tree (was undeclared in v1.0)
+│   ├── config/settings.py           # ⭐ now part of the canonical tree (was undeclared in v1.0);
+│   │                                #    `check` mode validates env files before the M8 approval
 │   ├── db/readonly_client.py        # sole sanctioned DB access path (§6)
 │   ├── notify/{base,dispatcher}.py  # adapters dingtalk/feishu/wecom/email + dispatcher
 │   └── testdata/                    # ⭐ seeding/cleanup hooks per environment (PRD M8/M9 data_issue;
-│                                    #    policy: engineering/TESTING_STRATEGY harness & seed section)
+│                                    #    seed-registry.yaml + policy: TESTING_STRATEGY harness section)
 ├── reports/{allure-results,allure-report}/   # gitignored content, tracked .gitkeep
 ├── knowledge/{patterns.md,anti-patterns.md,target-app-notes/<target-app>.md}
 ├── scripts/
@@ -146,13 +147,17 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── classify_failure.py           # pytest evidence → bounded failure class
 │   ├── find_affected_modules.py      # AST import-closure selection for regression
 │   ├── record_approval.py            # sole approval writer; requires explicit user action
+│   ├── record_event.py               # ⭐ sole writer of `state` transitions + `events[]` (PRD §6)
 │   ├── reopen_iteration.py           # user-triggered reopen + stale propagation
+│   ├── finalize_merge.py             # ⭐ post-merge `merged` finalization with real merge SHA (ADR-011)
+│   ├── check_prod_scope.py           # ⭐ static write-call audit of read_only-marked tests (PRD §6)
+│   ├── check_orphan_tests.py         # ⭐ reverse closure: collected nodeids must resolve to cases + trace
 │   ├── run_plugin.py
 │   ├── notify.py                    # ⭐ CLI wrapper around shared/notify/dispatcher.py
 │   ├── self_debug_helper.py         # ⭐ budget bookkeeping/attempt-log helper used by the agent-driven loop;
 │   │                                #    invokes patch-scope checks and affected-module regression;
 │   │                                #    the LOOP ITSELF is the skill (session-side), never CI (ADR-004)
-│   ├── target_app_up.py / seed.py / reset.py / healthcheck.py / down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
+│   ├── target_app_up.py / target_app_seed.py / target_app_reset.py / target_app_healthcheck.py / target_app_down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
 │   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
 │       └── fixtures/                # incl. a checked-in hand-written sample iteration
 ├── .github/workflows/{ci.yml,regression.yml}
@@ -162,7 +167,9 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 └── docs/                            # development documentation set (see AGENT_BRIEF index)
 ```
 
-Gitignore rules resolve the v1.0 conflict between "reports/ ignored" and ".gitkeep committed": ignore directory *contents*, re-include keepers — `reports/**`, `!reports/**/.gitkeep`; same pattern for `automation/api/har/`.
+Gitignore rules resolve the v1.0 conflict between "reports/ ignored" and ".gitkeep committed": ignore directory *contents*, re-include keepers — `reports/**`, `!reports/**/.gitkeep`; same pattern for `automation/api/har/`. Per ADR-012, `iterations/*/runs/*/` tracks only `run-summary.yaml` and patch files; `allure-results/`, `logs/`, and `traces/` beneath a run directory are ignored.
+
+**This tree is the single structural authority**: Roadmap 0.8's structural-diff DoD and every TESTING_STRATEGY/ROADMAP reference to script or directory names defer to it; naming drift found in reviews is fixed here first.
 
 ---
 
@@ -281,8 +288,9 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 
 Two jobs, deliberately split because their prerequisites differ:
 
-- **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, archives run evidence into each touched iteration's `runs/<run_id>/` (helper invocation), uploads the run directories (summary/allure/logs/junit/patches) as artifacts, and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only.
+- **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, orphan-test closure, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci` (sole summary writer on CI — reads junit/allure, writes `scope: full` with one attempt), archives run evidence into each touched iteration's `runs/<run_id>/`, uploads the run directories (summary/patches committed contents; allure/logs/traces as artifacts only per ADR-012), and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** executes the full suite against `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions).
+- **Flake policy (CI-side, distinct from the in-test retry ban)**: a failed e2e job is re-run once automatically; a retry-pass marks the notification as `flaky-suspect` (single category, never counted green, never blocks merge on its own); the same nodeid appearing flaky-suspect repeatedly is recorded to `knowledge/patterns.md` via the M12 channel and triggers a repair-or-escalate decision. Full quarantine workflows stay post-v1 (Deferred).
 
 Workflow-hardening contract (GitHub's own guidance): third-party actions are pinned to **full commit SHAs** (`<sha> # vX.Y` comments; Dependabot keeps them current), top-level `permissions` default to none with per-job opt-in, every job sets `timeout-minutes`, and PR workflows share a concurrency group that cancels superseded runs.
 
@@ -312,11 +320,13 @@ CI trigger and notification contract:
 | Accepted artifacts are immutable; exemptions and explicit reopen are separate contracts | [ADR-009](./adr/adr-009-exemptions-and-accepted-artifact-reopen.md) |
 | Per-run evidence directories under `iterations/<id>/runs/<run_id>/` | [ADR-010](./adr/adr-010-per-run-evidence-directories.md) |
 | `accepted` closes the PR; `merged` is finalized post-merge by script | [ADR-011](./adr/adr-011-post-merge-finalization.md) |
+| Tiered evidence storage: summaries/patches in git, heavy evidence as artifacts | [ADR-012](./adr/adr-012-evidence-storage-policy.md) |
 
 CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
 
 ```yaml
 # .github/workflows/ci.yml — static checks, every PR, no target app needed
+# (regression.yml additionally carries `on: schedule:` — weekly full run against release HEAD)
 permissions: {}                        # minimal by default; jobs opt in explicitly
 concurrency:
   group: ci-${{ github.ref }}
@@ -357,7 +367,9 @@ jobs:
       - run: uv run python scripts/target_app_healthcheck.py
       - run: echo "base_url: $MEDUSA_URL" > config/env.ci.yaml   # assembled from secrets (+ auth/dsn blocks)
       - run: TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml
-      - run: uv run python scripts/self_debug_helper.py archive --dest iterations/*/runs/   # allure+logs+summary into per-run dirs
+      - run: uv run python scripts/self_debug_helper.py record-ci --junit reports/junit.xml   # sole CI summary writer (scope=full, one attempt)
+      - run: uv run python scripts/self_debug_helper.py archive --dest iterations/*/runs/   # allure+logs into per-run dirs (gitignored)
+      # a failed e2e job re-runs once (re-run failed jobs); retry-pass => flaky-suspect in notify, never green
       - if: always()
         uses: actions/upload-artifact@<full-sha>   # v4
         with:

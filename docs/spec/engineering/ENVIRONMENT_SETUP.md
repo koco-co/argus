@@ -37,7 +37,7 @@ target-app-up/seed/reset/healthcheck/down:  harness scripts (policy: TESTING_STR
 
 Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pytest cannot filter parameterized marks that way — reviewed & confirmed error); no `debug` target exists (self-debug is the agent-session flow, ADR-004). Execution scratch (`--alluredir=reports/allure-results`) stays gitignored display-only state; the durable evidence copy lands in `iterations/<id>/runs/<run_id>/` via the self-debug helper / CI archive step (ADR-010).
 
-**.gitignore essentials**: gitignored env/notify YAMLs; `reports/**` + `!reports/**/.gitkeep`; `automation/api/har/**` + keeper; `config/env.ci.yaml`; `.venv/`. Raw inputs: tracked text under `iterations/*/00-raw/` (subject to secret scan), binaries/large-file patterns ignored there with manifest fallback (PRD §6).
+**.gitignore essentials**: gitignored env/notify YAMLs; `reports/**` + `!reports/**/.gitkeep`; `automation/api/har/**` + keeper; `config/env.ci.yaml`; `.venv/`. Run evidence (ADR-012): under `iterations/*/runs/*/`, `run-summary.yaml` and patch files stay tracked while `allure-results/`, `logs/`, `traces/` are ignored (`iterations/*/runs/*/allure-results/**` etc., each with keeper-free full-ignore rules). Raw inputs: tracked text under `iterations/*/00-raw/` (subject to secret scan), binaries/large-file patterns ignored there with manifest fallback (PRD §6).
 
 ## Installation & Initialization
 

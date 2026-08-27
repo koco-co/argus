@@ -20,4 +20,4 @@ One long-lived protected `release` branch per target-app repo; every iteration m
 
 ## Impact
 
-Branch protection config becomes a real roadmap task (branch creation/protection was missing from v1.0 task list — added to Roadmap Phase 0). The single-in-progress rule is enforced by iteration validation; parallel multi-iteration work is a post-v1 change requiring a new asset ownership decision.
+Branch protection config becomes a real roadmap task (branch creation/protection was missing from v1.0 task list — added to Roadmap Phase 0). The single-in-progress rule is enforced by iteration validation; parallel multi-iteration work is a post-v1 change requiring a new asset ownership decision (per-module ownership registry / CODEOWNERS-style mapping agreed **before** the single-in-progress rule is lifted — module directories under `automation/` are the natural ownership unit).

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-27 — v1.4 baseline review adoption (v1.4 → v1.5)
+
+Input: external review of the v1.4 snapshot (20 findings: P1×7 / P2×8 / P3×5, no P0). Plan presented and confirmed before editing; every finding re-verified against the working tree first. All 20 dispositioned: 14 adopted, 5 lightweight/partial, 1 sub-item rejected (core/adapter ADR draft stays deferred).
+
+Adopted (P1): `requirements.priority` field (M1 proposes, user confirms at accept, absent ⇒ 2) so M2's priority-1 depth rule is decidable; API-led exemption production via a requirements-mapping sub-stage and new `requirements_mapped` route state (fixes the Phase 9.3 deadlock where the API branch had no legal exemption producer); `scripts/record_event.py` as sole writer of `state` transitions + `events[]` (symmetric with record_approval.py, closes the audit-forgery asymmetry); tiered evidence storage policy ([ADR-012](../architecture/adr/adr-012-evidence-storage-policy.md): run-summary + patch refs in git, allure/logs/traces gitignored/artifact-only, traces added to the redaction boundary); `finalize_merge.py` given a creation task (7.6) and tree entry; `check_orphan_tests.py` reverse closure (collected nodeids must resolve to cases + traceability — makes the no-hand-written-automation acceptance criterion mechanical); seed registry (`shared/testdata/seed-registry.yaml`, 5.0.2 output) with `derived_from.seed` resolution enforced from M6 on.
+
+Adopted (P2/P3): `settings.py check` mode gating the M8 approval; CI flake policy (failed e2e re-runs once → `flaky-suspect` classification via M12 channel) and weekly scheduled full regression against `release` HEAD; `self_debug_helper.py record-ci` as the sole CI summary writer plus a `failed` status in the run_summary enum (single-shot executions had no representable terminal state); directory-tree naming unified (`target_app_*`), missing scripts added, tree declared the single structural authority; stub-return literal heuristic in the POM boundary checker + a fourth self-debug proof case; optimizer golden-artifact regression as a hard 8.2 DoD; AGENT_BRIEF index de-versioned; optional gitleaks pairing noted in 1.13; validation fix-loop budget exhaustion now ends in `blocked(validation_budget_exhausted)` uniformly (M3/M4/M6/M7); `exemptions` added to the iteration artifacts map (optional, additive); acceptance criterion #1 narrowed to "no hand-written automation for iteration cases" with the exempt infrastructure surface listed.
+
+Deferred with records: full flake-quarantine workflow, core-package/project-adapter split (triggers made observable in RISKS #13/#14), per-module asset-ownership model noted as a precondition in ADR-001 before lifting the single-in-progress rule.
+
 ## 2026-08-27 — GPT spec review adoption (v1.3 → v1.4)
 
 Input: external GPT review of the v1.2 `spec.zip` snapshot (48 findings, P0×14 / P1×27 / P2×5 / P3×2). Every finding was re-verified against the current v1.3 tree before acting — several were already fixed by the Claude/Grok adoptions, and its headline "Schema 非法 JSON" probe did not reproduce against either snapshot (all fenced blocks parse).

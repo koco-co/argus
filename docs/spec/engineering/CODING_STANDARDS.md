@@ -95,6 +95,7 @@ Full taxonomy in PRD §4.7; implementation-facing summary:
 | Raw `dict` payloads in API clients | Untyped drift; hallucinated fields survive | Pydantic models both directions | `check_api_models.py` |
 | `wait_for_timeout(...)` to fix flake | Masks timing bugs; inflates suite time | Wait on expected state (`expect(locator).to_be_visible()` etc.) | review adoption |
 | Broad `try/except Exception: pass` in tests/shared | Swallows real failures; enables fake greens | Let exceptions fail; classify via failure classes | PRD §4.7 ban list |
+| Value-returning page-object method returning a string/number literal (no locator interaction in the body) | Stub-style fake green hiding inside the allow-list | Return values derived from locators; static-copy reads need `# static-copy-ok: <reason>` | literal-return heuristic in `check_pom_boundary.py`; Roadmap 5.5 case (d) |
 | Tests importing/reading `iterations/**` at runtime | Couples long-lived assets to mutable iteration data; breaks layering | Read own pytest markers | dependency table |
 | Hand-editing derived views (`.md`/`.xmind`/`.xlsx`) or `exports/` | Diverges from source-of-truth YAML | Regenerate via `export_*` scripts | ADR-007 |
 | Adding dependencies ad hoc | Undermines lockfile/reproducibility | Declare in pyproject groups per purpose (core/dev/mobile/perf) | pyproject layout |
