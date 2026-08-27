@@ -1,0 +1,17 @@
+# config/notify.example.yaml — committed placeholder shape (ARCHITECTURE §7.2).
+# Copy to config/notify.yaml (gitignored) and fill real webhook/SMTP values.
+# A failing channel is logged and never blocks others nor the run.
+#
+# channels:
+#   dingtalk:
+#     webhook: "https://oapi.dingtalk.com/robot/send?access_token=CHANGE_ME"
+#   feishu:
+#     webhook: "https://open.feishu.cn/open-apis/bot/v2/hook/CHANGE_ME"
+#   wecom:
+#     webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=CHANGE_ME"
+#   email:
+#     smtp_host: "CHANGE_ME"
+#     smtp_port: 465
+#     username: "CHANGE_ME"
+#     password: "CHANGE_ME"
+#     to: ["CHANGE_ME@example.com"]

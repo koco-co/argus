@@ -1,0 +1,6 @@
+# knowledge/optimization-candidates.yaml
+# M12-maintained candidate feed for the skill-self-optimizer (Roadmap 8.2).
+# The ≥2-distinct-iterations / ≥3-occurrence threshold is counted from this
+# registry, never from session memory.
+schema_version: "1.0"
+candidates: []

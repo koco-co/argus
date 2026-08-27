@@ -1,0 +1,5 @@
+# plugins/registry.yaml — explicit plugin registry (ARCHITECTURE §1/§2).
+# run_plugin.py resolves `source ref -> plugin` EXCLUSIVELY through this table;
+# an unknown name is an actionable error, never a guessed fallback.
+# v1 ships zero real connectors (PRD §8); Phase 2 wires the payload schemas.
+plugins: []
