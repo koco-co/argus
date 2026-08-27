@@ -11,7 +11,7 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 ## 已完成与下一步
 
 - 已完成：v1.0–v1.6 文档基线（详见 [CHANGELOG](./status/CHANGELOG.md)）；2026-08-27 Phase 0 施工与验收；2026-08-28 Phase 0 关闭（0.6 签收 + 决策留痕）。
-- 进行中：Phase 1 已完成 1.1（全部 DATA_MODEL schema + fixture 对 + 文档块测试，含 rfc3339-validator 规格缺陷修复）、1.2（registry 十项绑定 + validate_schema.py 真实现 + _registry_lib 单一实现）、1.3（validate_iteration.py：分支感知路由/staleness 全链/审批与事件完整性/单迭代/run-summary 不变量，check 与 --fix 分离）、1.4（render_md.py 确定性渲染 requirement.md/test_points.md，金样 fixture 锁定）、1.5（export_xmind.py：XMind ZEN zip 布局、ZIP 时间戳与文档属性固定实现字节可复现、iteration→module→R→T→C→step 结构断言、argus_v<N>_Cases.xmind 版本号递增不覆盖；116 pytest 全绿）。- 下一步：Phase 1 任务 1.6（export_xlsx.py）起，顺序至 1.15b，再 1.16 接线收口、1.17/1.18 补齐。待用户动作：无。
+- 进行中：Phase 1 已完成 1.1（全部 DATA_MODEL schema + fixture 对 + 文档块测试，含 rfc3339-validator 规格缺陷修复）、1.2（registry 十项绑定 + validate_schema.py 真实现 + _registry_lib 单一实现）、1.3（validate_iteration.py：分支感知路由/staleness 全链/审批与事件完整性/单迭代/run-summary 不变量，check 与 --fix 分离）、1.4（render_md.py 确定性渲染 requirement.md/test_points.md，金样 fixture 锁定）、1.5（export_xmind.py：XMind ZEN zip 布局、ZIP 时间戳与文档属性固定实现字节可复现、iteration→module→R→T→C→step 结构断言、argus_v<N>_Cases.xmind 版本号递增不覆盖）、1.6（export_xlsx.py：DATA_MODEL §7 十五列契约 openpyxl 回读断言、doc 属性与 ZIP 时间戳固定实现双跑同字节、argus_v<N>_API_Cases.xlsx 版本号递增；120 pytest 全绿）。- 下一步：Phase 1 任务 1.7（check_coverage.py）起，顺序至 1.15b，再 1.16 接线收口、1.17/1.18 补齐。待用户动作：无。
 - 需注意：历史审查记录已消化并按所有者指示删除；被否决的评审建议留痕于 [RISKS_AND_KNOWN_ISSUES](./status/RISKS_AND_KNOWN_ISSUES.md)，不得作为新需求重新引入。
 
 ## 文档索引
