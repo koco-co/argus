@@ -1,8 +1,8 @@
 # Product Requirement Document (PRD)
 
-## AI-Driven Automation & Performance Testing Framework
+## AI-Driven Automation Framework
 
-Version: 1.1 · Status: Revised baseline (v1.0 + review adoptions) · Companion docs: ARCHITECTURE.md, DATA_MODEL.md, GLOSSARY.md, ROADMAP.md
+Version: 1.3 · Status: Revised baseline (v1.0 + Claude and Grok review adoptions) · Performance/load testing is reserved for post-v1 · Companion docs: ARCHITECTURE.md, DATA_MODEL.md, GLOSSARY.md, ROADMAP.md
 
 > **Reading rule**: machine contracts (JSON Schemas, field dictionaries) are defined authoritatively in [DATA_MODEL](../architecture/DATA_MODEL.md); IDs and naming formats in [GLOSSARY.md](./GLOSSARY.md). This PRD defines *what* and *in which state*; it does not restate schema fields.
 
@@ -12,7 +12,7 @@ Version: 1.1 · Status: Revised baseline (v1.0 + review adoptions) · Companion 
 
 Define **what** the system must do and **in what order/state**, independent of implementation. This PRD is the contract the Skills, scripts, and CI gates must all satisfy. Scope is v1: requirement clarification through Web + API automation generation and self-debug execution for a single target application, single repo. Mobile, mini-program, performance testing, and real plugin integrations are designed-for but not required to ship in v1 (see §8).
 
-**Roles** (minimum viable): the **user** is the only actor who can accept requirements/test points, provide environment secrets, approve skill edits, merge to `release`, and review self-debug diffs at acceptance. The **agent** drives generation, validation, and the self-debug loop, but never performs an acceptance action without a persisted user-confirmation record (see §6 Auditability). A CI job is a checker only — it can fail builds, never accept or merge.
+**Roles** (minimum viable): the **user** is the only actor who can accept requirements/test points/exemptions, provide environment secrets, approve skill edits, merge to `release`, and review self-debug diffs at acceptance. The **agent** drives generation, validation, and the self-debug loop, but never performs an acceptance action without a persisted user-confirmation record (see §6 Auditability). A CI job is a checker only — it can fail builds, never accept or merge.
 
 ---
 
@@ -23,13 +23,13 @@ Define **what** the system must do and **in what order/state**, independent of i
 |Entity|Identity|Lives in|Produced by|
 |---|---|---|---|
 |IterationState|`iteration_id`|`iterations/<id>/iteration.yaml`|`scripts/new_iteration.py`; updated by skills/scripts at each phase transition|
-|Requirement|`requirement_id` (R####)|`requirements.yaml`|test-design skill, stage 1|
-|TestPoint|`test_point_id` (T####)|`test_points.yaml`|test-design skill, stage 2|
-|FunctionalCase|`case_id` (C####)|`functional-cases.yaml`|test-design skill, stage 3|
+|Requirement|`requirement_id` (R####)|`requirements.yaml`|functional-test-design skill, stage 1|
+|TestPoint|`test_point_id` (T####)|`test_points.yaml`|functional-test-design skill, stage 2|
+|FunctionalCase|`case_id` (C####)|`functional-cases.yaml`|functional-test-design skill, stage 3|
 |NormalizedSpec|— (endpoint list under `endpoints[]`)|`api/spec.normalized.yaml`|api-test-design skill / plugin conversion (M4)|
-|APICase|`api_case_id` (A####)|`api/cases.yaml`|api-test-design skill|
+|APICase|`api_case_id` (A####), with `requirement_ids[]`|`api/cases.yaml`|api-test-design skill|
 |AutomationTest|`automation_test_id` (pytest nodeid)|`automation/**/tests/<module>/`|web/api-automation-generation skills|
-|TraceabilityRecord|link row (`requirement_id` → `test_point_id` → `functional_case_id` xor `api_case_id` → `automation_test_ids[]`)|`traceability.yaml`|all generation skills, incrementally (idempotent upsert keyed on `iteration_id`+ids)|
+|TraceabilityRecord|branch-aware link row: UI `requirement_id` → `test_point_id` → `functional_case_id` → `automation_test_ids[]`; API `requirement_id` → `api_case_id` → `automation_test_ids[]`|`traceability.yaml`|all generation skills, incrementally (branch-specific idempotent upsert)|
 |RunResult|`run_id`|`run-summary.yaml` + `reports/allure-results/`|self-debug-runner|
 
 Full field dictionaries: DATA_MODEL §2–§10.
@@ -41,23 +41,17 @@ Full field dictionaries: DATA_MODEL §2–§10.
         │                          │                        (validated against source-payload schema)
         ▼                          ▼
  ┌─────────────────────────────────────────┐   requirements.yaml   ┌──────────────┐
- │ test-design (stage 1 = M1)              │──────────────────────▶│ requirement.md│ (rendered)
+ │ functional-test-design (stage 1 = M1)   │──────────────────────▶│ requirement.md│ (rendered)
  └─────────────────────────────────────────┘                        └──────────────┘
-        │ (user accepts — recorded in iteration.yaml approvals[])
-        ▼
-      M2: test_points.yaml ──▶ test_points.md            (user accepts)
-        ▼
- ┌───────────────────────────┐        ┌────────────────────────────────────┐
- │ M3: functional-cases.yaml │  OR/AND│ M4: source/HAR/plugin payload       │
- │     exports/*.xmind       │        │     → api/spec.normalized.yaml      │
- └───────────────────────────┘        │ M5: api/cases.yaml → *.xlsx         │
-        │                             └────────────────────────────────────┘
-        ▼                                        │
-      M6: web POM + tests                        ▼
-                                       M7: api clients/models/tests
-        └───────────────┬──────────────────────┘
-                        ▼
-             M9: self-debug-runner
+        │ (user accepts — recorded by record_approval.py)
+        ├── UI-led only ──▶ M2: test_points.yaml + exemptions.yaml ──▶ M3: functional-cases.yaml
+        │                                      └──▶ exports/*.xmind ──▶ M6: web POM + tests
+        └── API-led only ─▶ M4: api/spec.normalized.yaml ──▶ M5: api/cases.yaml
+                                             └──▶ exports/*.xlsx ──▶ M7: API clients/models/tests
+                                                                  │
+                                      (both branches are never enabled in v1)
+                                                                  ▼
+                                                       M9: self-debug-runner
                         ▼
    run-summary.yaml + reports/allure-results/
                         ▼
@@ -73,19 +67,27 @@ Every arrow that crosses a skill boundary is a **YAML file validated against a s
 |#|Module|Purpose|Trigger|Primary Input|Primary Output|Confirmation point|
 |---|---|---|---|---|---|---|
 |M1|Requirement Ingestion & Clarification|Turn raw/messy input into an unambiguous requirement|New iteration created|`00-raw/*` or plugin source payload|`requirements.yaml` + rendered `requirement.md`|⏸ Yes (clarify, then accept)|
-|M2|Test Point Extraction|Enumerate testable points from accepted requirement|M1 accepted|`requirements.yaml` (status `accepted`)|`test_points.yaml` (+ rendered `.md`)|⏸ Yes|
+|M2|Test Point Extraction|Enumerate testable points or record reasoned exemptions from accepted requirements|M1 accepted, UI branch only|`requirements.yaml` (status `accepted`)|`test_points.yaml` + `exemptions.yaml` (+ rendered `.md`)|⏸ Yes|
 |M3|Functional Test Case Generation|Turn test points into structured, exportable cases|M2 accepted|`test_points.yaml` (status `accepted`)|`functional-cases.yaml` + `.xmind`|No (schema-gated; see §4.3 note on implicit review opportunity)|
 |M4|API Spec Normalization|Turn source code / docs / HAR / plugin payload into a normalized spec|Iteration needs API cases|source, docs, `.har`, or API source payload|`api/spec.normalized.yaml`|No|
 |M5|API Test Case Generation|Turn normalized spec into structured API cases|M4 output present|`api/spec.normalized.yaml` (valid)|`api/cases.yaml` + `.xlsx`|No (schema-gated only)|
 |M6|Web Automation Generation|Turn functional cases into POM-based UI automation|M3 output present|`functional-cases.yaml` (status `exported`)|page/component objects + tests under `automation/web/{pages,components,tests}/<module>/`|No|
 |M7|API Automation Generation|Turn API cases or HAR into httpx+pydantic automation|M5 output present, **or** a HAR (which is routed through M4's normalization to produce schema-valid `api/cases.yaml` before any code is written)|`api/cases.yaml` (valid)|clients + models + tests under `automation/api/`|No|
 |M8|Environment Setup|Persist real env parameters for execution|Before first run|user-provided values|`config/env.<name>.yaml`|⏸ Yes|
-|M9|Execution & Self-Debug|Run generated suite, autonomously fix whitelisted failure classes, stop at green/budget/escalation|M6 and/or M7 output present + M8 complete|test files + env config|`run-summary.yaml`, allure results|No mid-loop; final summary + full diff history handed over|
+|M9|Execution & Self-Debug|Run generated suite, autonomously fix whitelisted failure classes, stop at green/budget/escalation|M6 or M7 output present + M8 complete|test files + env config|`run-summary.yaml`, allure results|⏸ Yes (terminal acceptance; no mid-loop contact)|
 |M10|Traceability & Coverage|Guarantee every non-exempt requirement reaches the tier its iteration stage demands|Continuous; staged gate in CI|all of the above|`traceability.yaml`, coverage verdict per §5.1|No (automated gate)|
 |M11|Notification|Report run outcomes to IM channels|End of M9, or CI completion (always, incl. failures)|`run-summary.yaml` or job result|DingTalk/Feishu/WeCom/Email message via `shared/notify/dispatcher.py` (CLI wrapper `scripts/notify.py`)|No|
-|M12|Knowledge Accumulation|Record reusable facts/lessons|**Concrete trigger**: within 24h of each terminal state of M9 and after every applied skill optimization|agent observations|append-only entries in `knowledge/*.md` with frontmatter (`tags/date/source`)|No|
+|M12|Knowledge Accumulation|Record reusable facts/lessons|Before handing control back at each terminal state of M9 and after every applied skill optimization|agent observations|append-only entries in `knowledge/*.md` with frontmatter (`tags/date/source`), following the shared knowledge-capture contract below|No|
 |M13|Skill Self-Optimization|Improve a Skill's own instructions|Same failure class recurs in ≥2 distinct iterations (quantified threshold), or ≥3 occurrences anywhere|proposed SKILL.md diff|versioned, committed skill change (old copy kept under `versions/`)|⏸ Yes|
 |M14|Plugin Ingestion|Fetch + normalize external sources|Skill needs external data|source ref (URL/ID/path)|normalized payload written to disk matching `*_source_payload.schema.json`; downstream M1/M4 converts it into internal artifacts|No (plugin has no confirmation point; downstream M1/M4 still gate)|
+
+### M12 Knowledge Capture Contract
+
+M12 is a shared closing responsibility of generation, execution, and optimization skills; it does not require a separate full skill. Before handing control back at an M9 terminal state, and after each applied skill optimization, the responsible skill records only evidence-backed, reusable knowledge in the appropriate append-only file under `knowledge/`.
+
+- Each entry carries `tags`, `date`, and `source` frontmatter and states the observed fact, context, and reusable consequence.
+- Duplicate facts are not appended. A correction is recorded as a new entry that points to the superseded one.
+- Record confirmed behavior, reproducible failures, validated workarounds, or explicit design corrections; omit generic advice, speculation, and one-off noise.
 
 ---
 
@@ -122,7 +124,7 @@ Each phase defines: **Entry precondition**, **Input**, **Output**, **State diagr
 
 - **Entry precondition**: `requirements.yaml` status = `accepted`.
 - **Input**: `requirements.yaml`.
-- **Output**: `test_points.yaml` (statuses `draft` → `review` → `accepted`), rendered to `test_points.md`.
+- **Output**: `test_points.yaml` plus `exemptions.yaml` (statuses `draft` → `review` → `accepted`), rendered to `test_points.md`.
 
 |State|Entry condition|Exit condition → Next state|Actor|
 |---|---|---|---|
@@ -130,7 +132,7 @@ Each phase defines: **Entry precondition**, **Input**, **Output**, **State diagr
 |`review`|schema valid|user reviews → `accepted`, or → `draft` (revise)|User|
 |`accepted`|user confirms|unlocks M3; also unlocks the R→T coverage tier check (§5.1)|—|
 
-- **Validation rules**: every requirement with default flags (i.e., not manually exempted) is referenced by ≥1 test point **at this stage** — gaps are caught here, not deferred to final CI. A requirement judged un-testable gets `testable: false` + reason; one that will never be automated gets `automation_required: false` + `manual_reason` — both remain visible to reviewers.
+- **Validation rules**: for a UI-led iteration, every accepted requirement is referenced by ≥1 test point or by one accepted exemption carrying a non-empty reason; every priority-1 requirement has at least one `happy` and one `negative`/`boundary` test point unless covered by a `not_testable` exemption (`manual_only` still requires the case tier). Exemptions live in `exemptions.yaml`, not in the accepted requirements file. The accepted `requirements.yaml` is read-only; changes require the reopen protocol in §5.
 - **Failure handling**: unmappable requirements are flagged in the review output, never silently omitted.
 
 ### 4.3 Functional Test Case Generation (M3)
@@ -146,7 +148,7 @@ Each phase defines: **Entry precondition**, **Input**, **Output**, **State diagr
 |`valid`|schema passes|export script runs → `exported`|Agent (automatic)|
 |`exported`|`.xmind` written and structurally verified|unlocks M6|—|
 
-- **Validation rules**: schema valid; every case's tags include exactly one `module:<name>` tag matching GLOSSARY module format; every case links its source test points (`test_point_ids[]`). Exporters must be byte-reproducible (fixed ZIP timestamps — Architecture §7).
+- **Validation rules**: schema valid; every case's tags include exactly one `module:<name>` tag matching GLOSSARY module format; every case links its source test points (`test_point_ids[]`); `precondition` is always present and explicitly says `none` when no setup is needed. Each step declares `expected_kind` (`ui_state`, `copy`, or `derived_value`); `derived_value` must declare `derived_from.seed` and `derived_from.rule`, and semantic checks reject unexplained currency or pure-numeric literals. Exporters must be byte-reproducible (fixed ZIP timestamps and document properties; see Roadmap 1.5–1.6).
 - **Implicit review opportunity**: M3 itself is not a confirmation gate by design; because M6 is a separately invoked skill, the exported `.xmind` naturally serves as a human-readable checkpoint the user may reject before invoking generation. The agent should surface the export path at handoff instead of immediately proceeding.
 
 ### 4.4 API Spec Normalization & API Test Case Generation (M4 + M5)
@@ -162,7 +164,7 @@ Each phase defines: **Entry precondition**, **Input**, **Output**, **State diagr
 |`cases_valid`|schema + semantic checks pass|export runs → `exported`|Agent|
 |`exported`|`.xlsx` written|unlocks M7|—|
 
-- **Validation rules**: every endpoint not marked `out_of_scope: true` (with a reason) has ≥1 happy-path case **and** ≥1 negative/edge case, checked by `scripts/check_api_coverage.py`; every case carries a required `module` (drives `automation/api/tests/<module>/` placement).
+- **Validation rules**: every endpoint not marked `out_of_scope: true` (with a reason) has ≥1 happy-path case **and** ≥1 negative/edge case, checked by `scripts/check_api_coverage.py`; every case carries a required `module` (drives `automation/api/tests/<module>/` placement) and `requirement_ids[]` (drives API-led R→A traceability). The normalized source preserves parameter/body/response schemas and referenced OpenAPI components, and request variables can reference `seed`, `path`, or `prev_response`.
 - **Failure handling**: unparseable source stops at `spec_draft` and surfaces to the user — hard failures are not silent even though this phase has no confirmation point.
 
 ### 4.5 Web UI Automation Generation (M6)
@@ -176,7 +178,7 @@ Each phase defines: **Entry precondition**, **Input**, **Output**, **State diagr
 |`linting`|generation complete|`check_pom_boundary.py` + `check_test_markers.py` + ruff + pyright pass → `generated`, else fix loop|Agent (automatic)|
 |`generated`|lint clean|unlocks M9 for this module|—|
 
-- **Validation rules**: no selector literal in a `tests/` file; no assertion inside `pages/`–`components/` code; every test tagged with `module`/`case_id`/`iteration` markers (markers are metadata — run selection is by module **directory**); `traceability.yaml` gains an `automation_test_ids` entry for every covered `case_id`.
+- **Validation rules**: no selector literal in a `tests/` file; no assertion inside `pages/`–`components/` code; generated test files use `test_<iteration_id>_<case_id>_<behavior>.py`; every test is tagged with `module`/`case_id`/`iteration` markers (markers are metadata — run selection is by module **directory**); `traceability.yaml` gains an `automation_test_ids` entry for every covered `case_id`; when an expectation depends on seeded or environment data, generated assertions re-derive the value from the seed context rather than copying a literal from the case description, and `check_functional_expectations.py` rechecks the case-to-assertion contract.
 - **Failure handling**: a case with no sensible UI mapping is flagged back to the user rather than producing a vacuous test.
 
 ### 4.6 API Automation Generation (M7)
@@ -186,7 +188,8 @@ Same shape as 4.5; input `api/cases.yaml` (or a HAR pre-normalized through M4/M5
 ### 4.7 Execution & Self-Debug (M9)
 
 - **Entry precondition**: automation for the target modules is `generated`; required `config/env.*.yaml` values present (M8 complete).
-- **Scope**: one invocation targets one **module set** within the iteration (default: all modules touched by this iteration). Re-runs execute the failing subset plus its intra-module dependencies, never gratuitous full-suite reruns.
+- **Scope**: one invocation targets one **module set** within the iteration (default: all modules touched by this iteration). A debug **cycle** is exactly one failing-subset execution, at most one patch (which may touch multiple allowed files), the static verification battery, and one affected-module regression before the next retry.
+- **Affected-module regression**: after a patch, compute the AST import closure of changed project modules, then run the complete test directory for every business module in that closure using the same `automation/{web,api}/tests/<module>/` selection rule; this is broader than the failing subset and narrower than the whole repository.
 - **Output**: `run-summary.yaml` (with `run_id`), `reports/allure-results/`.
 - **Runtime rule**: the self-debug loop is **session-side only** (agent-driven skill). CI never runs self-debug — CI executes committed tests read-only.
 
@@ -201,22 +204,23 @@ Same shape as 4.5; input `api/cases.yaml` (or a HAR pre-normalized through M4/M5
 
 **Patch scope (hard rule):**
 
-- May modify: `automation/web/{pages,components,fixtures}/**`, `automation/api/{clients,models}/**`, generated test implementation internals (waits, selectors inside page objects, import paths), shared utilities it owns.
-- Must never modify: assertions' expected values or assertion semantics, expected results sourced from `cases.yaml`, markers/tags, pytest collection config, `iterations/**`, `config/**`, `.agents/skills/**` (incl. schemas), `AGENTS.md`.
+- May modify: locator/wait/type/import implementation in `automation/web/{pages,components}/**` and `automation/api/{clients,models}/**`. A `data_issue` may only adjust reseed-hook wiring or namespace arguments; it may not change seed formulas, seeded fixture `expected_*` values, or test data meaning.
+- Must never modify: any `assert`/`expect` expression or expected value under `automation/**/tests/**`; expected-result formulas or `expected_*` fields under `automation/**/fixtures/**` and `shared/testdata/**`; case expectations in `iterations/**`; markers/tags, pytest collection configuration, `config/**`, `.agents/skills/**` (incl. schemas), `AGENTS.md`, or any file outside the allow-list.
 - Banned patterns: `pytest.skip`/`pytest.xfail`/`@pytest.mark.skip|xfail`, `assert True`, bare `try/except Exception: pass`, deleting or loosening existing assertions, moving tests out of collection.
 
-**Failure-class taxonomy:**
+**Failure-class taxonomy:** `classify_failure.py` first maps pytest evidence mechanically: assertion failures, backend 5xx, auth failures, and product-behavior mismatches are escalation-only; Timeout/Locator failures may be `timing` or `locator_drift`; fixture/serialization/import failures map to their corresponding repairable classes. The LLM may refine only within the repairable locator/timing boundary and may never promote an escalation-only class to auto-fixable.
 
 | Class | Auto-fix? | Typical repair |
 | --- | --- | --- |
-| `locator_drift`, `timing`, `fixture_error`, `serialization_error`, `import_type_error` | ✅ yes | update selectors/waits/fixtures/serialization/types |
+| `locator_drift`, `timing`, `serialization_error`, `import_type_error` | ✅ yes | update selectors/waits/serialization/types inside the allow-list |
 | `data_issue` (test data missing/consumed) | ⚠️ only via seeding hooks (`shared/testdata/`); never by weakening expectations | re-seed namespace, unique-suffix data |
+| `fixture_error` (anything beyond reseed-hook wiring) | ❌ escalate immediately | diagnose and hand over |
 | `environment_unavailable`, `auth_failure`, `backend_5xx`, `product_behavior_mismatch`, `requirement_conflict` | ❌ escalate immediately | diagnose and hand over |
 
-**Post-patch verification battery** (every cycle, before re-run): ruff + pyright + `check_pom_boundary.py` + `check_test_markers.py` + affected-module regression. A patch failing static gates counts against budget and is reverted if not clean.
+**Post-patch verification battery** (every cycle, before re-run): `check_patch_scope.py` + ruff + pyright + `check_pom_boundary.py` + `check_test_markers.py` + affected-module regression. The patch-scope check fails hard on frozen-path, assertion/expected-value, or banned-pattern violations; there is no review-only exception for those changes. A patch failing static gates counts against budget and is reverted if not clean. Terminal diff review remains a second audit layer.
 
 - **Validation rules**: `retry_budget` default 5 debug cycles per invocation; every appends `{attempt_number, result, failure_class, summary, diff_ref}` to `run-summary.yaml.attempts[]`.
-- **Failure handling**: the user is contacted only at terminal states (`passed`/`budget_exceeded`/`escalated`) — never mid-loop. At acceptance the user reviews the accumulated diffs; the acceptance criterion is that no diff touches forbidden scope.
+- **Failure handling**: the user is contacted only at terminal states (`passed`/`budget_exceeded`/`escalated`) — never mid-loop. At acceptance the user reviews the accumulated diffs; the automated patch-scope verdict and final diff review must both confirm that no diff touches forbidden scope or weakens assertions.
 
 ---
 
@@ -232,18 +236,18 @@ CREATED → requirements_clarifying → requirements_accepted → test_points_re
   → env_pending → env_configured → executing → execution_passed | execution_budget_exceeded | escalated
   → acceptance_pending → accepted → merged
 
-API-led route (skips M2/M3 entirely):
+API-led route (skips M2/M3 entirely and links requirements directly to API cases):
 CREATED → requirements_clarifying → requirements_accepted → spec_normalizing → spec_valid
   → api_cases_generating → api_cases_exported
   → api_automation_generating → api_automation_generated
   → env_pending → env_configured → executing → …(same tail)
 
-Hybrid: both case branches proceed in parallel; `executing` requires all intended branches
-to have reached *_automation_generated. Which branches are intended is declared once in
-iteration.yaml.branches at creation time.
+Hybrid is reserved for post-v1. v1 accepts exactly one intended branch per iteration;
+`iteration.yaml.branches` with both `ui` and `api` enabled is invalid and must be rejected
+by schema/semantic validation.
 ```
 
-Any state may move to `blocked` with a `blocked_reason` on a hard failure (spec parse failure, escalated self-debug, etc.). Leaving `blocked` always requires user action. Transition legality is enforced against this section's routes by scripts and referenced from AGENTS.md; illegal transitions are a validation error.
+Any state may move to `blocked` with a `blocked_reason` on a hard failure (spec parse failure, escalated self-debug, etc.). Leaving `blocked` always requires user action. An accepted upstream artifact can be changed only through `scripts/reopen_iteration.py`: it records a user-triggered reopen event, preserves all allocated IDs, marks downstream artifacts stale, and prevents generation/execution from consuming stale inputs until regenerated or explicitly re-confirmed. Transition legality is enforced against this section's routes by scripts and referenced from AGENTS.md; illegal transitions are a validation error.
 
 ### 5.1 Staged coverage gates (resolves the strictness contradiction)
 
@@ -251,12 +255,14 @@ Coverage demands scale with the iteration's own progress; CI evaluates **per-ite
 
 | Iteration condition | Enforced minimum (via `check_coverage.py --tier <t>`) |
 | --- | --- |
-| test_points accepted | Tier R→T: every requirement (except `testable: false`) cited by ≥1 test point |
-| functional and/or api cases exported | Tier T→C: every test point cited by ≥1 case |
-| automation generated | Tier C→automation: every case whose requirement chain has `automation_required: true` maps to ≥1 nodeid |
-| merged to release | All three tiers hold for the merged iteration |
+| UI-led test_points accepted | Tier R→T: every requirement is cited by ≥1 test point, unless covered by an accepted `not_testable` exemption |
+| API-led api_cases exported | Tier R→A: every requirement is cited by ≥1 API case through `requirement_ids[]` |
+| UI functional cases exported | Tier T→C: every test point is cited by ≥1 functional case |
+| UI automation generated | Tier C→automation: every non-`manual_only` case maps to ≥1 nodeid |
+| API automation generated | Tier A→automation: every API case maps to ≥1 nodeid |
+| merged to release | The complete tier chain for that iteration's declared branch holds |
 
-Referential integrity (every referenced ID exists; IDs unique per scope; no orphan rows) is enforced at **every** tier. Requirements marked `automation_required: false` need `manual_reason` and exit the automated-tier demand.
+Referential integrity (every referenced ID exists; IDs unique per scope; no orphan rows) is enforced at **every** tier. `--tier from-iteration` reads `iteration.yaml.branches` and the current state to select the applicable chain; release/merged validation requires the complete chain for that branch. `--tier auto` remains a local audit aggregate only and is not a CI gate. A `manual_only` exemption still requires UI/API coverage up to the case tier but exits the automation-tier demand.
 
 ---
 
@@ -264,8 +270,8 @@ Referential integrity (every referenced ID exists; IDs unique per scope; no orph
 
 - **Determinism of derived views**: `.xmind`/`.xlsx`/`.md` renders must be byte-reproducible from their source YAML — exporters pin ZIP entry timestamps and document properties so two runs produce identical bytes (DoD: SHA-256 equal across runs). Determinism is promised **only** for these script-rendered outputs.
 - **Regeneration discipline (skills)**: exact idempotency is not assumed from an LLM. Instead: each generated artifact records `generated_from: {artifact, sha256}`; when invoked on unchanged input (hash match) a generation skill defaults to a **no-op** unless explicitly forced; stable ordering and preserved ID allocation prevent gratuitous churn; outputs are formatted uniformly.
-- **Auditability**: every confirmation-gated transition is reconstructable from `iterations/<id>/` alone: `approvals[]` records `{stage, action, actor=user, timestamp, artifact_sha256, note}`, and `events[]` records transitions. Raw text inputs under `00-raw/` are committed (subject to a pre-commit secret-pattern scan); binaries/large files are gitignored but must appear in `iteration.yaml.source_manifest[]` with `{path, sha256, captured_at}` so provenance survives redaction.
-- **Staleness propagation**: when an upstream artifact changes (hash mismatch vs downstream's `generated_from.sha256`), downstream becomes stale: validators mark it, CI refuses stale assets, old exports must not ship, and affected automation must be regenerated or explicitly re-confirmed.
+- **Auditability**: every confirmation-gated transition is reconstructable from `iterations/<id>/` alone: `scripts/record_approval.py` is the only approval writer and records `{stage, action, actor=user, timestamp, artifact_sha256, note}` after an explicit user acceptance; agents must not hand-edit `approvals[]`. `events[]` records transitions. Raw text inputs under `00-raw/` are committed (subject to a pre-commit secret-pattern scan); binaries/large files are gitignored but must appear in `iteration.yaml.source_manifest[]` with `{path, sha256, captured_at}` so provenance survives redaction.
+- **Staleness propagation**: when an upstream artifact changes (hash mismatch vs downstream's `generated_from.sha256`), downstream becomes stale: validators mark it, CI refuses stale assets, old exports must not ship, and M6/M7/M9 must reject stale inputs until affected automation is regenerated or explicitly re-confirmed through the reopen protocol.
 - **Security posture**: lightweight by explicit decision — secrets live in gitignored YAML (accepted v1 debt; migration path noted in RISKS_AND_KNOWN_ISSUES). Secrets/redaction rules: Authorization/Cookie/token-style headers and credential-shaped fields are redacted at ingestion boundaries (HAR normalization, case import, log/Allure attachment). DB access is read-only-only, with the read-only DB role as the authoritative control and code checks as defense-in-depth. `TEST_ENV=prod` mechanically restricts collection to tests marked `@pytest.mark.read_only` (enforced in conftest collection hook), not merely by prose.
 - **Extensibility**: M14 plugins and mobile/mini-program/perf additions must not require modifying M1–M9's schemas or state machines. Vision-driven/UI-TARS style locator engines and global RTM aggregation are reserved extensions (out of scope, §8).
 - **Browser matrix**: v1 validates Chromium only, locally and in CI (single-browser parity beats divergent installs).
@@ -274,11 +280,11 @@ Referential integrity (every referenced ID exists; IDs unique per scope; no orph
 
 Aligned with Roadmap Phase 9; a release can claim v1 when all hold:
 
-1. Two independent iterations have gone end-to-end from raw requirement to merged, passing, traceable automation — one UI-led, one API-led — with **no hand-written test code** (only requirement text and configuration).
+1. Two independent iterations have gone end-to-end from raw requirement to merged, passing, traceable automation — one UI-led, one API-led — with **no hand-written test code** (only requirement text and configuration). The UI iteration proves R→T→C→nodeid; the API iteration proves R→A→nodeid.
 2. Every confirmation-gated transition in those iterations is reconstructable from their `iterations/<id>/` directories alone (approvals + events + manifests present).
-3. `check_coverage.py` proves all four tiers for both merged iterations; `must-automate` exemptions carry reasons.
-4. Self-debug transcripts show zero mid-loop user contact and zero patches touching forbidden scope (audit rule §4.7 verified by diff review of `attempts[].diff_ref`).
-5. CI green on GitHub Actions: static-checks job (schemas, layering, POM boundary, DB read-only, secret scan, coverage tiers) on every PR; e2e job executing the suite against the pinned local target-app harness.
+3. `check_coverage.py --tier from-iteration` proves the complete branch-specific chain for both merged iterations; every exemption carries a reason.
+4. Self-debug transcripts show zero mid-loop user contact and zero patches touching forbidden scope; every cycle has a passing patch-scope verdict and the final diff review confirms no assertion weakening (audit rule §4.7).
+5. CI green on GitHub Actions: static-checks job (schemas, state/staleness, layering, POM boundary, DB read-only, secret scan, branch-specific coverage, export semantics, and patch scope) on every PR; e2e runs for release-targeted PRs and for other PRs that change `automation/**` or `iterations/**`, executing the suite against the pinned local target-app harness.
 
 ---
 
@@ -291,3 +297,4 @@ Aligned with Roadmap Phase 9; a release can claim v1 when all hold:
 - `knowledge/` categorization/scoring/expiry — flat files with frontmatter metadata only.
 - Self-debug inside CI pipelines; automated container sandboxing/virus-scanning of generated code (execution happens in the developer's project environment; bandit-style scans reserved as post-v1 hardening).
 - Vision-model-driven element location (Midscene/UI-TARS style), cross-repo RTM aggregation services.
+- Hybrid iterations that execute UI and API branches together; v1 supports one branch per iteration.

@@ -1,8 +1,8 @@
 # ADR-005: Traceability rows are sparse; coverage is derived, not hand-maintained
 
 - Date: 2026-08-27
-- Status: Accepted (replaces v1.0 traceability schema)
-- Related: DATA_MODEL §8, PRD §4.2/§5.1/M10, Roadmap Phase 1
+- Status: Accepted (v1.3 exemption storage amendment; replaces v1.0 traceability schema)
+- Related: DATA_MODEL §2.1/§8, PRD §4.2/§5.1/M10, Roadmap Phase 1, ADR-009
 
 ## Background
 
@@ -13,7 +13,7 @@ v1.0's `traceability.schema.json` required `requirement_id` **and** `test_point_
 1. Rows hold only the fields known so far (`test_point_id`, `functional_case_id`, `api_case_id`, `automation_test_ids[]` all optional); JSON Schema validates *shape*.
 2. The hand-written `coverage_status` field is removed. Coverage depth is computed by `check_coverage.py` per PRD §5.1's tiers against each iteration's own stage — eliminating a redundant, drift-prone manual field.
 3. Functional and API case links are separate fields.
-4. Exemptions live where they are declared: `testable: false` / `automation_required: false` (+reasons) on requirement rows in `requirements.yaml`; the checker consumes those flags.
+4. v1.1 originally kept exemption flags on requirement rows. v1.3 supersedes that placement: accepted `requirements.yaml` is immutable, and reasoned exemptions live in the separately validated `exemptions.yaml` contract described by ADR-009.
 
 Rationale: every observed defect in v1.0 came from storing a cached summary of what the row already implies. Derivation removes the update path entirely.
 

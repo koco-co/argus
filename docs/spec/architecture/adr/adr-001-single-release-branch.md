@@ -10,7 +10,7 @@ Iterations produce test branches (`test/<iteration-id>`) that must merge somewhe
 
 ## Decision & Rationale
 
-One long-lived protected `release` branch per target-app repo; every iteration merges via PR from its `test/<iteration-id>` branch after user acceptance. Confirmed originally in Implementation Guide v1.0 with rationale: simple lifecycle matching single-team, serial-iteration usage in v1.
+One long-lived protected `release` branch per target-app repo; every iteration merges via PR from its `test/<iteration-id>` branch after user acceptance. v1 permits at most one non-terminal iteration per repository, so the branch model and long-lived automation assets do not face concurrent iteration ownership in the initial release. Confirmed originally in Implementation Guide v1.0 with rationale: simple lifecycle matching single-team, serial-iteration usage in v1.
 
 ## Considered Alternatives
 
@@ -20,4 +20,4 @@ One long-lived protected `release` branch per target-app repo; every iteration m
 
 ## Impact
 
-Branch protection config becomes a real roadmap task (branch creation/protection was missing from v1.0 task list — added to Roadmap Phase 0). Parallel multi-iteration merges could contend on one branch; accepted limitation tracked in RISKS_AND_KNOWN_ISSUES.
+Branch protection config becomes a real roadmap task (branch creation/protection was missing from v1.0 task list — added to Roadmap Phase 0). The single-in-progress rule is enforced by iteration validation; parallel multi-iteration work is a post-v1 change requiring a new asset ownership decision.

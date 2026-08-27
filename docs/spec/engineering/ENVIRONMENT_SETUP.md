@@ -20,7 +20,7 @@ Authoritative skeletons to be created verbatim-shaped in Phase 0 tasks:
 
 **pyproject.toml** — core deps: pytest≥8.3, pytest-playwright≥0.5, pytest-xdist≥3.6, **allure-pytest**≥2.15 (v1.0's `pytest-allure-adapter` does not exist on PyPI), httpx≥0.27, pydantic≥2.9, rich≥13.9, pyyaml≥6.0, jsonschema≥4.23, openpyxl≥3.1 (xlsx round-trip needs it). Optional groups (moved out of core per review): `[dependency-groups] dev=[ruff, pyright, pre-commit]`, `mobile=[appium-python-client]`, `perf=[locust]`. Tool tables: pytest markers with `--strict-markers`, ruff select `E,F,I,UP,B,SIM` line-length 100, pyright basic.
 
-**pre-commit hooks**: ruff/ruff-format remote hooks; local hooks `validate-schema` (entry `scripts/validate_schema.py`, files matcher excludes `iterations/*/00-raw/**` — raw inputs aren't schema artifacts), `validate-iteration-state` (`validate_iteration.py`), `no-db-writes`, `check-secrets`.
+**pre-commit hooks**: ruff/ruff-format remote hooks; local hooks `validate-schema` (entry `scripts/validate_schema.py`, matches registered artifacts plus the exact `iterations/*/00-raw/source-payload.yaml` path; unrelated raw inputs aren't schema artifacts), `validate-iteration-state` (`validate_iteration.py`), `no-db-writes`, `check-secrets`.
 
 **Makefile targets** (v1.0 renames applied):
 
@@ -53,12 +53,12 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation | 已定义 / 待实现 |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips | 已定义 / 待实现 |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已定义 / 待实现 |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现 |
-| Coverage gate | root | `uv run python scripts/check_coverage.py --tier <t> iterations/<id>` | tier verdict per PRD §5.1 | 已定义 / 待实现 |
-| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken fixture (smoke-tested then reverted) | 已定义 / 待实现 |
+| Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已定义 / 待实现 |
+| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已定义 / 待实现 |
 | Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
 | Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
-| CI equivalent | CI | static-checks job / e2e job (split) | see ARCHITECTURE §8 | 已定义 / 待实现 |
+| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; both notify under `always()` | see ARCHITECTURE §8 | 已定义 / 待实现 |
 
 Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.

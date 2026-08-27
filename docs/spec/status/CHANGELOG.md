@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-27 — Grok spec review adoption (v1.2 → v1.3)
+
+- Adopted the Grok contract findings: API-led coverage is now R→A→nodeid with `requirement_ids[]`; UI/API branches are explicit; exemptions moved to immutable-source-safe `exemptions.yaml`; accepted artifacts use explicit approval/reopen tooling and stale blocking.
+- Added typed functional expectation kinds and seed/rule provenance, stronger self-debug frozen-scope and mechanical failure preclassification, AST import-closure regression, case-aware asset naming/retirement, and one in-progress iteration protection.
+- Preserved API parameter/body/response types, referenced OpenAPI components, and replay variables; defined XMind/XLSX semantic export structures, added `ci` to the environment contract, switched CI coverage to `from-iteration`, and made GitHub Actions the sole v1 CI authority.
+- Defined exact CI triggers/notifications/source-payload validation, removed M12's time-based trigger, clarified M12 ownership, aligned locator guidance with the target-app notes, and removed Performance from the v1 product title.
+- Added [ADR-009](../architecture/adr/adr-009-exemptions-and-accepted-artifact-reopen.md); Jenkins mirror and cross-repo skill reuse remain explicitly post-v1.
+
+## 2026-08-27 — Claude spec review adoption (v1.1 → v1.2)
+
+- Adopted all 16 review findings as documentation-contract changes: fixed and test-planned all embedded JSON Schemas, unified API lifecycle status names, required functional-case preconditions, bounded iteration IDs, and made the coverage model explicitly three tiers with an aggregate `auto` mode.
+- Clarified v1 scope: Hybrid iterations are post-v1; iteration validation accepts exactly one UI/API branch. Functional test design is named symmetrically with API test design.
+- Added ADR-008 for the deliberate move from shared, order-dependent test data to run-namespaced data and worker-isolated fixtures; added a real parallel-run DoD.
+- Added the self-debug patch-scope checker contract, affected-module regression definition, assertion-change review signal, and fixture/CI obligations.
+- Defined the shared M12 knowledge-capture contract, made the target-app CI harness Compose-only, and added the Phase 7 branch-protection closure with required checks and human review.
+- Path correction: earlier entries describe intermediate documentation layouts; the final canonical live paths are under `docs/spec/`, with ADRs under `docs/spec/architecture/adr/`.
+
 ## 2026-08-27 — Documentation consolidation: review adoption & contract completion (v1.0 → v1.1)
 
 - Documentation reorganization (product code not involved; this repository is still documentation-only):
@@ -28,3 +45,4 @@
 - 已实施：spec 内按 `product / architecture / engineering / status` 子目录编排全部 12 类文档，AGENT_BRIEF 迁至 `docs/spec/AGENT_BRIEF.md`，根 AGENTS.md 入口同步更新。`Implementation Guide.md` 内容融入：§2 靶应用 harness/种子策略 → engineering/TESTING_STRATEGY「Target-App Harness & Seed Policy」，§3 Skill 编写模板 → engineering/CODING_STANDARDS「Skill Authoring Conventions」，§5 CI 骨架 → architecture/ARCHITECTURE §8，其余章节此前已由 ADR 与既有文档承接；`Repo structure.md` 的 v2 结构决策记录为 [ADR-007](../architecture/adr/adr-007-repo-layout-redesign.md)。两份源文档随后删除。
 - 已确认决策：ADR-007 新增（repo 布局重设计的出处固化）。
 - 验证与证据：删除后全库无指向两文件的失效引用（历史条目按记录纪律保留原文）；全库相对链接逐一探测通过。
+- 路径说明：本条描述的是归档前的中间目录状态；最终规范目录以 `docs/spec/` 及其子目录为准。

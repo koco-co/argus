@@ -19,6 +19,8 @@ M9's fix-and-rerun loop needs a runtime. Two viable shapes: (A) an in-session ag
 
 Makefile consequence: no `debug` target invoking a phantom package; debugging is documented as the agent-session flow.
 
+Safety consequence: `classify_failure.py` mechanically pre-classifies pytest evidence before the session-side agent chooses a repair. Assertion failures, 5xx/auth failures, and product-behavior mismatches are escalation-only; the LLM may refine only locator-versus-timing within the repairable boundary and cannot relabel an escalation class as auto-fixable.
+
 ## Considered Alternatives
 
 | Alternative | Why not chosen | Basis |

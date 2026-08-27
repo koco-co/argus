@@ -1,8 +1,8 @@
 # Architecture Design Document
 
-## AI-Driven Automation & Performance Testing Framework
+## AI-Driven Automation Framework
 
-Version: 1.1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
+Version: 1.3 · Performance/load testing is reserved for post-v1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSARY.md
 
 > Machine contracts (JSON Schemas) are defined authoritatively in [DATA_MODEL.md](./DATA_MODEL.md); this document owns layering, directory structure, and dependency rules.
 
@@ -15,7 +15,7 @@ Version: 1.1 · Companion docs: PRD, DATA_MODEL.md, CODING_STANDARDS.md, GLOSSAR
 │  Plugin Interface Layer            plugins/                        │
 │  fetch(source_ref) -> normalized SOURCE PAYLOAD envelope.           │
 │  run_plugin.py persists the envelope to disk BEFORE validation      │
-│  against *_source_payload.schema.json. No test-design logic.        │
+│  against *_source_payload.schema.json. No case-design logic.        │
 │  No LLM calls inside a plugin.                                      │
 └───────────────────────────────────────────────────────────────────┘
                               │ persisted source-payload YAML
@@ -65,7 +65,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 ├── AGENTS.md                        # ⭐ single source of operating rules (Phase plan: Roadmap 0.6)
 ├── CLAUDE.md                        # `@AGENTS.md` include only
 ├── README.md
-├── .agents/skills/                  # canonical: test-design, api-test-design,
+├── .agents/skills/                  # canonical: functional-test-design, api-test-design,
 │   │                                # web-automation-generation, api-automation-generation,
 │   │                                # self-debug-runner, skill-self-optimizer
 │   │                                # each: SKILL.md + schemas/ + examples/
@@ -92,7 +92,8 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── iteration.yaml               # ⭐ global state + approvals/events/source_manifest (DATA_MODEL §3)
 │   ├── 00-raw/                      # text inputs tracked w/ secret scan; binaries/large ignored,
 │   │                                # recorded instead in iteration.yaml.source_manifest[]
-│   ├── requirements.yaml / requirement.md
+│   ├── requirements.yaml / requirement.md  # accepted requirements are immutable
+│   ├── exemptions.yaml                     # reasoned M2 exceptions
 │   ├── test_points.yaml / test_points.md
 │   ├── functional-cases.yaml
 │   ├── api/spec.normalized.yaml, api/cases.yaml
@@ -120,29 +121,36 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 ├── scripts/
 │   ├── new_iteration.py             # scaffolds iterations/<id>/ incl. iteration.yaml
 │   ├── schema_registry.yaml         # ⭐ explicit artifact-path ↔ schema binding
-│   ├── schemas/                     # ⭐ iteration / traceability / run_summary schemas (DATA_MODEL §3,8,9)
+│   ├── schemas/                     # ⭐ exemptions / iteration / traceability / run_summary schemas (DATA_MODEL §2.1,3,8,9)
 │   ├── validate_schema.py
 │   ├── validate_iteration.py        # ⭐ state-transition legality + staleness (hash chain) checks
 │   ├── render_md.py
 │   ├── export_xmind.py
 │   ├── export_xlsx.py
-│   ├── check_coverage.py            # tiered coverage gate (PRD §5.1)
+│   ├── check_coverage.py            # branch-aware coverage gate (PRD §5.1)
+│   ├── check_functional_expectations.py # expected_kind/seed-rule guard
 │   ├── check_api_coverage.py        # ⭐ endpoint happy/negative coverage
 │   ├── check_db_readonly.py
 │   ├── check_pom_boundary.py        # selectors-in-tests + assertions-in-pages
-│   ├── check_api_models.py          # ⭐ client methods ↔ pydantic models, no raw dicts
+│   ├── check_api_models.py          # ⭐ client methods ↔ pydantic models + spec fields
 │   ├── check_test_markers.py        # ⭐ module/case_id/iteration markers present & consistent
 │   ├── check_layering.py
 │   ├── check_secrets.py             # ⭐ credential-pattern scan over trackable text
+│   ├── check_patch_scope.py          # ⭐ self-debug frozen-scope and banned-pattern guard
+│   ├── classify_failure.py           # pytest evidence → bounded failure class
+│   ├── find_affected_modules.py      # AST import-closure selection for regression
+│   ├── record_approval.py            # sole approval writer; requires explicit user action
+│   ├── reopen_iteration.py           # user-triggered reopen + stale propagation
 │   ├── run_plugin.py
 │   ├── notify.py                    # ⭐ CLI wrapper around shared/notify/dispatcher.py
 │   ├── self_debug_helper.py         # ⭐ budget bookkeeping/attempt-log helper used by the agent-driven loop;
+│   │                                #    invokes patch-scope checks and affected-module regression;
 │   │                                #    the LOOP ITSELF is the skill (session-side), never CI (ADR-004)
 │   ├── target_app_up.py / seed.py / reset.py / healthcheck.py / down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
 │   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
 │       └── fixtures/                # incl. a checked-in hand-written sample iteration
 ├── .github/workflows/{ci.yml,regression.yml}
-├── Jenkinsfile
+├── Jenkinsfile                      # optional post-v1; not an acceptance path
 ├── pyproject.toml, uv.lock, .python-version
 ├── .pre-commit-config.yaml, Makefile, .gitignore
 └── docs/                            # development documentation set (see AGENT_BRIEF index)
@@ -181,9 +189,13 @@ POM structure/rules (page objects carry locators+actions only; tests carry asser
 |No locator call inside `*/tests/` (`get_by_*`, `locator(`, `page.click(".sel")`, `page.fill("#id",…)`, XPath helpers)|`check_pom_boundary.py` (AST + call-pattern scan)|`automation/{web,miniprogram,mobile}/tests/**`|
 |No `assert`/`expect` inside page/component/screen objects|same script, mirrored rule|`**/{pages,components,screens}/**`|
 |Markers present & consistent with path/module tag|`check_test_markers.py`|all generated tests|
-|API clients dict-free, model-linked|`check_api_models.py`|`automation/api/{clients,tests}/**`|
+|API clients dict-free, model-linked, and fields are a subset of normalized source schemas|`check_api_models.py`|`automation/api/{clients,models,tests}/**`|
 
 ---
+
+### 5.1 Automation Asset Ownership & Lifecycle
+
+`automation/` is long-lived and shared across iterations. Generated test filenames are `test_<iteration_id>_<case_id>_<behavior>.py`, so the cross-iteration identity pair prevents file collisions even though `case_id` is only unique within an iteration. A page/component/client method already referenced by another iteration may be extended or have its locator/wait/type corrected, but cannot be deleted without a `retires_nodeids[]` record and a coverage validation showing that no active iteration still depends on it. v1 permits at most one non-terminal iteration per repository; `new_iteration.py` rejects a second in-progress iteration. Retired nodeids remain in traceability history but do not count as active automation coverage.
 
 ## 6. DB Read-Only Assertion Interception
 
@@ -259,8 +271,17 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 
 Two jobs, deliberately split because their prerequisites differ:
 
-- **static-checks**: schema validation, state/staleness validation, tiered coverage, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, ruff/pyright. Needs no target app, runs on every PR.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, uploads Allure results/run-summary/patch history as artifacts, notifies under `always()`. Runs when the e2e label/branch conditions are met.
+- **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, uploads Allure results/run-summary/patch history as artifacts, and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only.
+
+CI trigger and notification contract:
+
+| PR context | static-checks | e2e | notification |
+| --- | --- | --- | --- |
+| Any PR | required | — | static-checks result under `always()` |
+| PR targeting `release` | required | required | static-checks and e2e under `always()` |
+| Other PR changing `automation/**` or `iterations/**` | required | required | static-checks and e2e under `always()` |
+| Other PR with no automation/iteration change | required | not run | static-checks under `always()` |
 
 ---
 
@@ -275,6 +296,8 @@ Two jobs, deliberately split because their prerequisites differ:
 | Sparse traceability rows, derived coverage | [ADR-005](./adr/adr-005-derived-coverage-sparse-traceability.md) |
 | Source-payload plugin envelopes on a disk-first boundary | [ADR-006](./adr/adr-006-source-payload-boundary.md) |
 | Consolidated repo layout: 6 skills, plugins layer, iterations↔module split, YAML sources + derived views | [ADR-007](./adr/adr-007-repo-layout-redesign.md) |
+| Namespaced test data and worker-isolated fixtures for parallel execution | [ADR-008](./adr/adr-008-parallel-test-isolation.md) |
+| Accepted artifacts are immutable; exemptions and explicit reopen are separate contracts | [ADR-009](./adr/adr-009-exemptions-and-accepted-artifact-reopen.md) |
 
 CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
 
@@ -289,14 +312,16 @@ jobs:
       - run: uv run pre-commit run --all-files   # schemas/state/staleness/POM/
                                                   # models/markers/db/secrets/lint
       - run: uv run pytest scripts/tests          # framework's own suites
-      - run: uv run python scripts/check_coverage.py --tier auto
+                                                  # includes schema-block and patch-scope fixtures
+      - run: uv run python scripts/check_coverage.py --tier from-iteration
+      - if: always()
+        continue-on-error: true
+        run: uv run python scripts/notify.py --job static-checks
 
-# .github/workflows/regression.yml — e2e behind branch/label conditions
+# .github/workflows/regression.yml — e2e for release PRs or automation/iteration changes
+# Target-app provisioning is compose-only; target_app_up.py owns the full stack.
 jobs:
   e2e:
-    services:            # or compose-up step driven by the lockfile
-      postgres: {}
-      redis: {}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

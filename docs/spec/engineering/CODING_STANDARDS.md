@@ -10,7 +10,7 @@ Conventions for all code this project produces: enforcement scripts, generated a
 | pyright (`basic`) | all Python | type-check gate next to ruff |
 | pytest (`--strict-markers`) | scripts/tests + automation suites | custom markers declared once in root conftest |
 | jsonschema checks | iteration/artifact YAMLs | DATA_MODEL contracts |
-| Project checkers | boundaries listed in Architecture §5 | POM boundary, API models, markers, layering, DB read-only, secrets |
+| Project checkers | boundaries listed in Architecture §5 | POM boundary, functional expectations, API models, markers, layering, DB read-only, secrets, self-debug patch scope, failure preclassification |
 
 ## Naming & Organization
 
@@ -20,7 +20,7 @@ Conventions for all code this project produces: enforcement scripts, generated a
 | Locator accessors | private methods, leading underscore, return Playwright locators — never exposed strings | `_discount_input()` | below |
 | Action methods | public, verb-named, return `self` or a **value**; no assertions inside | `apply_discount_code(code) -> CheckoutPage` | below |
 | Shared widgets | `components/`, composed into page objects, never copy-pasted between pages | navbar, modal | Reuse-before-create rule |
-| Generated tests | `test_<behavior>.py` under `tests/<module>/`; folder IS the module selector | `tests/checkout/test_guest_checkout.py` | run selection by directory (review fix) |
+| Generated tests | `test_<iteration_id>_<case_id>_<behavior>.py` under `tests/<module>/`; folder IS the module selector | `tests/checkout/test_2026-08-medusa-checkout-flow_c0012_guest_checkout.py` | cross-iteration `(iteration_id, case_id)` identity prevents filename collisions |
 | Markers | exactly `module(<name>)`, `case_id("<id>")`, `iteration("<id>")`; metadata only, consistency checked by script | see Architecture §5 | GLOSSARY |
 | API clients/modules | `clients/<module>/` httpx wrapper classes; `models/<module>/` pydantic models, one request+response pair minimum per endpoint used | `automation/api/clients/orders/orders_client.py` | PRD §4.6 |
 | Shared utilities | lowercase module names under `shared/<area>/`; DB access exclusively through `shared/db/readonly_client.py` | `shared/assertions/db_asserts.py` | Architecture §6 |
@@ -46,7 +46,7 @@ class CheckoutPage:
         return self
 
     def get_total(self) -> str:                     # value-returning read
-        return self._page.get_by_test_id("order-total").inner_text()
+        return self._page.get_by_role("status", name="Order total").inner_text()
 ```
 
 ```python
@@ -59,7 +59,7 @@ def test_discount_code_reduces_total(page, checkout_seeded):
     assert checkout_page.get_total() == checkout_seeded.expected_discounted_total
 ```
 
-Expected values come from the **seed context** (`checkout_seeded` computes the discounted total from seeded prices) — never hardcoded literals copied from case descriptions, so environment drift cannot masquerade as product behavior.
+Expected values come from the **seed context** (`checkout_seeded` computes the discounted total from seeded prices) — never hardcoded literals copied from case descriptions, so environment drift cannot masquerade as product behavior. Case expectations that depend on data must describe the relationship or rule; generation must re-derive the concrete value from the seed context.
 
 ### API client (typed end-to-end)
 
@@ -74,15 +74,16 @@ Rule: handlers accept/return model instances; `model_dump()` happens exactly onc
 
 ### Test data isolation
 
-Fixture-generated identities carry the run namespace: `qa-{run_id}-{n}@example.invalid`, codes/notes suffixed with `run_id`. Seeds live in `shared/testdata/` hooks invoked by `make target-app-seed`; cleanup is best-effort via APIs/container rebuild and never by direct DB writes (Architecture §6 scope).
+Fixture-generated identities carry the run namespace: `qa-{run_id}-{n}@example.invalid`, codes/notes suffixed with `run_id`. Seeds live in `shared/testdata/` hooks invoked by `make target-app-seed`; cleanup is best-effort via APIs/container rebuild and never by direct DB writes (Architecture §6 scope). Seed formulas and seeded fixture `expected_*` values are immutable to self-debug; only reseed-hook wiring and namespace arguments may be adjusted for `data_issue`.
 
 ## Patch Rules During Self-Debug
 
 Full taxonomy in PRD §4.7; implementation-facing summary:
 
-- Allowed edit surface: whitelisted `automation/**` paths plus owned shared utils — selectors, waits, fixtures, imports, serialization, types.
-- Frozen forever: assertions' expected values & semantics, marker tags, collection config, anything outside `automation/**`.
-- Every cycle passes the verification battery (ruff/pyright/POM/markers checks) before re-run; failed static gates burn budget and revert.
+- Allowed edit surface: locator/wait/type/import implementation in `automation/web/{pages,components}/**` and `automation/api/{clients,models}/**`; for `data_issue`, only reseed-hook wiring and namespace arguments.
+- Frozen forever: every test assertion/expectation, case expected values, seed formulas, seeded fixture `expected_*` values, marker tags, collection config, and anything outside the allow-list.
+- Every cycle passes `check_patch_scope.py`, the verification battery (ruff/pyright/POM/markers checks), and the full affected-module regression before re-run; failed gates burn budget and revert.
+- `check_patch_scope.py` hard-fails frozen-path, assertion/expected-value, or banned-pattern violations; terminal diff review is an additional audit, not an exception path.
 - Assertion-density drop between attempts (`delta_assertions < 0`) is an automatic escalation signal.
 
 ## Anti-Patterns
@@ -104,24 +105,30 @@ Every `SKILL.md` follows one shape so cross-model behavior stays comparable (mer
 
 ```markdown
 ---
-name: test-design
+name: functional-test-design
 version: 1.0.0
 description: >
-  Use for the full test-design phase: raw requirement dump -> clarified
+  Use for the full functional-test-design phase: raw requirement dump -> clarified
   requirement -> test points -> functional cases.yaml -> xmind export.
-  Owns confirmation points 1-3 in that order.
+  Owns the UI-led confirmation points only. For an API-led iteration, stop after
+  requirements are accepted and route to api-test-design; do not create test_points.yaml.
 ---
 ## Inputs / Outputs
 (inputs; outputs in order, each gated by validate_schema.py;
- approvals written to iterations/<id>/iteration.yaml)
+ approvals are written only by scripts/record_approval.py)
 ## Stop-and-confirm points
-(explicit user acceptance between stages; every acceptance appends
- {stage, action, actor=user, timestamp, artifact_sha256} to approvals[])
+(explicit user acceptance between stages; every acceptance calls
+ scripts/record_approval.py, which appends {stage, action, actor=user,
+ timestamp, artifact_sha256} to approvals[])
 ## Rules
 - Never invent content absent from 00-raw/ or user answers.
-- Populate traceability links while generating, never deferred.
+- Populate branch-correct traceability links while generating, never deferred.
 - Input-hash gating: unchanged inputs => no-op unless --force.
 - On schema validation failure: fix -> re-validate; budget 3, then surface.
+## Knowledge capture
+(before returning control at every M9 terminal state and after an applied skill optimization, record only
+ evidence-backed reusable lessons using the shared M12 contract; suppress duplicates
+ and omit generic or speculative observations)
 ```
 
-Generation-skill rules block (web variant; API analog adds pydantic-model pairing): one page object per route under `pages/<module>/`, creating the module dir when new · tests import page objects only — selector literals fail `check_pom_boundary.py`, assertions live in tests only · markers `module/case_id/iteration` on every test with path consistency enforced by `check_test_markers.py`; run selection is by directory · reuse-before-create across `pages/` + `components/` · traceability upsert of nodeids immediately. Frontmatter carries `version:` for future upstream diffing (ADR-003). The self-debug loop's behavioral rules live in PRD §4.7 and ADR-004; its SKILL.md is a Roadmap Phase 5 deliverable conforming to this template.
+Generation-skill rules block (web variant; API analog adds pydantic-model pairing): read `knowledge/target-app-notes/<target-app>.md` before generating; choose locators in this order: role → label → placeholder → text → testid → CSS, with a documented reason to fall back; one page object per route under `pages/<module>/`, creating the module dir when new · tests import page objects only — selector literals fail `check_pom_boundary.py`, assertions live in tests only · markers `module/case_id/iteration` on every test with path consistency enforced by `check_test_markers.py`; generated test filenames include both `iteration_id` and `case_id`; run selection is by directory · reuse-before-create across `pages/` + `components/`; existing page methods referenced by another iteration cannot be deleted without a retirement record; traceability upsert of nodeids immediately. Frontmatter carries `version:` for future upstream diffing (ADR-003). The self-debug loop's behavioral rules live in PRD §4.7 and ADR-004; its SKILL.md is a Roadmap Phase 5 deliverable conforming to this template. Functional test-design and API test-design are parallel skills; their names must remain symmetric.
