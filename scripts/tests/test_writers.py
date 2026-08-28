@@ -253,6 +253,32 @@ def test_record_approval_records_user_actor_and_artifact_hash(
     assert len(approval["artifact_sha256"]) == 64
 
 
+def test_record_approval_supports_exemptions_stage(
+    record_approval: Any, tmp_path: Path
+) -> None:
+    """需求豁免必须能经唯一写入器形成独立的用户批准记录。"""
+    iteration_dir = _scaffold(tmp_path, "2026-08-exemptions", "requirements_accepted")
+    artifact = tmp_path / "exemptions.yaml"
+    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "exemptions",
+                "--action",
+                "accepted",
+                "--artifact",
+                str(artifact),
+            ]
+        )
+        == 0
+    )
+    document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
+    assert document["approvals"][-1]["stage"] == "exemptions"
+
+
 def test_hand_edited_state_blocks_event_writer(
     record_event: Any, tmp_path: Path, capsys: Any
 ) -> None:

@@ -77,13 +77,17 @@ _TAIL = {
     "accepted": {"merged"},
     "merged": set(),
 }
-# states that require a recorded user approval before the transition to them
-# is considered complete: to_state -> (approvals[].stage, approvals[].action)
+# 进入下列状态前必须具备的用户批准记录：
+# to_state -> ((approvals[].stage, approvals[].action), ...)
 _APPROVAL_GATES = {
-    "requirements_accepted": ("requirements", "accepted"),
-    "test_points_accepted": ("test_points", "accepted"),
-    "env_configured": ("environment", "provided"),
-    "accepted": ("acceptance", "accepted"),
+    "requirements_accepted": (("requirements", "accepted"),),
+    "requirements_mapped": (("exemptions", "accepted"),),
+    "test_points_accepted": (
+        ("test_points", "accepted"),
+        ("exemptions", "accepted"),
+    ),
+    "env_configured": (("environment", "provided"),),
+    "accepted": (("acceptance", "accepted"),),
 }
 
 
@@ -227,12 +231,14 @@ def check_iteration(
         gate = _APPROVAL_GATES.get(event["to_state"])
         if gate is None:
             continue
-        stage, action = gate
-        if not any(a.get("stage") == stage and a.get("action") == action for a in approvals):
-            report.error(
-                f"transition to {event['to_state']} requires an approvals[] entry "
-                f"(stage={stage}, action={action}) recorded by record_approval.py"
-            )
+        for stage, action in gate:
+            if not any(
+                a.get("stage") == stage and a.get("action") == action for a in approvals
+            ):
+                report.error(
+                    f"transition to {event['to_state']} requires an approvals[] entry "
+                    f"(stage={stage}, action={action}) recorded by record_approval.py"
+                )
 
     # 3. staleness over the full generated_from chain
     proposed: dict[str, str] = {}

@@ -13,7 +13,7 @@ The v1.1 requirement schema stored `testable` and `automation_required` flags on
 1. `requirements.yaml` contains only clarified requirement facts and becomes read-only after M1 acceptance.
 2. M2 writes `exemptions.yaml`, where each requirement may have at most one reasoned `not_testable` or `manual_only` exemption.
 3. A user-triggered change to any accepted upstream artifact goes through `scripts/reopen_iteration.py`; it preserves allocated IDs, records the event, marks downstream artifacts stale, and blocks stale consumers until regeneration or explicit re-confirmation.
-4. `scripts/record_approval.py` is the only approval writer. Agents must wait for explicit user acceptance and may not hand-edit `approvals[]`.
+4. `scripts/record_approval.py` is the only approval writer. Agents must wait for explicit user acceptance and may not hand-edit `approvals[]`。`exemptions.yaml` 使用独立的 `stage=exemptions, action=accepted` 记录；UI 分支还需独立的 `test_points` 批准，API 分支在进入 `requirements_mapped` 前也必须具备该豁免批准。
 
 This keeps the accepted source immutable while making every exception and reopen auditable, branch-aware, and mechanically checkable.
 

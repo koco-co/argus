@@ -219,7 +219,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
         "type": "object", "additionalProperties": false,
         "required": ["stage", "action", "actor", "timestamp", "artifact_sha256"],
         "properties": {
-          "stage": {"enum": ["requirements", "test_points", "environment", "skill_change", "acceptance"]},
+          "stage": {"enum": ["requirements", "exemptions", "test_points", "environment", "skill_change", "acceptance"]},
           "action": {"enum": ["accepted", "rejected", "provided", "approved"]},
           "actor": {"enum": ["user"]},
           "timestamp": {"type": "string", "format": "date-time"},

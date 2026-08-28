@@ -118,7 +118,11 @@ def _ui_chain_events() -> tuple[list, list]:
         _event("requirements_accepted", "test_points_review"),
         _event("test_points_review", "test_points_accepted"),
     ]
-    approvals = [_approval("requirements", "accepted"), _approval("test_points", "accepted")]
+    approvals = [
+        _approval("requirements", "accepted"),
+        _approval("exemptions", "accepted"),
+        _approval("test_points", "accepted"),
+    ]
     return states, events or approvals
 
 
@@ -135,6 +139,7 @@ def test_legal_ui_route_chain_passes(validator: Any, tmp_path: Path) -> None:
         ],
         approvals=[
             _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
             _approval("test_points", "accepted"),
         ],
     )
@@ -152,7 +157,10 @@ def test_legal_api_route_chain_with_requirements_mapped(validator: Any, tmp_path
             _event("requirements_clarifying", "requirements_accepted"),
             _event("requirements_accepted", "requirements_mapped"),
         ],
-        approvals=[_approval("requirements", "accepted")],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
+        ],
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-api-ok", doc)
     assert validator.main([str(iteration_dir)]) == 0
@@ -205,6 +213,37 @@ def test_missing_approval_gate_rejected(validator: Any, tmp_path: Path) -> None:
         approvals=[],
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-no-approval", doc)
+    assert validator.main([str(iteration_dir)]) == 1
+
+
+@pytest.mark.parametrize("ui", [True, False])
+def test_missing_exemptions_approval_gate_rejected(
+    validator: Any, tmp_path: Path, ui: bool
+) -> None:
+    """UI 与 API 分支都不能绕过需求豁免签收。"""
+    if ui:
+        state = "test_points_accepted"
+        events = [
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "test_points_review"),
+            _event("test_points_review", "test_points_accepted"),
+        ]
+        approvals = [
+            _approval("requirements", "accepted"),
+            _approval("test_points", "accepted"),
+        ]
+    else:
+        state = "requirements_mapped"
+        events = [
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+        ]
+        approvals = [_approval("requirements", "accepted")]
+    iteration_id = f"2026-08-no-exemption-{'ui' if ui else 'api'}"
+    doc = _iteration_doc(iteration_id, ui=ui, state=state, events=events, approvals=approvals)
+    iteration_dir = _scaffold(tmp_path, iteration_id, doc)
     assert validator.main([str(iteration_dir)]) == 1
 
 
@@ -381,6 +420,7 @@ def test_stale_input_consumption_is_surfaced(validator: Any, tmp_path: Path, cap
         ],
         approvals=[
             _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
             _approval("test_points", "accepted"),
         ],
     )

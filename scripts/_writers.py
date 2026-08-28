@@ -26,7 +26,14 @@ from typing import Any
 import yaml
 from _registry_lib import binding_for_path, schema_errors
 
-APPROVAL_STAGES = ("requirements", "test_points", "environment", "acceptance", "skill_change")
+APPROVAL_STAGES = (
+    "requirements",
+    "exemptions",
+    "test_points",
+    "environment",
+    "acceptance",
+    "skill_change",
+)
 APPROVAL_ACTIONS = ("accepted", "rejected", "provided", "approved")
 ACTORS = ("agent", "script", "user")
 
