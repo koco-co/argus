@@ -1,5 +1,7 @@
 # Changelog
 
+- 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；新增摘要不匹配、后续拒绝、产物缺失回归，永久测试夹具通过唯一批准写入器校正。框架全量回归增至 401 项。
+
 ## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
 
 - 补齐数据库能力边界：靶场迁移后幂等创建 `argus_readonly`，仅授予全表 SELECT，并用 `default_transaction_read_only` 和实际建表拒绝探针双重验证；宿主机只通过 `127.0.0.1:15432` 访问。`settings.py assemble` 在注入数据库 DSN 时保留机械可识别的只读声明，真实 UI/API 本地配置检查均通过且文件权限为 `0600`。

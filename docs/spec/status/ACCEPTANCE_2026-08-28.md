@@ -6,7 +6,7 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 398 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 401 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
@@ -14,7 +14,7 @@
 | 全栈并发回归 | 双 worker 下 UI 正向/负向与 API 正向/负向共 4 条通过 | 本地最终运行：`4 passed`；GitHub e2e 使用相同 Compose-only 生命周期 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | PR 覆盖范围 | iteration 工件变化只检查对应目录；自动化、共享代码或覆盖门禁变化检查全部；删除 iteration 明确失败；CI 取得完整 base 历史 | `check_coverage.py --changed-base <sha>`；`test_check_coverage.py` |
-| CI 对抗控制 | `force_failure` 稳定持续失败；`force_flaky` 首轮失败、第二轮通过；常规运行不受影响 | 本地探针退出序列分别为 `1` 与 `1→0`；远端证据待工作流提交后补入 PR |
+| CI 对抗控制 | `force_failure` 远端连续两轮均为 1 失败/9 通过并以失败终止；`force_flaky` 首轮 1 失败/9 通过、第二轮 10 通过，被归类为 `flaky-suspect` 并以成功终止；两条路径均上传证据、执行汇总通知并清理容器/网络/卷 | Actions run `33167112680`、`33167439010`；artifact `9684097115`、`9684232762` |
 | 导出 | XMind 与 XLSX 各连续两次字节一致；XLSX 跨秒 core modified 固定 | UI SHA `2c5806…d2a42`；API SHA `ed1123…36da0` |
 | M9 可修复 | locator 真实失败后只修改 POM，复跑通过 | `run-20260828T164100Z-ui01`、`run-20260828T174000Z-mobi` |
 | M9 预算耗尽 | 不可用生成桩连续 5 轮真实失败后 `budget_exceeded` | `run-20260828T171000Z-stub` |
@@ -22,7 +22,7 @@
 | M9 防伪 | 常量返回 patch 虽在路径白名单内，仍被 POM `stub-return` 启发式拒绝并回滚 | `run-20260828T173000Z-lite` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 功能提交 `dc27186` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 396 项框架测试与 9 条全栈/靶场测试，通知入口无 traceback 且 static job 状态明确为 `success` | Actions run `33166431986`、`33166432059` |
+| GitHub Actions | 功能提交 `0a05320` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 398 项框架测试与 10 条全栈/靶场测试，通知入口无 traceback；同提交的 static 强制失败探针以失败终止并进入明确的 failure 通知分支 | Actions run `33167098541`、`33167098511`、`33167112164` |
 
 ## 不可伪造的外部事实
 

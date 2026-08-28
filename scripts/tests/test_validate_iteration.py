@@ -21,6 +21,11 @@ from conftest import FIXTURES_DIR, _load_script
 
 SCHEMA_FIXTURES = FIXTURES_DIR / "schemas"
 SHA = "a" * 64
+_APPROVAL_ARTIFACTS = {
+    "requirements": "requirements.yaml",
+    "exemptions": "exemptions.yaml",
+    "test_points": "test_points.yaml",
+}
 
 
 @pytest.fixture(scope="module")
@@ -93,15 +98,41 @@ def _scaffold(
 ) -> Path:
     iteration_dir = root / "iterations" / iteration_id
     iteration_dir.mkdir(parents=True, exist_ok=True)
-    (iteration_dir / "iteration.yaml").write_text(
-        yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
     if requirements_raw is not None:
         (iteration_dir / "requirements.yaml").write_text(requirements_raw, encoding="utf-8")
         upstream = iteration_dir / upstream_name
         upstream.parent.mkdir(parents=True, exist_ok=True)
         upstream.write_text("upstream content", encoding="utf-8")
+    # 门禁测试必须携带真实可散列的产物；不能用固定占位摘要掩盖验证缺陷。
+    for approval in doc.get("approvals", []):
+        artifact_name = _APPROVAL_ARTIFACTS.get(approval["stage"])
+        if artifact_name is None:
+            continue
+        artifact = iteration_dir / artifact_name
+        if not artifact.exists():
+            artifact.write_text(
+                f"schema_version: '1.0'\niteration_id: {iteration_id}\n",
+                encoding="utf-8",
+            )
+        approval["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    (iteration_dir / "iteration.yaml").write_text(
+        yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     return iteration_dir
+
+
+def _refresh_approval_digest(iteration_dir: Path, stage: str) -> None:
+    """测试修改门禁产物后，同步构造一条仍然有效的批准记录。"""
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    artifact = iteration_dir / _APPROVAL_ARTIFACTS[stage]
+    for approval in reversed(document["approvals"]):
+        if approval["stage"] == stage:
+            approval["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            break
+    iteration_yaml.write_text(
+        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
 
 
 def _ui_chain_events() -> tuple[list, list]:
@@ -214,6 +245,74 @@ def test_missing_approval_gate_rejected(validator: Any, tmp_path: Path) -> None:
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-no-approval", doc)
     assert validator.main([str(iteration_dir)]) == 1
+
+
+def test_approval_digest_must_match_current_artifact(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """批准字段存在但摘要不匹配时，门禁仍必须拒绝。"""
+    doc = _iteration_doc(
+        "2026-08-bad-approval-sha",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-bad-approval-sha", doc)
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    persisted = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    persisted["approvals"][0]["artifact_sha256"] = "0" * 64
+    iteration_yaml.write_text(yaml.safe_dump(persisted, sort_keys=False), encoding="utf-8")
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "artifact_sha256" in capsys.readouterr().err
+
+
+def test_latest_approval_for_stage_controls_gate(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """旧版 accepted 后出现 rejected 时，不能继续复用旧批准。"""
+    doc = _iteration_doc(
+        "2026-08-latest-rejected",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("requirements", "rejected"),
+        ],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-latest-rejected", doc)
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "latest approvals[] entry" in capsys.readouterr().err
+
+
+def test_approval_gate_requires_the_artifact_file(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """摘要无法对应到现存产物时，不能把门禁视为可审计。"""
+    doc = _iteration_doc(
+        "2026-08-missing-approved-artifact",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-missing-approved-artifact", doc)
+    (iteration_dir / "requirements.yaml").unlink()
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "requires requirements.yaml" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("ui", [True, False])
@@ -365,6 +464,7 @@ def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, cap
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     upstream = iteration_dir / "00-raw" / "requirements-dump.md"
     upstream.write_text("tampered upstream", encoding="utf-8")
 
@@ -398,6 +498,7 @@ def test_fix_writes_stale_status_and_rerun_is_clean(
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     (iteration_dir / "00-raw" / "requirements-dump.md").write_text("tampered")
 
     assert validator.main([str(iteration_dir), "--fix"]) == 0
@@ -434,6 +535,7 @@ def test_stale_input_consumption_is_surfaced(validator: Any, tmp_path: Path, cap
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     (iteration_dir / "00-raw" / "requirements-dump.md").write_text("tampered")
 
     assert validator.main([str(iteration_dir), "--fix"]) == 1

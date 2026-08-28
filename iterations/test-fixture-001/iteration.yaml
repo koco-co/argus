@@ -62,6 +62,18 @@ approvals:
   timestamp: '2026-08-28T08:01:52Z'
   artifact_sha256: 7b479c7d6e47c9a3d1c927291e615cec6e11cdeca9141a00c2352f9e85b096d0
   note: 永久脚本测试夹具：空豁免清单，已核对上游摘要
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T11:33:09Z'
+  artifact_sha256: f9a16444655db89bb995e9cd55ee1330a677e0c7430cf3c217c92eccfbed4c44
+  note: 永久脚本测试夹具摘要校正；仅用于校验器回归，不代表产品验收
+- stage: test_points
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T11:33:09Z'
+  artifact_sha256: f931d3ba7b145b01091943c4a5777e3ee9f378ca6598741313da3ddf4d78d1c7
+  note: 永久脚本测试夹具摘要校正；仅用于校验器回归，不代表产品验收
 events:
 - from_state: created
   to_state: requirements_clarifying
@@ -80,4 +92,4 @@ events:
   timestamp: '2026-08-28T12:00:00Z'
   triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-28T08:01:52Z'
+updated_at: '2026-08-28T11:33:09Z'

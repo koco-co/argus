@@ -15,7 +15,9 @@ Enforced semantics (DATA_MODEL §11 / PRD §5):
 - events[] chain consistency — ``state`` must equal the last event's
   ``to_state`` (hand-editing either is a validation error; the writer is
   scripts/record_event.py, Roadmap 1.15b);
-- approval completeness: gate states require a matching approvals[] entry;
+- approval integrity: gate states require the latest stage approval to carry
+  the expected action, and requirements/test-point/exemption approvals must
+  match the current artifact bytes;
 - single-in-progress rule across the repo (ARCHITECTURE §5.1);
 - staleness verdicts computed from the full ``generated_from`` chain: an
   upstream hash mismatch downgrades the artifact to ``stale`` (check mode
@@ -88,6 +90,11 @@ _APPROVAL_GATES = {
     ),
     "env_configured": (("environment", "provided"),),
     "accepted": (("acceptance", "accepted"),),
+}
+_APPROVAL_ARTIFACTS = {
+    "requirements": "requirements.yaml",
+    "exemptions": "exemptions.yaml",
+    "test_points": "test_points.yaml",
 }
 
 
@@ -224,17 +231,47 @@ def check_iteration(
             f"use scripts/record_event.py"
         )
 
-    # 2. approval completeness for every gate state that was entered
+    # 2. approval integrity for every gate state that was entered. 只查“是否
+    # 曾经 accepted”会让后续 rejected 或被改写的产物继续穿过门禁。
     approvals: list[dict[str, Any]] = document.get("approvals", [])
     for event in events:
         gate = _APPROVAL_GATES.get(event["to_state"])
         if gate is None:
             continue
         for stage, action in gate:
-            if not any(a.get("stage") == stage and a.get("action") == action for a in approvals):
+            latest = next(
+                (approval for approval in reversed(approvals) if approval.get("stage") == stage),
+                None,
+            )
+            if latest is None:
                 report.error(
                     f"transition to {event['to_state']} requires an approvals[] entry "
                     f"(stage={stage}, action={action}) recorded by record_approval.py"
+                )
+                continue
+            if latest.get("action") != action:
+                report.error(
+                    f"transition to {event['to_state']} requires the latest approvals[] entry "
+                    f"for stage={stage} to use action={action}, got {latest.get('action')!r}"
+                )
+                continue
+            artifact_name = _APPROVAL_ARTIFACTS.get(stage)
+            if artifact_name is None:
+                continue
+            artifact_path = iteration_dir / artifact_name
+            if not artifact_path.is_file():
+                report.error(
+                    f"transition to {event['to_state']} requires {artifact_name} so the "
+                    f"stage={stage} approval digest can be verified"
+                )
+                continue
+            current_digest = sha256_of(artifact_path)
+            if latest.get("artifact_sha256") != current_digest:
+                report.error(
+                    f"transition to {event['to_state']} has stale or invalid "
+                    f"artifact_sha256 for stage={stage}: recorded "
+                    f"{latest.get('artifact_sha256')!r}, current {current_digest}; "
+                    f"record the explicit decision through record_approval.py"
                 )
 
     # 3. staleness over the full generated_from chain
