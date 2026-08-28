@@ -65,9 +65,22 @@ def all_registered_files(registry_path: Path) -> list[Path]:
     return sorted(matches)
 
 
+def expand_targets(paths: list[Path]) -> list[Path]:
+    """将迭代目录递归展开为 YAML，保持单文件 CLI 兼容。"""
+    targets: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            targets.extend(
+                sorted(candidate for candidate in path.rglob("*.yaml") if candidate.is_file())
+            )
+        else:
+            targets.append(path)
+    return targets
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("paths", nargs="*", type=Path, help="YAML files to validate")
+    parser.add_argument("paths", nargs="*", type=Path, help="YAML files or iteration dirs")
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument(
         "--all",
@@ -76,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    targets: list[Path] = list(args.paths)
+    targets = expand_targets(list(args.paths))
     if args.all:
         targets.extend(all_registered_files(args.registry))
     if not args.all and not targets:

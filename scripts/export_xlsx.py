@@ -111,7 +111,16 @@ def deterministic_xlsx_bytes(workbook: Workbook) -> bytes:
             pinned = zipfile.ZipInfo(info.filename, date_time=FIXED_DATE)
             pinned.compress_type = zipfile.ZIP_DEFLATED
             pinned.external_attr = info.external_attr
-            archive.writestr(pinned, inner.read(info.filename))
+            payload = inner.read(info.filename)
+            if info.filename == "docProps/core.xml":
+                # openpyxl 在 save() 内部强制把 modified 改回当前时间，必须在
+                # 最终 ZIP 层再次固定，否则跨秒两次导出的字节不同。
+                payload = re.sub(
+                    rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)",
+                    rb"\g<1>1980-01-01T00:00:00Z\g<2>",
+                    payload,
+                )
+            archive.writestr(pinned, payload)
     return outer.getvalue()
 
 

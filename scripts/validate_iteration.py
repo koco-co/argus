@@ -372,7 +372,12 @@ def apply_fixes(iteration_dir: Path, report: IterationReport) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("iteration", type=Path, help="iterations/<id> directory")
+    parser.add_argument(
+        "iterations",
+        nargs="+",
+        type=Path,
+        help="one or more iterations/<id> dirs or iteration.yaml files",
+    )
     parser.add_argument(
         "--fix",
         action="store_true",
@@ -380,38 +385,43 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
-    if iteration_dir.is_file() and iteration_dir.name == "iteration.yaml":
-        iteration_dir = iteration_dir.parent  # pre-commit passes the file itself
-    if not (iteration_dir / "iteration.yaml").exists():
-        print(f"error: no iteration.yaml under {iteration_dir}", file=sys.stderr)
-        return 1
+    failed = False
+    for raw in args.iterations:
+        iteration_dir = raw if raw.is_absolute() else REPO_ROOT / raw
+        if iteration_dir.is_file() and iteration_dir.name == "iteration.yaml":
+            iteration_dir = iteration_dir.parent  # pre-commit passes each file itself
+        if not (iteration_dir / "iteration.yaml").exists():
+            print(f"error: no iteration.yaml under {iteration_dir}", file=sys.stderr)
+            failed = True
+            continue
 
-    report = IterationReport()
-    sibling = find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
-    check_iteration(iteration_dir, report, in_progress_elsewhere=sibling)
+        report = IterationReport()
+        sibling = find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
+        check_iteration(iteration_dir, report, in_progress_elsewhere=sibling)
 
-    if args.fix and not report.errors:
-        apply_fixes(iteration_dir, report)
+        if args.fix and not report.errors:
+            apply_fixes(iteration_dir, report)
 
-    for verdict in report.verdicts:
-        print(verdict)
-    for error in report.errors:
-        print(f"error: {error}", file=sys.stderr)
-    if report.errors:
-        print(f"validate_iteration: {len(report.errors)} error(s)", file=sys.stderr)
-        return 1
-    if report.pending_stale and not args.fix:
-        print(
-            "validate_iteration: stale rewrites pending (run --fix to write them)",
-            file=sys.stderr,
-        )
-        return 1
-    if report.verdicts:
-        print(f"validate_iteration: {len(report.verdicts)} verdict(s)")
-    else:
-        print(f"validate_iteration: {iteration_dir.name} OK")
-    return 0
+        for verdict in report.verdicts:
+            print(verdict)
+        for error in report.errors:
+            print(f"error: {error}", file=sys.stderr)
+        if report.errors:
+            print(f"validate_iteration: {len(report.errors)} error(s)", file=sys.stderr)
+            failed = True
+            continue
+        if report.pending_stale and not args.fix:
+            print(
+                "validate_iteration: stale rewrites pending (run --fix to write them)",
+                file=sys.stderr,
+            )
+            failed = True
+            continue
+        if report.verdicts:
+            print(f"validate_iteration: {len(report.verdicts)} verdict(s)")
+        else:
+            print(f"validate_iteration: {iteration_dir.name} OK")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -456,6 +456,23 @@ def test_second_in_progress_iteration_rejected(validator: Any, tmp_path: Path) -
     assert validator.main([str(iteration_two)]) == 1
 
 
+def test_precommit_can_validate_multiple_iteration_yaml_paths(
+    validator: Any, tmp_path: Path
+) -> None:
+    """pre-commit 会把同次提交中的多个 iteration.yaml 一并传入。"""
+    first = _iteration_doc(
+        "test-fixture-multi-a", ui=True, state="created", events=[], approvals=[]
+    )
+    second = _iteration_doc(
+        "test-fixture-multi-b", ui=False, state="created", events=[], approvals=[]
+    )
+    first_dir = _scaffold(tmp_path, "test-fixture-multi-a", first)
+    second_dir = _scaffold(tmp_path, "test-fixture-multi-b", second)
+    assert (
+        validator.main([str(first_dir / "iteration.yaml"), str(second_dir / "iteration.yaml")]) == 0
+    )
+
+
 def _run_summary_doc(status: str, attempts: list, **extra: Any) -> dict:
     doc = {
         "schema_version": "1.0",

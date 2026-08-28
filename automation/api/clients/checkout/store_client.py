@@ -41,9 +41,7 @@ class StoreClient:
         response.raise_for_status()
         return CartResponse.model_validate(response.json())
 
-    def apply_promotions(
-        self, cart_id: str, request: ApplyPromotionsRequest
-    ) -> CartResponse:
+    def apply_promotions(self, cart_id: str, request: ApplyPromotionsRequest) -> CartResponse:
         response = self._client.post(
             f"/store/carts/{cart_id}/promotions", json=request.model_dump()
         )
@@ -51,9 +49,7 @@ class StoreClient:
         return CartResponse.model_validate(response.json())
 
     def apply_promotions_error(self, cart_id: str) -> ErrorResponse:
-        response = self._client.post(
-            f"/store/carts/{cart_id}/promotions", json={"code": "ARGUS10"}
-        )
+        response = self._client.post(f"/store/carts/{cart_id}/promotions", json={"code": "ARGUS10"})
         if response.status_code != 400:
             response.raise_for_status()
         return ErrorResponse.model_validate(response.json())

@@ -26,9 +26,7 @@ def test_apply_valid_promotion(
     cart = store_client.create_cart(seed_state["region_europe"]).cart
     store_client.add_line_item(cart.id, variant.id)
     code = seed_registry["discount_argus10"]["value"]
-    response = store_client.apply_promotions(
-        cart.id, ApplyPromotionsRequest(promo_codes=[code])
-    )
+    response = store_client.apply_promotions(cart.id, ApplyPromotionsRequest(promo_codes=[code]))
     price = seed_registry["product_price_eur"]["value"]
     percentage = seed_registry["discount_argus10"]["percentage"]
     assert response.cart.total == price * (100 - percentage) / 100

@@ -21,8 +21,12 @@ validate-iteration:
 	uv run python scripts/validate_schema.py iterations/$(ID)
 
 export:
-	uv run python scripts/export_xmind.py iterations/$(ID)
-	uv run python scripts/export_xlsx.py iterations/$(ID)
+	@if [ -f iterations/$(ID)/functional-cases.yaml ]; then \
+		uv run python scripts/export_xmind.py iterations/$(ID); \
+	fi
+	@if [ -f iterations/$(ID)/api/cases.yaml ]; then \
+		uv run python scripts/export_xlsx.py iterations/$(ID); \
+	fi
 	uv run python scripts/render_md.py iterations/$(ID)
 
 web-tests:
