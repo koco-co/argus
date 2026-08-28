@@ -8,7 +8,7 @@
 
 当前实现已覆盖六个项目级 Skill、契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。两类来源连接器仍是 v1 明确排除的 post-v1 插件边界；运行器已经实现信封校验、失败隔离和安全拒绝。
 
-本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **404 passed**；`uv run pre-commit run --all-files` 的 6 个钩子通过；UI 与 API 共 4 条真实 Medusa 业务自动化及 6 条靶场/CI 基础设施探针通过；本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针；GitHub PR #1 的 `static-checks` 与 Compose-only `e2e` 均在功能提交 `dc27186` 通过。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
+本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **405 passed**；`uv run pre-commit run --all-files` 的 6 个钩子通过；UI 与 API 共 4 条真实 Medusa 业务自动化及 6 条靶场/CI 基础设施探针通过；本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针；GitHub PR #1 的 `static-checks` 与 Compose-only `e2e` 均在功能提交 `dc27186` 通过。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
 
 ## 当前状态
 

@@ -451,7 +451,11 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         report = IterationReport()
-        sibling = find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
+        sibling = (
+            None
+            if iteration_dir.name.startswith("test-fixture-")
+            else find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
+        )
         check_iteration(iteration_dir, report, in_progress_elsewhere=sibling)
 
         if args.fix and not report.errors:

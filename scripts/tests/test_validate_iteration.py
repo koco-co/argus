@@ -597,6 +597,28 @@ def test_precommit_can_validate_multiple_iteration_yaml_paths(
     )
 
 
+def test_permanent_fixture_does_not_conflict_with_live_iteration(
+    validator: Any, tmp_path: Path
+) -> None:
+    """永久夹具在真实非终态 iteration 存在时仍须可由同一钩子校验。"""
+    live = _iteration_doc(
+        "2026-08-live",
+        ui=True,
+        state="requirements_clarifying",
+        events=[_event("created", "requirements_clarifying")],
+        approvals=[],
+    )
+    fixture = _iteration_doc(
+        "test-fixture-alongside-live", ui=False, state="created", events=[], approvals=[]
+    )
+    live_dir = _scaffold(tmp_path, "2026-08-live", live)
+    fixture_dir = _scaffold(tmp_path, "test-fixture-alongside-live", fixture)
+
+    assert (
+        validator.main([str(live_dir / "iteration.yaml"), str(fixture_dir / "iteration.yaml")]) == 0
+    )
+
+
 def _run_summary_doc(status: str, attempts: list, **extra: Any) -> dict:
     doc = {
         "schema_version": "1.0",
