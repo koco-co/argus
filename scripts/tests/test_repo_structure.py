@@ -363,6 +363,20 @@ def test_artifact_upload_action_uses_node24_release() -> None:
     assert int(match.group("major")) >= 7
 
 
+def test_architecture_tree_and_ci_example_match_real_entrypoints() -> None:
+    """目录唯一权威不得重新引入不存在、重复或过期的脚本入口。"""
+    architecture = (REPO_ROOT / "docs/spec/architecture/ARCHITECTURE.md").read_text(
+        encoding="utf-8"
+    )
+    tree = architecture.split("## 3. Module Decoupling Rules", 1)[0]
+    assert tree.count("classify_failure.py") == 1
+    assert tree.count("self_debug_helper.py") == 1
+    assert "find_affected_modules.py" not in tree
+    assert "├── Jenkinsfile" not in tree
+    assert "self_debug_helper.py record-ci-auto" in architecture
+    assert "self_debug_helper.py archive --dest" not in architecture
+
+
 def test_keeper_dirs_hold_a_gitkeep() -> None:
     empty = sorted(d for d in KEEPER_DIRS if not (REPO_ROOT / d / ".gitkeep").is_file())
     assert empty == []

@@ -148,9 +148,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_secrets.py             # ⭐ credential-pattern scan over trackable text
 │   ├── check_patch_scope.py          # ⭐ self-debug frozen-scope and banned-pattern guard
 │   ├── classify_failure.py           # M9 结构化证据机械预分类（升级类不可降级）
-│   ├── self_debug_helper.py          # ⭐ run 摘要、预算、检查点、patch 门禁与受影响模块
-│   ├── classify_failure.py           # pytest evidence → bounded failure class
-│   ├── find_affected_modules.py      # AST import-closure selection for regression
+│   ├── self_debug_helper.py          # ⭐ run 摘要、预算、检查点、patch 门禁、AST 受影响模块与 CI 证据
 │   ├── record_approval.py            # sole approval writer; requires explicit user action
 │   ├── record_event.py               # ⭐ sole writer of `state` transitions + `events[]` (PRD §6)
 │   ├── reopen_iteration.py           # user-triggered reopen + stale propagation
@@ -158,16 +156,13 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_prod_scope.py           # ⭐ static write-call audit of read_only-marked tests (PRD §6)
 │   ├── check_orphan_tests.py         # ⭐ reverse closure: collected nodeids must resolve to cases + trace
 │   ├── run_plugin.py
-│   ├── _target_app.py               # ⭐ 靶应用锁定配置、Compose 调用与健康探测的共享实现
+│   ├── _target_app.py               # ⭐ 靶应用锁定配置、Compose 调用与健康/只读角色探测
 │   ├── notify.py                    # ⭐ CLI wrapper around shared/notify/dispatcher.py
-│   ├── self_debug_helper.py         # ⭐ budget bookkeeping/attempt-log helper used by the agent-driven loop;
-│   │                                #    invokes patch-scope checks and affected-module regression;
-│   │                                #    the LOOP ITSELF is the skill (session-side), never CI (ADR-004)
+│   ├── weekly_escalation.py          # 周回归连续失败时创建或复用 GitHub issue
 │   ├── target_app_up.py / target_app_seed.py / target_app_reset.py / target_app_healthcheck.py / target_app_canary.py / target_app_down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
 │   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
 │       └── fixtures/                # incl. a checked-in hand-written sample iteration
 ├── .github/workflows/{ci.yml,regression.yml}
-├── Jenkinsfile                      # optional post-v1; not an acceptance path
 ├── pyproject.toml, uv.lock, .python-version
 ├── .pre-commit-config.yaml, Makefile, .gitignore
 └── docs/                            # development documentation set (see AGENT_BRIEF index)
@@ -297,7 +292,7 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 Two jobs, deliberately split because their prerequisites differ:
 
 - **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, orphan-test closure, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci` (sole summary writer on CI — reads junit/allure, writes `scope: full` with one attempt), archives run evidence into each touched iteration's `runs/<run_id>/`, uploads the run directories (summary/patches committed contents; allure/logs/traces as artifacts only per ADR-012), and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** executes the full suite against `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci-auto` (sole summary writer on CI — scans eligible iterations, reads JUnit, writes `scope: full` with one attempt), uploads `reports/` 与各 iteration 的 run 证据（重型日志/trace 仅作为 artifact，规则见 ADR-012），and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** executes the full suite against `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
 - **Flake policy (CI-side, distinct from the in-test retry ban)**: a failed e2e job is re-run once automatically; a retry-pass marks the notification as `flaky-suspect` (single category, never counted green, never blocks merge on its own); the same nodeid appearing flaky-suspect repeatedly is recorded to `knowledge/patterns.md` via the M12 channel and triggers a repair-or-escalate decision. Full quarantine workflows stay post-v1 (Deferred).
 
 Workflow-hardening contract (GitHub's own guidance): third-party actions are pinned to **full commit SHAs** (`<sha> # vX.Y` comments; Dependabot keeps them current), top-level `permissions` default to none with per-job opt-in, every job sets `timeout-minutes`, and PR workflows share a concurrency group that cancels superseded runs.
@@ -368,19 +363,17 @@ jobs:
     steps:
       - uses: actions/checkout@<full-sha>
       - uses: astral-sh/setup-uv@<full-sha>
-      - run: uv sync
+      - run: uv sync --group dev
       - run: uv run playwright install --with-deps chromium
       - run: uv run python scripts/target_app_up.py
-      - run: uv run python scripts/target_app_seed.py
       - run: uv run python scripts/target_app_healthcheck.py
       # secrets reach the assembly step via the workflow `env:` block mapped from ${{ secrets.* }} —
       # never as shell arguments, never via inline echo (log-tracing would leak them);
       # settings.py reads env-var overrides first, so most jobs never need the YAML at all
       - run: uv run python -m shared.config.settings assemble --env ci   # writes gitignored config/env.ci.yaml
       - run: TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml
-      - run: uv run python scripts/self_debug_helper.py record-ci --junit reports/junit.xml   # sole CI summary writer (scope=full, one attempt)
-      - run: uv run python scripts/self_debug_helper.py archive --dest iterations/*/runs/   # allure+logs into per-run dirs (gitignored)
-      # a failed e2e job re-runs once (re-run failed jobs); retry-pass => flaky-suspect in notify, never green
+      - run: uv run python scripts/self_debug_helper.py record-ci-auto --junit reports/junit.xml --env ci
+      # 首次失败只复跑一次；复跑转绿时 job 依据复跑结果放行，但通知分类保持 flaky-suspect
       - if: always()
         uses: actions/upload-artifact@<full-sha>   # v7（Node 24）
         with:
