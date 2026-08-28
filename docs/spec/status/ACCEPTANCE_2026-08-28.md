@@ -33,7 +33,7 @@
 
 1. 正式 UI/API iteration 的上游与终态记录已按当前任务授权完成：UI 记录用户 `accepted`，API 的 exemptions/environment/acceptance 记录 `delegated`；API 的结构化 delegation 绑定用户 basis 摘要、scope 和有效期，且旧终态已经 reopen 后由 fresh run 重建；所有批准记录由 `record_approval.py` 写入并绑定当前摘要。该代理授权不改变外部事实门禁。
 2. `config/notify.yaml` 不存在，Actions Secrets/Variables 当前为空；适配器、隔离重试、Secrets 环境变量装配和 CI `always()` 已验证，但“真实频道收到消息”未成立。
-3. PR #1 当前仍为 OPEN、`REVIEW_REQUIRED`、`BLOCKED`，远端 head 为 `be7f421…`，reviews 为 0；受保护 `release` 要求至少一名非作者人工批准与最后推送后的批准，作者不能批准自己的 PR。
+3. PR #1 当前仍为 OPEN、`REVIEW_REQUIRED`、`BLOCKED`，远端 head 已包含本轮最新交付提交，reviews 为 0；受保护 `release` 要求至少一名非作者人工批准与最后推送后的批准，作者不能批准自己的 PR。
 4. `finalize_merge.py` 需要真实 PR 合并 SHA；合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
 
