@@ -5,6 +5,16 @@ permissions: {}
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      acceptance_scenario:
+        description: "CI 验收场景"
+        required: true
+        default: normal
+        type: choice
+        options:
+          - normal
+          - force_failure
+          - force_flaky
   schedule:
     - cron: "17 3 * * 1"
 
@@ -46,6 +56,7 @@ jobs:
     env:
       ARGUS_BASE_URL: http://localhost:8000
       ARGUS_API_BASE_URL: http://localhost:9000
+      ARGUS_CI_ACCEPTANCE_SCENARIO: ${{ inputs.acceptance_scenario || 'normal' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1

@@ -79,6 +79,30 @@ def test_notify_job_rejects_empty_status() -> None:
     assert "--status 不得为空" in result.stderr
 
 
+def test_e2e_workflow_exposes_manual_failure_and_flaky_scenarios() -> None:
+    """7.1 的强制失败与单次 flaky 验收必须能由手工工作流重复执行。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
+    assert "acceptance_scenario:" in workflow
+    assert "force_failure" in workflow
+    assert "force_flaky" in workflow
+    assert "ARGUS_CI_ACCEPTANCE_SCENARIO" in workflow
+    assert "automation/**/tests/harness/**" in (root / "scripts/orphan-allowlist.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert (root / "automation/web/tests/harness/test_ci_acceptance_control.py").is_file()
+
+
+def test_static_workflow_exposes_manual_failure_scenario() -> None:
+    """static-checks 必须能真实触发失败通知分支而不修改业务代码。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "force_failure:" in workflow
+    assert "inputs.force_failure" in workflow
+    assert "exit 1" in workflow
+
+
 class _Fake(Notifier):
     def __init__(self, failures: int) -> None:
         self.failures = failures

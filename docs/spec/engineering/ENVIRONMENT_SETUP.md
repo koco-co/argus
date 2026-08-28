@@ -55,7 +55,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（396 项；含 CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（398 项；含 CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-28（ruff、format、Schema、状态、DB 只读、密钥共 6 个真实钩子通过；CLI 静默空跑有回归门禁） |
@@ -66,5 +66,6 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Export artifacts | root | `make export ID=<id>` | branch-aware byte-reproducible `.xmind` or `.xlsx`, plus `.md`, written under `exports/` | 已运行 2026-08-28（UI/API 各连续两次 SHA-256 一致；XLSX 的 ZIP 与 core modified 时间均固定） |
 | Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive iterations/<id>/runs/<rid> reports/allure-results reports/logs` | display reports copied into the named run without overwrite | 已运行 2026-08-28（Playwright trace 与五轮 JUnit 日志归档；重复目标拒绝覆盖） |
 | CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已运行 2026-08-28（PR #1 的 static-checks/e2e 已真实通过；最新提交继续由同名必需检查验证） |
+| CI 对抗场景 | GitHub Actions | 手工调度 `static-checks(force_failure=true)`；手工调度 `e2e(acceptance_scenario=force_failure\|force_flaky)` | 失败分支执行失败通知且保持失败；flaky 首轮失败、仅重跑一次并分类 `flaky-suspect`；证据上传与 down 仍执行 | 本地控制探针已验证首轮失败/次轮通过及持续失败；远端调度在工作流提交后执行 |
 
 Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.

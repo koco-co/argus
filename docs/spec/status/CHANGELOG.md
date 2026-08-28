@@ -7,6 +7,7 @@
 - 修复 CI 通知事实源：本轮没有 JUnit 时不再选择历史 iteration 摘要，改发当前 job 状态；鉴于 GitHub runner 实测把 `job.status` 展开为空，工作流改用 `failure()`/`cancelled()` 推导非空状态，CLI 同时拒绝空状态，防止“通知步骤通过但消息状态为空”的假阳性。
 - 为组合 UI/API 执行增加可选 `api_base_url` 与 `ARGUS_API_BASE_URL`，生成 API 夹具不再硬编码 Medusa 后端地址；配置校验、CI 注入和文档示例同步覆盖。
 - 完成 Roadmap 7.4 的 PR 上下文覆盖路由：`--changed-base` 只选择变更 iteration，自动化、共享代码或覆盖工具变化会检查全部历史链，删除 iteration 不得静默跳过；CI 完整拉取历史并传入 base SHA。框架全量回归增至 396 项。
+- 为 Roadmap 7.1 增加只在 `workflow_dispatch` 暴露的对抗验收场景：static-checks 可强制进入失败通知分支，e2e 可稳定持续失败或仅首轮失败；常规 PR/定时运行始终为 normal。本地已证明退出序列 `1` 与 `1→0`，框架全量回归增至 398 项，远端调度证据将在提交后执行。
 
 - 固定并容器化 Medusa 2.19.0 开源靶场，提供 build/up/seed/reset/healthcheck/canary/down 生命周期；Admin API 种子覆盖区域与货币、商品库存、配送、手工支付、客户、促销、publishable key，并以私有运行时文件保存凭据。
 - 两次 reset 的种子状态字节一致；实时金丝雀验证 EUR 10.00、ARGUS10 10% 与 EUR 9.00 的派生关系，故意破坏价格时按预期失败；完整 down 后未残留 Argus 容器、网络或卷，重新全新启动通过。

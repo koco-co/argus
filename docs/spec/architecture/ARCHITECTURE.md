@@ -355,6 +355,7 @@ jobs:
 
 # .github/workflows/regression.yml — e2e for release PRs or automation/iteration changes
 # Target-app provisioning is compose-only; target_app_up.py owns the full stack.
+# workflow_dispatch 可选择 normal/force_failure/force_flaky，验收失败通知与单次重跑分类。
 permissions:
   contents: read
 concurrency:
