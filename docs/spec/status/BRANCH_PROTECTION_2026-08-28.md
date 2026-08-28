@@ -8,7 +8,7 @@
 - 必需状态检查：`static-checks`、`e2e`；`strict=true`，合并前必须与目标分支同步。
 - 必需人工批准数：1；启用 stale review 驳回与最后推送者不得批准。
 - 管理员同样受保护；要求线性历史与对话解决；禁止强推和删除分支。
-- PR #1 已真实运行并通过 `static-checks`、`changes` 与 `e2e`。该 PR 仍为 Draft，不把阶段性绿灯当作最终迭代验收。
+- PR #1 已转为 Ready，并在提交 `b0529d1` 真实运行且通过 `static-checks`、`changes` 与 `e2e`。该 PR 仍缺少受保护分支要求的非作者批准，不把阶段性绿灯当作最终迭代验收。
 
 ## 负向验收
 

@@ -55,7 +55,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（403 项；含批准产物摘要完整性与写前门禁、CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（404 项；含批准主体、产物摘要完整性与写前门禁、CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-28（ruff、format、Schema、状态、DB 只读、密钥共 6 个真实钩子通过；CLI 静默空跑有回归门禁） |

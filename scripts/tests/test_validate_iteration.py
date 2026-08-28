@@ -315,6 +315,28 @@ def test_approval_gate_requires_the_artifact_file(
     assert "requires requirements.yaml" in capsys.readouterr().err
 
 
+def test_approval_gate_requires_user_actor(validator: Any, tmp_path: Path, capsys: Any) -> None:
+    """Schema 允许的其他 actor 不能冒充用户批准。"""
+    doc = _iteration_doc(
+        "2026-08-non-user-approval",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-non-user-approval", doc)
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    persisted = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    persisted["approvals"][0]["actor"] = "agent"
+    iteration_yaml.write_text(yaml.safe_dump(persisted, sort_keys=False), encoding="utf-8")
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "not one of ['user']" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("ui", [True, False])
 def test_missing_exemptions_approval_gate_rejected(
     validator: Any, tmp_path: Path, ui: bool

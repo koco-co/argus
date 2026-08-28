@@ -105,7 +105,7 @@ _5.0 exists because Phase 3 DoDs in v1.0 depended on an app that stood up only i
 
 ## Phase 6 — Skill: `api-automation-generation`
 
-- [ ] **6.1** SKILL.md + symlink.
+- [x] **6.1** SKILL.md + symlink. *(2026-08-28：`api-automation-generation/SKILL.md` 已具版本 frontmatter、API 分支路由、typed model/client、hash no-op、traceability 与静态门禁规则；`.claude/skills/api-automation-generation` 实际解析到项目级 Skill。)*
 - [ ] **6.2 [manual gate]** Codegen from Phase 4 cases + HAR variant routed through normalization. **DoD**: clients/models/tests generated; `check_api_models.py` verifies typed pairing and client fields ⊆ source schema; loop reaches terminal states per 5.5 standard; tier gates hold.
 
 ## Phase 7 — CI/CD Wiring
@@ -127,7 +127,7 @@ _5.0 exists because Phase 3 DoDs in v1.0 depended on an app that stood up only i
 - [ ] **9.1 [manual gate]** Fresh harness bring-up + env.local config. **DoD**: healthchecks green; M8 approval record present.
 - [ ] **9.2 [manual gate]** UI-led iteration end-to-end (guest checkout w/ discount) → merged. **DoD**: PR head carries `iteration.yaml.state=accepted` and merges to `release`; `merged` is finalized post-merge by `scripts/finalize_merge.py` with the real merge SHA/event (ADR-011); approvals[] reconstruct acceptance solely from directory contents; branch-specific R→T→C→nodeid coverage green; PR green incl. e2e; notification fired; **attempts[] diff review confirms no frozen-scope patches**.
 - [ ] **9.3 [manual gate]** API-led iteration (order totals) same bar. **DoD**: same checks incl. the post-merge finalization, exercising api skills as primary path; no test_points.yaml is created; requirements-mapping/exemption stage (4.0) executed; branch-specific R→A→nodeid coverage green; API cases retain requirement_ids, declared `side_effect`, and source-schema-conformant clients.
-- [ ] **9.4** Retrospective corrections to AGENTS.md/knowledge/docs. **DoD**: ≥1 concrete correction committed & referenced from the merge PR description.
+- [x] **9.4** Retrospective corrections to AGENTS.md/knowledge/docs. **DoD**: ≥1 concrete correction committed & referenced from the merge PR description. *(2026-08-28：提交 `0e44648` / `b0529d1` 修正批准摘要完整性、最后决定与写前生命周期门禁；PR #1 的 Implementation Details 已引用该修正及回归范围。)*
 - [ ] **9.5** Final v1 acceptance sweep vs PRD §7 checklist. **DoD**: each of the five criteria evidenced (links to runs/PRs/approvals), including all three coverage tiers and patch-scope verdicts.
 
 ---
