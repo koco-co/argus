@@ -8,7 +8,7 @@
 
 当前实现已覆盖六个项目级 Skill、契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。两类来源连接器仍是 v1 明确排除的 post-v1 插件边界；运行器已经实现信封校验、失败隔离和安全拒绝。
 
-本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。远端 PR #1 的历史 `static-checks` 与 Compose-only `e2e` 证据仍对应提交 `74897fe`（run `33176595798` / `33176595811`）；本地新增提交尚未推送。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
+本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 `static-checks` run `33202248757` 与 Compose-only `e2e` run `33202248717` 均成功，e2e 日志显示 38 passed。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收。PR #1 仍为 OPEN、REVIEW_REQUIRED、BLOCKED，尚无非作者审批，不能执行受保护合并或 `finalize_merge.py`。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
 
 ## 当前状态
 

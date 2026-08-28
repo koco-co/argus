@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-08-29：提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 GitHub `static-checks`（run `33202248757`）与 Compose-only `e2e`（run `33202248717`）均通过，e2e 日志为 38 passed，通知步骤实际执行但因无 Secret 保持零渠道。PR 仍等待非作者审批，受保护 `release` 合并与真实通知送达继续保持未验收。
 - 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报同步当前 430 项框架测试和 38 条全栈回归证据。
 
 - 2026-08-29：针对审计复核重建 API iteration 的真实验收链。新增结构化、限时用户 delegation（basis_sha256、scope、有效期和 delegation_id 语义校验），禁止终态后追加 acceptance 记录，并要求 agent reopen 具备 lifecycle_reopen scope；API 来源信封改为严格 Schema 并补充有效/无效夹具。Medusa 真实负向响应统一按已探测的 400/404 声明，A0018 缺少 provider 改为 400，整个 setup 链副作用改为 creates；fresh reset 后新 run `run-20260828T182611Z-api3` 为 22/22，通过新的 endpoint/status/模型/孤儿闭包门禁。
