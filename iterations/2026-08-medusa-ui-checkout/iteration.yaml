@@ -1,6 +1,6 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: acceptance_pending
+state: accepted
 blocked_reason: null
 branches:
   ui: true
@@ -82,6 +82,12 @@ approvals:
   timestamp: '2026-08-28T14:23:30Z'
   artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
   note: 用户于 2026-08-28 重开时明确授权沿用当前 local 环境重新执行 M9
+- stage: acceptance
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T15:59:03Z'
+  artifact_sha256: d67622e1f6cfb58c0d680427f7e700b4553c5a2866569ef2e7a41610b97d0085
+  note: 用户明确回复：接受本次 UI M9 验收结果
 events:
 - from_state: created
   to_state: requirements_clarifying
@@ -183,5 +189,9 @@ events:
   to_state: acceptance_pending
   timestamp: '2026-08-28T15:13:16Z'
   triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-28T15:59:03Z'
+  triggered_by: user
 source_manifest: []
-updated_at: '2026-08-28T15:13:16Z'
+updated_at: '2026-08-28T15:59:03Z'
