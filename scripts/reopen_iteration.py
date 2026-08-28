@@ -16,29 +16,20 @@ import argparse
 import sys
 from pathlib import Path
 
-from _writers import WriterError, load_iteration, propagate_stale, record_event
+from _writers import WriterError, load_iteration, record_event
 
 
 def reopen(iteration_dir: Path, reason: str | None) -> dict:
-    iteration_yaml, document = load_iteration(iteration_dir)
-    propagate_stale(document)
-    # persist the stale statuses first (part of the reopen event's meaning),
-    # then record the user event through the sole transition writer.
-    iteration_yaml.write_text(yaml_safe_dump(document), encoding="utf-8")
-    document = record_event(
+    _, document = load_iteration(iteration_dir)
+    # stale 传播与 reopen 事件由唯一事件写入器一次落盘，拒绝时文件字节不变。
+    return record_event(
         iteration_dir,
         from_state=document["state"],
         to_state="requirements_clarifying",
         triggered_by="user",
         reason=reason,
+        mark_downstream_stale=True,
     )
-    return document
-
-
-def yaml_safe_dump(document: dict) -> str:
-    import yaml
-
-    return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
 
 
 def main(argv: list[str] | None = None) -> int:

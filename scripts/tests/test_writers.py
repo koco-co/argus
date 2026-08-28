@@ -220,10 +220,11 @@ def test_record_event_rejects_gate_without_approval(
 def test_writers_reject_schema_valid_but_broken_event_chain(
     record_event: Any,
     record_approval: Any,
+    reopen_iteration: Any,
     tmp_path: Path,
     capsys: Any,
 ) -> None:
-    """生命周期数组虽过 Schema、但链断裂时，两个写入入口都不得追加。"""
+    """生命周期数组虽过 Schema、但链断裂时，三个写入入口都不得追加。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-w1-broken-chain", "requirements_clarifying")
     _add_requirements_approval(iteration_dir)
     iteration_yaml = iteration_dir / "iteration.yaml"
@@ -236,6 +237,7 @@ def test_writers_reject_schema_valid_but_broken_event_chain(
             "triggered_by": "user",
         }
     ]
+    document["artifacts"]["test_points"]["status"] = "accepted"
     iteration_yaml.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
     before = iteration_yaml.read_text(encoding="utf-8")
 
@@ -253,6 +255,10 @@ def test_writers_reject_schema_valid_but_broken_event_chain(
         )
         == 1
     )
+    assert "chain broken" in capsys.readouterr().err
+    assert iteration_yaml.read_text(encoding="utf-8") == before
+
+    assert reopen_iteration.main([str(iteration_dir), "--reason", "fixture reopen"]) == 1
     assert "chain broken" in capsys.readouterr().err
     assert iteration_yaml.read_text(encoding="utf-8") == before
 
@@ -526,7 +532,7 @@ def test_hand_edited_state_blocks_event_writer(
         )
         == 1
     )
-    assert "hand-edited file" in capsys.readouterr().err
+    assert "hand-edited?" in capsys.readouterr().err
 
 
 def test_reopen_preserves_ids_and_marks_downstream_stale(

@@ -90,10 +90,12 @@ def record_event(
     reason: str | None = None,
     merge_sha: str | None = None,
     pr_number: int | None = None,
+    mark_downstream_stale: bool = False,
 ) -> dict[str, Any]:
     from validate_iteration import approval_gate_violations, legal_transition
 
     iteration_yaml, document = load_iteration(iteration_dir)
+    validate_document(iteration_yaml, document)
     if document["state"] != from_state:
         raise WriterError(
             f"stale transition request: iteration state is {document['state']!r}, "
@@ -111,6 +113,13 @@ def record_event(
         raise WriterError("; ".join(gate_violations))
     if to_state == "blocked" and not (reason or "").strip():
         raise WriterError("moving to blocked requires a non-empty --reason")
+    if mark_downstream_stale and not (
+        triggered_by == "user" and to_state == "requirements_clarifying"
+    ):
+        raise WriterError(
+            "mark_downstream_stale is reserved for a user-triggered reopen to "
+            "requirements_clarifying"
+        )
     event: dict[str, Any] = {
         "from_state": from_state,
         "to_state": to_state,
@@ -124,6 +133,8 @@ def record_event(
         event["pr_number"] = pr_number
     elif merge_sha is not None or pr_number is not None:
         raise WriterError("merge_sha/pr_number 只能写入 merged 事件")
+    if mark_downstream_stale:
+        propagate_stale(document)
     document["events"].append(event)
     document["state"] = to_state
     if to_state == "blocked":
