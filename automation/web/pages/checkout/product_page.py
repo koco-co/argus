@@ -60,4 +60,5 @@ class ProductPage:
 
     def capture(self, path: Path, *, full_page: bool = True) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.evaluate("window.scrollTo(0, 0)")
         self.page.screenshot(path=path, full_page=full_page)

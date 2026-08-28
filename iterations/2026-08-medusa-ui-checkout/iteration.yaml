@@ -1,6 +1,6 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: env_configured
+state: acceptance_pending
 blocked_reason: null
 branches:
   ui: true
@@ -31,8 +31,8 @@ artifacts:
     status: not_started
     input_sha256: null
   execution:
-    status: not_started
-    input_sha256: null
+    status: passed
+    input_sha256: d67622e1f6cfb58c0d680427f7e700b4553c5a2866569ef2e7a41610b97d0085
 approvals:
 - stage: requirements
   action: accepted
@@ -171,5 +171,17 @@ events:
   to_state: env_configured
   timestamp: '2026-08-28T14:23:30Z'
   triggered_by: user
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T14:24:03Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-28T15:12:08Z'
+  triggered_by: script
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-28T15:13:16Z'
+  triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-28T14:23:30Z'
+updated_at: '2026-08-28T15:13:16Z'

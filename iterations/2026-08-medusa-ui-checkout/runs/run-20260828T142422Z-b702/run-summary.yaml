@@ -1,0 +1,32 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-ui-checkout
+run_id: run-20260828T142422Z-b702
+started_at: '2026-08-28T14:24:32Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: passed
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: fail
+  failure_class: locator_drift
+  summary: 完整 checkout 模块回归：6 通过、4 失败；剩余问题为地址表单推进等待与结账页数量定位。
+  diff_ref: attempt-1.patch
+- attempt_number: 2
+  result: fail
+  failure_class: locator_drift
+  summary: 完整 checkout 模块回归：7 通过、3 失败；三个真实订单均已创建，剩余为确认页规格文本定位漂移。
+  diff_ref: attempt-2.patch
+- attempt_number: 3
+  result: fail
+  failure_class: timing
+  summary: 完整 checkout 模块 10/10 通过；人工视觉检查发现移动端全页截图在交互滚动位置采集，固定导航遮挡证据。
+  diff_ref: attempt-3.patch
+- attempt_number: 4
+  result: pass
+  failure_class: timing
+  summary: 完整 checkout 模块 10/10 通过；桌面与 390px 移动端 6 张新截图已逐张人工验收，无横向溢出或证据遮挡。
+  diff_ref: attempt-4.patch
+finished_at: '2026-08-28T15:12:03Z'

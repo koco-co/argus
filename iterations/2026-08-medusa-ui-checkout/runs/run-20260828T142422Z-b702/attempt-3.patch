@@ -1,0 +1,6 @@
+diff --git a/automation/web/pages/checkout/checkout_page.py b/automation/web/pages/checkout/checkout_page.py
+--- a/automation/web/pages/checkout/checkout_page.py
++++ b/automation/web/pages/checkout/checkout_page.py
+@@
+-        return self.page.get_by_text("S / Black", exact=True)
++        return self.page.get_by_text("Variant: S / Black", exact=True)

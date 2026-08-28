@@ -31,7 +31,7 @@ class CartPage:
         return summary_row.get_by_text(formatted_amount, exact=True)
 
     def item_variant(self) -> Locator:
-        return self.page.get_by_text("S / Black", exact=True)
+        return self.page.get_by_text("Variant: S / Black", exact=True)
 
     def quantity_selector(self) -> Locator:
         return self.page.get_by_role("combobox").first
@@ -44,4 +44,5 @@ class CartPage:
 
     def capture(self, path: Path, *, full_page: bool = True) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.evaluate("window.scrollTo(0, 0)")
         self.page.screenshot(path=path, full_page=full_page)
