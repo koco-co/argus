@@ -1,6 +1,6 @@
 # 插件接口契约（ROADMAP 2.1）
 
-状态：草案，等待用户明确签收（human sign-off）。本文件说明插件如何处理来源引用、职责边界及输出信封；不表示 `run_plugin.py` 已实现，也不替代人工确认。
+状态：已签收（2026-08-28，用户明确确认）。本文件说明插件如何处理来源引用、职责边界及输出信封；`run_plugin.py` 的实现状态以 Roadmap 和测试证据为准。
 
 信封结构的唯一机器权威是 [DATA_MODEL §10](../../docs/spec/architecture/DATA_MODEL.md#10-plugin-source-payloads)，Schema 位于 `plugins/_interface/schemas/`；落盘边界按 [ADR-006](../../docs/spec/architecture/adr/adr-006-source-payload-boundary.md) 执行。
 
