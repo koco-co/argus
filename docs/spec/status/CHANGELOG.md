@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-28 — Step 0 recheck blocked; recovery ledger corrected
+
+- Resumed from ROADMAP + AGENT_BRIEF and the current checkout, not a fresh scaffold. ROADMAP records 0.1–0.8 and Phase 1 complete, with 0.9 deferred to 7.5. Existing commit `c0212c2` contains the 2.1 contract draft; human sign-off remains pending. Corrected the stale “Phase 2 not started” / “local hooks are stubs” descriptions in AGENT_BRIEF without changing any task checkbox or approval/event artifact.
+- Current user instruction requires real dependencies and forbids mock substitution for acceptance. It supersedes the historical notification fallback recorded below; that history remains intact but is not current authorization to lower M11/7.2 or final acceptance. No PRD, DATA_MODEL, architecture, or DoD contract was changed.
+- Live checks confirmed Docker/Compose, uv/Python 3.12, actual project Chromium startup, GitHub repository/admin access, enabled Actions, and the successful Phase 1 static-checks run. A real webhook is unavailable in the checked local/repository configuration, so Step 0 is blocked and implementation stops. Commands, safe outputs, scope limits, and user actions are recorded in [STEP0_CHECK_2026-08-28](./STEP0_CHECK_2026-08-28.md).
+
 ## 2026-08-28 — Phase 1 task 1.1 implemented; spec defect fixed (rfc3339-validator)
 
 - **1.1** All DATA_MODEL schemas authored at their owning placements (requirements/test_points/functional_cases under `.agents/skills/functional-test-design/schemas/`; api_spec/api_cases under `.agents/skills/api-test-design/schemas/`; exemptions/traceability/run_summary under `scripts/schemas/`; two source payloads under `plugins/_interface/schemas/`). Every `generated_from` definition incorporates the documented optional `inputs[]` sibling (DATA_MODEL intro). Fixture pairs committed under `scripts/tests/fixtures/schemas/` covering the DoD list (missing required, bad enum/pattern, unresolved-ambiguity at `accepted`, missing `generated_from` at terminal states, invalid expectation kind, API case without `requirement_ids`, vacuous-conditional regressions, combinator preservation + `$ref` patterns, mutual-exclusion payloads, malformed `date-time`); `test_docs_schemas.py` extracts and parses every fenced JSON Schema block in DATA_MODEL (count pinned at 10).
