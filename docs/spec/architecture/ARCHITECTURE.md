@@ -382,7 +382,7 @@ jobs:
       - run: uv run python scripts/self_debug_helper.py archive --dest iterations/*/runs/   # allure+logs into per-run dirs (gitignored)
       # a failed e2e job re-runs once (re-run failed jobs); retry-pass => flaky-suspect in notify, never green
       - if: always()
-        uses: actions/upload-artifact@<full-sha>   # v4
+        uses: actions/upload-artifact@<full-sha>   # v7（Node 24）
         with:
           name: run-evidence-${{ github.run_id }}
           path: |

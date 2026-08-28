@@ -7,6 +7,7 @@ new structure enters the docs first, then this expected set.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -350,6 +351,16 @@ def test_executable_checkers_invoke_main_from_cli() -> None:
         if "def main(" in source and 'if __name__ == "__main__":' not in source:
             missing.append(path.name)
     assert missing == []
+
+
+def test_artifact_upload_action_uses_node24_release() -> None:
+    """上传证据的 Action 必须使用已迁移到 Node 24 的主版本。"""
+    workflow = (REPO_ROOT / ".github/workflows/regression.yml").read_text(encoding="utf-8")
+    match = re.search(
+        r"actions/upload-artifact@(?P<sha>[0-9a-f]{40})\s+#\s+v(?P<major>\d+)", workflow
+    )
+    assert match is not None
+    assert int(match.group("major")) >= 7
 
 
 def test_keeper_dirs_hold_a_gitkeep() -> None:
