@@ -1,6 +1,6 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: env_pending
+state: escalated
 blocked_reason: null
 branches:
   ui: true
@@ -52,6 +52,12 @@ approvals:
   timestamp: '2026-08-28T13:50:02Z'
   artifact_sha256: 277396e0fec3a97a9fc665d5d0e84aff486e841141e6be9581eaf2a6c0163f90
   note: 用户明确回复：接受 exemptions.yaml
+- stage: environment
+  action: provided
+  actor: user
+  timestamp: '2026-08-28T14:08:14Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 用户于 2026-08-28 明确批准使用当前 local 环境配置执行 M9
 events:
 - from_state: created
   to_state: requirements_clarifying
@@ -89,5 +95,17 @@ events:
   to_state: env_pending
   timestamp: '2026-08-28T13:55:43Z'
   triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T14:08:14Z'
+  triggered_by: user
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T14:08:34Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: escalated
+  timestamp: '2026-08-28T14:15:30Z'
+  triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-28T13:55:43Z'
+updated_at: '2026-08-28T14:15:30Z'
