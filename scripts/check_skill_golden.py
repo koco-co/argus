@@ -65,9 +65,7 @@ def _verify_inputs(baseline_dir: Path, entries: object, report: Report) -> None:
             continue
         actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
         if not isinstance(expected_hash, str) or actual_hash != expected_hash:
-            report.problems.append(
-                f"冻结输入摘要不匹配：{relative.as_posix()}，实际 {actual_hash}"
-            )
+            report.problems.append(f"冻结输入摘要不匹配：{relative.as_posix()}，实际 {actual_hash}")
 
 
 def _validate_schema(
@@ -166,9 +164,7 @@ def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
         )
         comparison = artifact.get("comparison")
         if comparison not in ALLOWED_COMPARISONS:
-            report.problems.append(
-                f"manifest.artifacts[{index}].comparison 不支持：{comparison}"
-            )
+            report.problems.append(f"manifest.artifacts[{index}].comparison 不支持：{comparison}")
             continue
         if relative is None:
             continue

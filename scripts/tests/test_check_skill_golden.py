@@ -58,9 +58,7 @@ def _baseline(tmp_path: Path, *, comparison: str = "yaml") -> tuple[Path, Path]:
     return baseline, actual
 
 
-def test_yaml_comparison_ignores_formatting_and_key_order(
-    checker: Any, tmp_path: Path
-) -> None:
+def test_yaml_comparison_ignores_formatting_and_key_order(checker: Any, tmp_path: Path) -> None:
     baseline, actual = _baseline(tmp_path)
     _write(actual / "artifact.yaml", "beta:\n  - two\n  - three\nalpha: 1\n")
 
@@ -79,9 +77,7 @@ def test_yaml_semantic_drift_is_reported(checker: Any, tmp_path: Path) -> None:
     assert any("语义差异" in problem for problem in report.problems)
 
 
-def test_python_comparison_ignores_comments_and_formatting(
-    checker: Any, tmp_path: Path
-) -> None:
+def test_python_comparison_ignores_comments_and_formatting(checker: Any, tmp_path: Path) -> None:
     baseline, actual = _baseline(tmp_path, comparison="python_ast")
     _write(
         actual / "artifact.py",
@@ -118,9 +114,7 @@ def test_modified_frozen_input_is_rejected(checker: Any, tmp_path: Path) -> None
 
 def test_registered_repository_baselines_verify_their_snapshots(checker: Any) -> None:
     root = Path(__file__).resolve().parents[2]
-    manifests = sorted(
-        (root / ".agents" / "skills").glob("*/versions/baselines/*/manifest.yaml")
-    )
+    manifests = sorted((root / ".agents" / "skills").glob("*/versions/baselines/*/manifest.yaml"))
     assert len(manifests) == 4
     for manifest in manifests:
         baseline = manifest.parent
