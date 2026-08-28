@@ -1,6 +1,6 @@
 # Changelog
 
-- 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；新增摘要不匹配、后续拒绝、产物缺失回归，永久测试夹具通过唯一批准写入器校正。框架全量回归增至 401 项。
+- 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；`record_event.py` 在持久化前复用同一门禁，三个唯一写入器还会拒绝 Schema 合法但生命周期链断裂的文件。新增摘要不匹配、后续拒绝、产物缺失、无批准事件写入与断链写入回归，永久测试夹具通过唯一批准写入器校正。框架全量回归增至 403 项。
 
 ## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
 

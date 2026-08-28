@@ -153,6 +153,79 @@ def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def approval_gate_violations(
+    to_state: str,
+    iteration_dir: Path,
+    approvals: list[dict[str, Any]],
+) -> list[str]:
+    """返回进入状态前未满足的批准条件，供校验器与唯一事件写入器共用。"""
+    violations: list[str] = []
+    for stage, action in _APPROVAL_GATES.get(to_state, ()):
+        latest = next(
+            (approval for approval in reversed(approvals) if approval.get("stage") == stage),
+            None,
+        )
+        if latest is None:
+            violations.append(
+                f"transition to {to_state} requires an approvals[] entry "
+                f"(stage={stage}, action={action}) recorded by record_approval.py"
+            )
+            continue
+        if latest.get("action") != action:
+            violations.append(
+                f"transition to {to_state} requires the latest approvals[] entry "
+                f"for stage={stage} to use action={action}, got {latest.get('action')!r}"
+            )
+            continue
+        artifact_name = _APPROVAL_ARTIFACTS.get(stage)
+        if artifact_name is None:
+            continue
+        artifact_path = iteration_dir / artifact_name
+        if not artifact_path.is_file():
+            violations.append(
+                f"transition to {to_state} requires {artifact_name} so the "
+                f"stage={stage} approval digest can be verified"
+            )
+            continue
+        current_digest = sha256_of(artifact_path)
+        if latest.get("artifact_sha256") != current_digest:
+            violations.append(
+                f"transition to {to_state} has stale or invalid "
+                f"artifact_sha256 for stage={stage}: recorded "
+                f"{latest.get('artifact_sha256')!r}, current {current_digest}; "
+                f"record the explicit decision through record_approval.py"
+            )
+    return violations
+
+
+def lifecycle_violations(document: dict[str, Any]) -> list[str]:
+    """校验当前生命周期链，不依赖磁盘产物或仓库级单迭代状态。"""
+    violations: list[str] = []
+    ui = document["branches"]["ui"]
+    state = document["state"]
+    if state == "blocked" and not document.get("blocked_reason"):
+        violations.append("blocked state requires a non-empty blocked_reason")
+
+    previous = "created"
+    for index, event in enumerate(document.get("events", [])):
+        reason = legal_transition(event["from_state"], event["to_state"], ui, event["triggered_by"])
+        if reason:
+            violations.append(f"events[{index}]: {reason}")
+        if event["from_state"] != previous:
+            violations.append(
+                f"events[{index}]: chain broken (from_state {event['from_state']!r} "
+                f"but previous to_state was {previous!r}) — hand-edited events[]?"
+            )
+        previous = event["to_state"]
+    if state != previous:
+        violations.append(
+            f"state {state!r} does not match the event chain (last to_state "
+            f"{previous!r}) — hand-editing state is a validation error; "
+            f"use scripts/record_event.py"
+        )
+    return violations
+
+
 def resolve_recorded(recorded: str, iterations_dir: Path) -> Path | None:
     """解析仓库相对、迭代相对或当前证据目录相对的记录路径。"""
     for base in (REPO_ROOT, iterations_dir.parent, iterations_dir):
@@ -199,7 +272,6 @@ def check_iteration(
         return
     document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
     iteration_id: str = document["iteration_id"]
-    ui: bool = document["branches"]["ui"]
     state: str = document["state"]
 
     if in_progress_elsewhere and in_progress_elsewhere != iteration_id:
@@ -208,71 +280,17 @@ def check_iteration(
             f"also non-terminal"
         )
 
-    if document["state"] == "blocked" and not document.get("blocked_reason"):
-        report.error("blocked state requires a non-empty blocked_reason")
-
     # 1. events chain consistency + transition legality
     events: list[dict[str, Any]] = document.get("events", [])
-    previous = "created"
-    for index, event in enumerate(events):
-        reason = legal_transition(event["from_state"], event["to_state"], ui, event["triggered_by"])
-        if reason:
-            report.error(f"events[{index}]: {reason}")
-        if event["from_state"] != previous:
-            report.error(
-                f"events[{index}]: chain broken (from_state {event['from_state']!r} "
-                f"but previous to_state was {previous!r}) — hand-edited events[]?"
-            )
-        previous = event["to_state"]
-    if state != previous:
-        report.error(
-            f"state {state!r} does not match the event chain (last to_state "
-            f"{previous!r}) — hand-editing state is a validation error; "
-            f"use scripts/record_event.py"
-        )
+    for violation in lifecycle_violations(document):
+        report.error(violation)
 
     # 2. approval integrity for every gate state that was entered. 只查“是否
     # 曾经 accepted”会让后续 rejected 或被改写的产物继续穿过门禁。
     approvals: list[dict[str, Any]] = document.get("approvals", [])
     for event in events:
-        gate = _APPROVAL_GATES.get(event["to_state"])
-        if gate is None:
-            continue
-        for stage, action in gate:
-            latest = next(
-                (approval for approval in reversed(approvals) if approval.get("stage") == stage),
-                None,
-            )
-            if latest is None:
-                report.error(
-                    f"transition to {event['to_state']} requires an approvals[] entry "
-                    f"(stage={stage}, action={action}) recorded by record_approval.py"
-                )
-                continue
-            if latest.get("action") != action:
-                report.error(
-                    f"transition to {event['to_state']} requires the latest approvals[] entry "
-                    f"for stage={stage} to use action={action}, got {latest.get('action')!r}"
-                )
-                continue
-            artifact_name = _APPROVAL_ARTIFACTS.get(stage)
-            if artifact_name is None:
-                continue
-            artifact_path = iteration_dir / artifact_name
-            if not artifact_path.is_file():
-                report.error(
-                    f"transition to {event['to_state']} requires {artifact_name} so the "
-                    f"stage={stage} approval digest can be verified"
-                )
-                continue
-            current_digest = sha256_of(artifact_path)
-            if latest.get("artifact_sha256") != current_digest:
-                report.error(
-                    f"transition to {event['to_state']} has stale or invalid "
-                    f"artifact_sha256 for stage={stage}: recorded "
-                    f"{latest.get('artifact_sha256')!r}, current {current_digest}; "
-                    f"record the explicit decision through record_approval.py"
-                )
+        for violation in approval_gate_violations(event["to_state"], iteration_dir, approvals):
+            report.error(violation)
 
     # 3. staleness over the full generated_from chain
     proposed: dict[str, str] = {}

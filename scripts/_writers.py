@@ -65,6 +65,13 @@ def validate_document(iteration_yaml: Path, document: dict[str, Any]) -> None:
     errors = schema_errors(binding, document)
     if errors:
         raise WriterError("iteration.yaml is invalid (hand-edited?): " + "; ".join(errors))
+    from validate_iteration import lifecycle_violations
+
+    semantic_errors = lifecycle_violations(document)
+    if semantic_errors:
+        raise WriterError(
+            "iteration.yaml lifecycle is invalid (hand-edited?): " + "; ".join(semantic_errors)
+        )
 
 
 def write_iteration(iteration_yaml: Path, document: dict[str, Any]) -> None:
@@ -84,7 +91,7 @@ def record_event(
     merge_sha: str | None = None,
     pr_number: int | None = None,
 ) -> dict[str, Any]:
-    from validate_iteration import legal_transition
+    from validate_iteration import approval_gate_violations, legal_transition
 
     iteration_yaml, document = load_iteration(iteration_dir)
     if document["state"] != from_state:
@@ -95,6 +102,13 @@ def record_event(
     violation = legal_transition(from_state, to_state, document["branches"]["ui"], triggered_by)
     if violation:
         raise WriterError(f"illegal transition {from_state} -> {to_state}: {violation}")
+    gate_violations = approval_gate_violations(
+        to_state,
+        iteration_dir,
+        document.get("approvals", []),
+    )
+    if gate_violations:
+        raise WriterError("; ".join(gate_violations))
     if to_state == "blocked" and not (reason or "").strip():
         raise WriterError("moving to blocked requires a non-empty --reason")
     event: dict[str, Any] = {
