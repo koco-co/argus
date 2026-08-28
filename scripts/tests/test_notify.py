@@ -33,6 +33,15 @@ def test_missing_notify_config_is_an_explicit_noop(tmp_path: Path) -> None:
     assert load_config(tmp_path / "missing.yaml") == {"channels": {}}
 
 
+def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> None:
+    """环境启动失败且没有 JUnit 时，必须发送 job 状态而非旧 iteration 摘要。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
+    assert "hashFiles('reports/junit.xml') != ''" in workflow
+    assert "hashFiles('reports/junit.xml') == ''" in workflow
+    assert "scripts/notify.py --job e2e" in workflow
+
+
 class _Fake(Notifier):
     def __init__(self, failures: int) -> None:
         self.failures = failures

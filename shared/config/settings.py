@@ -37,6 +37,7 @@ class EnvConfig(BaseModel):
     """单一执行环境的已校验配置。"""
 
     base_url: str
+    api_base_url: str | None = None
     auth: AuthConfig | None = None
     db: DBConfig | None = None
     cookies: dict[str, str] = Field(default_factory=dict)
@@ -74,6 +75,9 @@ def apply_environment_overrides(data: dict[str, Any]) -> dict[str, Any]:
     base_url = os.environ.get("ARGUS_BASE_URL")
     if base_url is not None:
         merged["base_url"] = base_url
+    api_base_url = os.environ.get("ARGUS_API_BASE_URL")
+    if api_base_url is not None:
+        merged["api_base_url"] = api_base_url
     _put_nested(merged, "auth", "username", os.environ.get("ARGUS_AUTH_USERNAME"))
     _put_nested(merged, "auth", "password", os.environ.get("ARGUS_AUTH_PASSWORD"))
     _put_nested(merged, "db", "dsn", os.environ.get("ARGUS_DB_DSN"))
@@ -143,6 +147,18 @@ def check_path(path: Path, iteration_dir: Path | None = None) -> list[str]:
         elif "CHANGE_ME" in base_url:
             problems.append("base_url: 仍是占位值")
 
+    api_base_url = data.get("api_base_url")
+    if api_base_url is not None:
+        parsed_api_url = urlparse(api_base_url) if isinstance(api_base_url, str) else None
+        if (
+            parsed_api_url is None
+            or parsed_api_url.scheme not in {"http", "https"}
+            or not parsed_api_url.netloc
+        ):
+            problems.append("api_base_url: 必须是 http 或 https URL")
+        elif "CHANGE_ME" in api_base_url:
+            problems.append("api_base_url: 仍是占位值")
+
     requires_credentials = _api_branch(iteration_dir)
     auth = data.get("auth")
     if requires_credentials or auth is not None:
@@ -176,6 +192,8 @@ def check_path(path: Path, iteration_dir: Path | None = None) -> list[str]:
 
 def _plain_document(config: EnvConfig) -> dict[str, Any]:
     document: dict[str, Any] = {"base_url": config.base_url}
+    if config.api_base_url is not None:
+        document["api_base_url"] = config.api_base_url
     if config.auth is not None:
         document["auth"] = {
             "username": config.auth.username,

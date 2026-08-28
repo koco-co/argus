@@ -71,10 +71,12 @@ cookies: {}
 """,
     )
     monkeypatch.setenv("ARGUS_BASE_URL", "http://env.invalid")
+    monkeypatch.setenv("ARGUS_API_BASE_URL", "http://api.invalid")
     monkeypatch.setenv("ARGUS_AUTH_USERNAME", "env-user")
     monkeypatch.setenv("ARGUS_AUTH_PASSWORD", "env-pass")
     loaded = settings.load_path(path)
     assert loaded.base_url == "http://env.invalid"
+    assert loaded.api_base_url == "http://api.invalid"
     assert loaded.auth is not None
     assert loaded.auth.username == "env-user"
     assert loaded.auth.password.get_secret_value() == "env-pass"
@@ -108,6 +110,7 @@ def test_check_api_branch_complete_config_passes(tmp_path: Path) -> None:
         """\
 # DB 角色：只读，仅授予 SELECT 权限。
 base_url: http://localhost:9000
+api_base_url: http://localhost:9000
 auth:
   username: api-user
   password: api-pass
@@ -120,12 +123,21 @@ cookies: {}
     assert settings.check_path(path, iteration) == []
 
 
+def test_check_rejects_invalid_optional_api_base_url(tmp_path: Path) -> None:
+    path = _env(
+        tmp_path / "env.bad-api-url.yaml",
+        "base_url: http://localhost:8000\napi_base_url: tcp://localhost:9000\n",
+    )
+    assert settings.check_path(path) == ["api_base_url: 必须是 http 或 https URL"]
+
+
 def test_assemble_writes_gitignored_ci_file_without_printing_secrets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     monkeypatch.setenv("ARGUS_BASE_URL", "http://localhost:9000")
+    monkeypatch.setenv("ARGUS_API_BASE_URL", "http://localhost:9000")
     monkeypatch.setenv("ARGUS_AUTH_USERNAME", "ci-user")
     monkeypatch.setenv("ARGUS_AUTH_PASSWORD", "ci-secret")
     monkeypatch.setenv(

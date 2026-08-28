@@ -72,6 +72,7 @@ make setup
 ```yaml
 # config/env.local.yaml
 base_url: "http://localhost:8000"
+api_base_url: "http://localhost:9000"  # UI/API 组合运行时的后端地址，可省略
 cookies: {}
 ```
 
@@ -131,6 +132,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 <h2 align="center">𝑪𝒐𝒏𝒇𝒊𝒈𝒖𝒓𝒂𝒕𝒊𝒐𝒏 · 配置与安全</h2>
 
 - `config/env.example.yaml` 是环境形状的唯一已提交示例；真实 `env.local/test/prod/ci.yaml` 均被忽略。
+- `base_url` 指向浏览器访问的站点；<b>UI/API</b> 组合运行可用可选的 `api_base_url` 指向后端，<b>CI</b> 可通过 `ARGUS_API_BASE_URL` 覆盖，测试代码不得硬编码环境地址。
 - 访客流程可省略 `auth` 与 `db`。<b>API-led</b> 正式迭代的 <b>M8</b> 检查要求完整凭据和只读数据库 <b>DSN</b>。
 - 代码层 <b>SQL</b> 扫描与 `ReadonlyDBClient` 只是纵深防御；真正的生产边界必须是仅授予 <b>SELECT</b> 的数据库角色和主机侧控制。
 - `TEST_ENV=prod` 时，`pytest collection` 只保留显式 `@pytest.mark.read_only` 的用例。
@@ -140,7 +142,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑬𝒗𝒊𝒅𝒆𝒏𝒄𝒆 · 验证证据</h2>
 
-<p>2026-08-28 的当前检出已实际完成 383 项框架测试、双工作进程的 4 条 <b>Medusa</b> 全栈用例、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
+<p>2026-08-28 的当前检出已实际完成 386 项框架测试、双工作进程的 4 条 <b>Medusa</b> 全栈用例、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
 
 - [验收证据矩阵](docs/spec/status/ACCEPTANCE_2026-08-28.md)
 - [Medusa 真实路由与种子事实](knowledge/target-app-notes/medusa.md)

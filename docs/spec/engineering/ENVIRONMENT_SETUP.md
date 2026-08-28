@@ -14,7 +14,7 @@ Prerequisites, initialization steps, and every operational command the framework
 | Playwright browsers | **Chromium only** (v1 decision; Firefox/WebKit installs are not performed) | single validated browser matrix |
 | Network access to PyPI + GitHub Actions runners | build time only | dependency sync, CI |
 
-Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. **CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process.
+Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. `base_url` 是浏览器站点地址；组合 UI/API 执行时可用 `api_base_url` 指定独立后端地址。**CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys（包括 `ARGUS_BASE_URL` 与可选 `ARGUS_API_BASE_URL`）, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process.
 
 ## Planned Base Configuration (authored in Phase 0)
 
@@ -55,7 +55,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（383 项；含 CLI 入口、通知信封、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（386 项；含 CLI 入口、通知信封与无 JUnit 降级、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（1.17 验收；无参形态评估全部迭代，CI 采用） |
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-28（ruff、format、Schema、状态、DB 只读、密钥共 6 个真实钩子通过；CLI 静默空跑有回归门禁） |

@@ -6,11 +6,11 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 383 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 386 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
-| API 生成链 | 需求→规范化 API→API 用例→Pydantic 模型/客户端→两条真实 API 用例→traceability 完整 | `iterations/test-fixture-api-e2e/`；`automation/api/` |
+| API 生成链 | 需求→规范化 API→API 用例→Pydantic 模型/客户端→两条真实 API 用例→traceability 完整；后端地址由 `api_base_url`/`ARGUS_API_BASE_URL` 注入，无环境硬编码 | `iterations/test-fixture-api-e2e/`；`automation/api/` |
 | 全栈并发回归 | 双 worker 下 UI 正向/负向与 API 正向/负向共 4 条通过 | 本地最终运行：`4 passed`；GitHub e2e 使用相同 Compose-only 生命周期 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | 导出 | XMind 与 XLSX 各连续两次字节一致；XLSX 跨秒 core modified 固定 | UI SHA `2c5806…d2a42`；API SHA `ed1123…36da0` |
@@ -28,7 +28,7 @@
 
 1. 正式 UI/API iteration 的 M1/M2/M8 approval 必须由用户针对具体工件明确接受，再由 `record_approval.py` 写入。
 2. `config/notify.yaml` 与真实 IM/邮件端点尚未提供；适配器、隔离重试和 CI `always()` 已验证，但“真实频道收到消息”未成立。
-3. PR #1 仍为 Draft，且受保护 `release` 要求至少一名非作者人工批准；作者不能批准自己的 PR。
+3. PR #1 已转为 Ready，且受保护 `release` 仍要求至少一名非作者人工批准与最后推送后的批准；作者不能批准自己的 PR。
 4. `finalize_merge.py` 需要真实 PR 合并 SHA；合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
 

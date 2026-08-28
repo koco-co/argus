@@ -52,6 +52,14 @@ def test_storefront_splits_internal_and_browser_backend_addresses(harness: Any) 
     assert "process.env.MEDUSA_INTERNAL_BACKEND_URL" in dockerfile
 
 
+def test_api_fixture_uses_environment_api_base_url() -> None:
+    """生成 API 夹具不得硬编码靶场后端地址。"""
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "automation/api/conftest.py").read_text(encoding="utf-8")
+    assert "env_config.api_base_url" in source
+    assert "http://localhost:9000" not in source
+
+
 def test_up_rebuilds_backend_before_migration() -> None:
     up_script = (Path(__file__).resolve().parents[1] / "target_app_up.py").read_text(
         encoding="utf-8"

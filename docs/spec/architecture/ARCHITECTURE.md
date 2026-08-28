@@ -258,6 +258,7 @@ class DBConfig(BaseModel):
 
 class EnvConfig(BaseModel):
     base_url: str
+    api_base_url: str | None = None     # 可选：UI/API 组合执行时使用独立 API 地址
     auth: AuthConfig | None = None      # optional: guest flows need neither auth nor db
     db: DBConfig | None = None
     cookies: dict[str, str] = {}
@@ -272,13 +273,13 @@ def load_env(env_name: str | None = None, cli_flag: str | None = None) -> EnvCon
     return EnvConfig(**data)
 ```
 
-Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows.
+Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows。可选的 `api_base_url`/`ARGUS_API_BASE_URL` 在站点和后端使用不同地址时保持生成 API 夹具与环境解耦。
 
 **prod protection is layered** (`check_prod_scope.py` + conftest + DB role): when `TEST_ENV=prod`, root `automation/conftest.py` implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only`; on top of collection gating, `scripts/check_prod_scope.py` statically audits read-only-marked tests for write-shaped client/page calls (configurable method denylist) before a prod run is assembled. Honest scoping: the marker is classification metadata that generation self-reports, so these code layers are defense-in-depth *around* the real boundaries — the SELECT-only DB role and host-side network/tenant controls. Combined they catch misconfiguration; no single layer is trusted alone.
 
 ### 7.2 Notification
 
-Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Feishu/WeCom/Email; dispatcher fans one run result to all configured channels; per-channel retry with exponential backoff (1s/2s/4s); a failing channel is logged and never blocks others nor the run. Entrypoints are unified (v1.0 had two competing ones): `shared/notify/dispatcher.py` holds the logic, `scripts/notify.py` is the CLI wrapper consuming a run's `run-summary.yaml` (explicit path, or `auto` = the newest `iterations/<id>/runs/<run-id>/run-summary.yaml`) or a CI job status. CI invokes it under `if: ${{ always() }}` so failures notify too (a plain step after a failed step would be skipped), and notification steps themselves carry `continue-on-error: true` per best-effort policy.
+Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Feishu/WeCom/Email; dispatcher fans one run result to all configured channels; per-channel retry with exponential backoff (1s/2s/4s); a failing channel is logged and never blocks others nor the run. Entrypoints are unified (v1.0 had two competing ones): `shared/notify/dispatcher.py` holds the logic, `scripts/notify.py` is the CLI wrapper consuming a run's `run-summary.yaml` (explicit path, or `auto` = the newest `iterations/<id>/runs/<run-id>/run-summary.yaml`) or a CI job status. CI invokes it under `if: ${{ always() }}` so failures notify too (a plain step after a failed step would be skipped), and notification steps themselves carry `continue-on-error: true` per best-effort policy。只有当前任务已产出 JUnit 时才允许选择 `auto` 摘要；环境启动等前置失败没有 JUnit 时，必须直接发送当前 `e2e` job 状态，禁止误用历史 iteration 摘要。
 
 ### 7.3 Extending environments/channels
 

@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from automation.api.clients.checkout.store_client import StoreClient
+from shared.config.settings import EnvConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,9 +25,12 @@ def _runtime() -> dict[str, str]:
 
 
 @pytest.fixture(scope="session")
-def store_client() -> Iterator[StoreClient]:
+def store_client(env_config: EnvConfig) -> Iterator[StoreClient]:
     runtime = _runtime()
-    client = StoreClient("http://localhost:9000", runtime["ARGUS_PUBLISHABLE_KEY"])
+    client = StoreClient(
+        env_config.api_base_url or env_config.base_url,
+        runtime["ARGUS_PUBLISHABLE_KEY"],
+    )
     yield client
     client.close()
 
