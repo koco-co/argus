@@ -20,7 +20,7 @@
 | M9 防伪 | 常量返回 patch 虽在路径白名单内，仍被 POM `stub-return` 启发式拒绝并回滚 | `run-20260828T173000Z-lite` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 最新提交 `3288842` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过 | Actions run `33159389849`、`33159389846` |
+| GitHub Actions | 功能提交 `3288842` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；后续仅同步验收文档 | Actions run `33159389849`、`33159389846` |
 
 ## 不可伪造的外部事实
 
