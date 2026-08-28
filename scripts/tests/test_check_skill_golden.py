@@ -102,6 +102,70 @@ def test_python_ast_drift_is_reported(checker: Any, tmp_path: Path) -> None:
     assert any("AST 语义差异" in problem for problem in report.problems)
 
 
+def test_python_compatible_comparison_allows_additive_methods(checker: Any, tmp_path: Path) -> None:
+    """共享 POM 可增量新增方法，但旧方法的 AST 必须保持不变。"""
+    baseline, actual = _baseline(tmp_path, comparison="python_ast")
+    manifest_path = baseline / "manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"][0]["comparison"] = "python_ast_compatible"
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    _write(
+        baseline / "expected/artifact.py",
+        """
+        class CartPage:
+            def total(self, value: int) -> int:
+                return value + 1
+        """,
+    )
+    _write(
+        actual / "artifact.py",
+        """
+        from pathlib import Path
+
+        class CartPage:
+            def total(self, value: int) -> int:
+                return value + 1
+
+            def capture(self, path: Path) -> None:
+                path.touch()
+        """,
+    )
+
+    report = checker.verify_baseline(baseline, actual)
+
+    assert report.problems == []
+
+
+def test_python_compatible_comparison_rejects_changed_existing_method(
+    checker: Any, tmp_path: Path
+) -> None:
+    baseline, actual = _baseline(tmp_path, comparison="python_ast")
+    manifest_path = baseline / "manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"][0]["comparison"] = "python_ast_compatible"
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    _write(
+        baseline / "expected/artifact.py",
+        """
+        class CartPage:
+            def total(self, value: int) -> int:
+                return value + 1
+        """,
+    )
+    _write(
+        actual / "artifact.py",
+        """
+        class CartPage:
+            def total(self, value: int) -> int:
+                return value - 1
+        """,
+    )
+
+    report = checker.verify_baseline(baseline, actual)
+
+    assert any("既有方法" in problem for problem in report.problems)
+
+
 def test_modified_frozen_input_is_rejected(checker: Any, tmp_path: Path) -> None:
     baseline, actual = _baseline(tmp_path)
     _write(baseline / "input/source.yaml", "value: changed\n")

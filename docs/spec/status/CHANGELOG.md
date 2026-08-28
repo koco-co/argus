@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-28：修复共享 POM 增量生成与 Skill 黄金基线的冲突。`python_ast_compatible` 保持冻结样例中的既有类、函数和方法 AST 不变，同时允许新 iteration 复用同一路由对象并新增 import/方法；旧方法被删除或改写仍会失败，禁止用覆盖 expected 快照掩盖漂移。
+
 - 2026-08-28：补齐 CI 通知 Secrets 的环境变量装配契约。`shared/notify/dispatcher.py` 现在可在不生成携密文件的前提下从 Actions Secrets 映射装配钉钉、飞书、企业微信或邮件渠道；不完整邮件配置会明确失败，空值仍保持零渠道兼容。两条工作流、示例配置与回归测试同步覆盖。
 
 - 2026-08-28：补齐 Roadmap 8.2 的可执行黄金基线基础设施。四个生成 Skill 各保存一份 1.0.0 冻结输入与代表性期望；`check_skill_golden.py` 校验输入 SHA-256、YAML Schema/解析后结构语义和 Python AST 语义，明确允许排版/注释变化而拒绝行为漂移。M13 的候选阈值、具体 proposal 展示与用户批准门禁保持未完成、未伪造。

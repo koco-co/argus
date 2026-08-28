@@ -15,7 +15,7 @@ import yaml
 from jsonschema import Draft7Validator, FormatChecker
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ALLOWED_COMPARISONS = {"yaml", "python_ast"}
+ALLOWED_COMPARISONS = {"yaml", "python_ast", "python_ast_compatible"}
 
 
 @dataclass
@@ -132,6 +132,120 @@ def _compare_python(expected_path: Path, actual_path: Path, report: Report) -> N
         report.problems.append(f"{actual_path.name} 存在 Python AST 语义差异")
 
 
+def _parse_python(path: Path, *, label: str, report: Report) -> ast.Module | None:
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, UnicodeError, SyntaxError) as exc:
+        report.problems.append(f"{label} 无法解析为 Python：{exc}")
+        return None
+
+
+def _compare_class_compatible(
+    expected: ast.ClassDef,
+    actual: ast.ClassDef,
+    *,
+    artifact_name: str,
+    report: Report,
+) -> None:
+    """保持既有类/方法语义，允许共享 POM 增量增加方法。"""
+
+    expected_header = ast.dump(
+        ast.ClassDef(
+            name=expected.name,
+            bases=expected.bases,
+            keywords=expected.keywords,
+            body=[],
+            decorator_list=expected.decorator_list,
+            type_params=getattr(expected, "type_params", []),
+        ),
+        include_attributes=False,
+    )
+    actual_header = ast.dump(
+        ast.ClassDef(
+            name=actual.name,
+            bases=actual.bases,
+            keywords=actual.keywords,
+            body=[],
+            decorator_list=actual.decorator_list,
+            type_params=getattr(actual, "type_params", []),
+        ),
+        include_attributes=False,
+    )
+    if expected_header != actual_header:
+        report.problems.append(f"{artifact_name} 既有类 {expected.name} 定义发生语义差异")
+        return
+
+    function_types = (ast.FunctionDef, ast.AsyncFunctionDef)
+    actual_methods = {node.name: node for node in actual.body if isinstance(node, function_types)}
+    for method in (node for node in expected.body if isinstance(node, function_types)):
+        current = actual_methods.get(method.name)
+        if current is None:
+            report.problems.append(f"{artifact_name} 缺少既有方法 {expected.name}.{method.name}")
+        elif ast.dump(method, include_attributes=False) != ast.dump(
+            current, include_attributes=False
+        ):
+            report.problems.append(
+                f"{artifact_name} 既有方法 {expected.name}.{method.name} 存在 AST 语义差异"
+            )
+
+    expected_other = {
+        ast.dump(node, include_attributes=False)
+        for node in expected.body
+        if not isinstance(node, function_types)
+    }
+    actual_other = {
+        ast.dump(node, include_attributes=False)
+        for node in actual.body
+        if not isinstance(node, function_types)
+    }
+    for missing in sorted(expected_other - actual_other):
+        report.problems.append(f"{artifact_name} 既有类成员发生语义差异：{missing}")
+
+
+def _compare_python_compatible(expected_path: Path, actual_path: Path, report: Report) -> None:
+    """比较旧生成语义是否仍被当前增量共享资产完整保留。"""
+
+    expected = _parse_python(expected_path, label=f"黄金产物 {expected_path}", report=report)
+    actual = _parse_python(actual_path, label=f"再生成产物 {actual_path}", report=report)
+    if expected is None or actual is None:
+        return
+
+    actual_classes = {node.name: node for node in actual.body if isinstance(node, ast.ClassDef)}
+    function_types = (ast.FunctionDef, ast.AsyncFunctionDef)
+    actual_functions = {node.name: node for node in actual.body if isinstance(node, function_types)}
+    actual_other = {
+        ast.dump(node, include_attributes=False)
+        for node in actual.body
+        if not isinstance(node, (ast.ClassDef, *function_types))
+    }
+
+    for node in expected.body:
+        if isinstance(node, ast.ClassDef):
+            current_class = actual_classes.get(node.name)
+            if current_class is None:
+                report.problems.append(f"{actual_path.name} 缺少既有类 {node.name}")
+            else:
+                _compare_class_compatible(
+                    node,
+                    current_class,
+                    artifact_name=actual_path.name,
+                    report=report,
+                )
+        elif isinstance(node, function_types):
+            current_function = actual_functions.get(node.name)
+            if current_function is None:
+                report.problems.append(f"{actual_path.name} 缺少既有函数 {node.name}")
+            elif ast.dump(node, include_attributes=False) != ast.dump(
+                current_function, include_attributes=False
+            ):
+                report.problems.append(f"{actual_path.name} 既有函数 {node.name} 存在 AST 语义差异")
+        elif ast.dump(node, include_attributes=False) not in actual_other:
+            report.problems.append(
+                f"{actual_path.name} 既有模块成员存在 AST 语义差异："
+                f"{ast.dump(node, include_attributes=False)}"
+            )
+
+
 def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
     """用一份基线清单验证冻结输入和隔离目录内的再生成产物。"""
 
@@ -183,8 +297,10 @@ def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
                 schema=artifact.get("schema"),
                 report=report,
             )
-        else:
+        elif comparison == "python_ast":
             _compare_python(expected_path, actual_path, report)
+        else:
+            _compare_python_compatible(expected_path, actual_path, report)
         report.compared.append(relative.as_posix())
     return report
 

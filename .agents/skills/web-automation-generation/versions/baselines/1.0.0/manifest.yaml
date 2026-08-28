@@ -7,7 +7,7 @@ inputs:
     sha256: ae868a677f562044cc3d417756898d6505df028615fd8f20f38be2ae19025120
 artifacts:
   - path: automation/web/pages/checkout/cart_page.py
-    comparison: python_ast
+    comparison: python_ast_compatible
   - path: automation/web/tests/checkout/test_test-fixture-ui-e2e_c0001_apply_discount.py
     comparison: python_ast
   - path: iterations/test-fixture-ui-e2e/traceability.yaml
