@@ -7,7 +7,7 @@ branches:
   api: false
 artifacts:
   requirements:
-    status: clarifying
+    status: clarified
     input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
   exemptions:
     status: not_started
