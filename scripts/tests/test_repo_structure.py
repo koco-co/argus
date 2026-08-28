@@ -295,6 +295,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_self_debug_helper.py",
         "test_notify.py",
         "test_finalize_merge.py",
+        "test_knowledge.py",
         "test_new_iteration.py",
         "test_repo_structure.py",
         "test_schemas.py",

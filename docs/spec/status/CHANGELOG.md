@@ -12,6 +12,7 @@
 - `self_debug_helper.py record-ci` 将 JUnit 绿/红结果写成唯一一条 `scope=full` attempt；报告归档拒绝覆盖既有 run 证据。真实外部渠道送达仍须在 7.2 DoD 单独验收，未用 mock 代替。
 - 新增 SHA 固定、最小权限、并发取消和超时约束的 `regression.yml`：release PR、自动化/迭代变更、手工与每周调度进入 Compose-only E2E；失败只自动复跑一次，重跑转绿标记 `flaky-suspect`；报告与通知使用 `always()`，靶场始终清理。Dependabot 每月更新 Actions/Python 依赖。
 - 新增 `finalize_merge.py`，只允许从 `accepted` 写入带 40 位真实 merge SHA 与正 PR number 的 `merged` 事件，并可仅在 `release` 分支创建 Emoji Conventional Commit；实际合并验收仍留在 7.6/9.2/9.3，未预写虚假 merge 事实。
+- 用本轮真实构建证据初始化 M12 知识：Medusa 容器 PostgreSQL SSL、SSR 内外 URL 分离、Skill 根目录命令路径和种子 oracle 反事实金丝雀；每条均含 tags/date/source，专项测试防止空来源和重复标题。
 
 ## 2026-08-28 — 完整交付 Goal 与 Phase 2 运行器实现
 
