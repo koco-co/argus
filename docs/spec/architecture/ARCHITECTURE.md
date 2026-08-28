@@ -124,7 +124,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── notify/{base,dispatcher}.py  # adapters dingtalk/feishu/wecom/email + dispatcher
 │   └── testdata/                    # ⭐ seeding/cleanup hooks per environment (PRD M8/M9 data_issue;
 │                                    #    seed-registry.yaml + policy: TESTING_STRATEGY harness section)
-├── reports/{allure-results,allure-report}/   # gitignored content, tracked .gitkeep
+├── reports/{allure-results,allure-report,visual}/ # gitignored runtime content, tracked Allure keepers
 ├── knowledge/{patterns.md,anti-patterns.md,optimization-candidates.yaml,target-app-notes/<target-app>.md}
 │                                    # optimization-candidates.yaml: [{skill_name, failure_pattern,
 │                                    #   occurrence_count, affected_iterations[], evidence_refs[]}] —
@@ -151,9 +151,10 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_patch_scope.py          # ⭐ self-debug frozen-scope and banned-pattern guard
 │   ├── classify_failure.py           # M9 结构化证据机械预分类（升级类不可降级）
 │   ├── self_debug_helper.py          # ⭐ run 摘要、预算、检查点、patch 门禁、AST 受影响模块与 CI 证据
-│   ├── record_approval.py            # sole approval writer; requires explicit user action
+│   ├── record_approval.py            # sole approval writer; user or scoped delegated agent
+│   ├── record_delegation.py          # sole writer of structured user delegation grants
 │   ├── record_event.py               # ⭐ sole writer of `state` transitions + `events[]` (PRD §6)
-│   ├── reopen_iteration.py           # user-triggered reopen + stale propagation
+│   ├── reopen_iteration.py           # user/delegated reopen + stale propagation
 │   ├── finalize_merge.py             # ⭐ post-merge `merged` finalization with real merge SHA (ADR-011)
 │   ├── check_prod_scope.py           # ⭐ static write-call audit of read_only-marked tests (PRD §6)
 │   ├── check_orphan_tests.py         # ⭐ reverse closure: collected nodeids must resolve to cases + trace
@@ -194,7 +195,7 @@ Corrections vs v1.0: the prose arrows "`plugins/` → `skills`" described **data
 
 ## 4. Data Contracts
 
-All artifact schemas, the registry binding, and semantic-check ownership live in [DATA_MODEL.md](./DATA_MODEL.md) (single authority — v1.0's "as previously specified" dangling reference is retired).
+All artifact schemas, the registry binding, and semantic-check ownership live in [DATA_MODEL.md](./DATA_MODEL.md) (single authority — v1.0's "as previously specified" dangling reference is retired). 原始来源也必须通过 `scripts/schema_registry.yaml` 的显式绑定校验；Medusa 的 `00-raw/medusa-store-api-source.yaml` 使用独立来源 schema，避免把真实来源证据误当作通用需求或 API 用例。
 
 ---
 
@@ -278,6 +279,8 @@ def load_env(env_name: str | None = None, cli_flag: str | None = None) -> EnvCon
 Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows。可选的 `api_base_url`/`ARGUS_API_BASE_URL` 在站点和后端使用不同地址时保持生成 API 夹具与环境解耦。
 
 **prod protection is layered** (`check_prod_scope.py` + conftest + DB role): when `TEST_ENV=prod`, root `automation/conftest.py` implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only`; on top of collection gating, `scripts/check_prod_scope.py` statically audits read-only-marked tests for write-shaped client/page calls (configurable method denylist) before a prod run is assembled. Honest scoping: the marker is classification metadata that generation self-reports, so these code layers are defense-in-depth *around* the real boundaries — the SELECT-only DB role and host-side network/tenant controls. Combined they catch misconfiguration; no single layer is trusted alone.
+
+**Approval provenance**: `scripts/record_approval.py` is the only regular writer of `approvals[]`; `scripts/record_delegation.py` is the only writer of the structured, time-bounded user grant and may perform a one-time binding migration for legacy delegated rows. Explicit user decisions retain `actor: user`. A delegated review must carry `action: delegated`, `actor: agent`, `delegation_id`, a non-empty note, and the current artifact digest; the validator recomputes the delegation basis hash and checks its scope, issuer, window, and approval timestamp. Delegated records are limited to repository artifacts and local execution; they never assert real notification delivery, non-author review, protected-branch merge, or a merge SHA.
 
 ### 7.2 Notification
 

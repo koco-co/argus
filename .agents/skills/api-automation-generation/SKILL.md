@@ -2,7 +2,7 @@
 name: api-automation-generation
 description: 从 exported API cases 与 normalized spec 为 Argus 生成同步 httpx clients、Pydantic request/response models、pytest tests 与 traceability。用于 M7；不得绕过 M4/M5、生成 raw dict client 或修改测试设计。
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Outcome
@@ -24,12 +24,12 @@ metadata:
 ## Steps
 
 1. 读取 PRD §4.6、CODING_STANDARDS API 规则及全部输入；运行 Schema、API coverage、R→A coverage 与 staleness 验证。
-2. 在任何状态转换前比较输入 hash。若当前已是 `api_automation_generated`、hash 未变化且 nodeid 可收集，则 no-op。只有确需首次生成且当前为 `api_cases_exported` 时，才记录 `api_cases_exported → api_automation_generating`；再生成必须先走 reopen/stale 协议回到合法状态。
+2. 在任何状态转换前先比较输入 hash 并收集现有 nodeid。若当前已是 `api_automation_generated`、hash 未变化且 nodeid 可收集，立即返回 no-op，不调用 `record_event.py`、不写文件也不产生格式噪声。只有首次生成（当前为 `api_cases_exported`）或已按 reopen/stale 协议重新生成且输入摘要确实变化时，才记录 `api_cases_exported → api_automation_generating`；重复调用不得先推进状态再判断 no-op。
 3. 先搜索并复用同 module 的 clients/models；按 endpoint schema 生成 Pydantic request/response models，保留 required、enum、format、nested object、array、`$ref` 与 combinator 可表达语义。
 4. 使用同步 `httpx.Client` 生成类型化 client method；输入和返回值都引用模型，不返回 raw dict，不使用源 Schema 之外的字段。
 5. 从 API cases 生成 tests，解析 seed/path/prev_response variables；按 side_effect 标明重跑边界。assertion 位于 tests，client/model 不嵌入业务预期。
 6. 每个 test 添加 module、case_id、iteration markers，并以幂等 upsert 写入 A→nodeid traceability。
-7. 运行 ruff、pyright、`check_api_models.py`、`check_test_markers.py`、`check_layering.py`、`check_orphan_tests.py`、API coverage 与 A→automation coverage。失败修复并重验最多 3 次；耗尽后通过 `uv run python scripts/record_event.py ... --to blocked --reason validation_budget_exhausted` 进入阻塞终态。
+7. 运行 ruff、pyright、`check_api_models.py`、`check_test_markers.py`、`check_layering.py`、`check_orphan_tests.py`、API coverage 与 A→automation coverage。失败修复并重验最多 3 次；耗尽后必须通过唯一事件写入器 `uv run python scripts/record_event.py <iteration> --from api_automation_generating --to blocked --by agent --reason validation_budget_exhausted` 进入 `blocked(validation_budget_exhausted)` 终态。
 8. 收集真实 nodeid，验证完整 R→A→nodeid 链，并通过 `uv run python scripts/record_event.py ...` 记录 `api_automation_generating → api_automation_generated`。
 
 ## Guardrails

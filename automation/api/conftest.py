@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import yaml
 
-from automation.api.clients.checkout.store_client import StoreClient
+from automation.api.clients.checkout.store_client import FullStoreClient
 from shared.config.settings import EnvConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,9 +25,9 @@ def _runtime() -> dict[str, str]:
 
 
 @pytest.fixture(scope="session")
-def store_client(env_config: EnvConfig) -> Iterator[StoreClient]:
+def store_client(env_config: EnvConfig) -> Iterator[FullStoreClient]:
     runtime = _runtime()
-    client = StoreClient(
+    client = FullStoreClient(
         env_config.api_base_url or env_config.base_url,
         runtime["ARGUS_PUBLISHABLE_KEY"],
     )

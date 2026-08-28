@@ -97,6 +97,7 @@ def test_finalize_records_merge_metadata(
 ) -> None:
     path = _iteration(tmp_path)
     monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
+    monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 0)
     finalizer.finalize(path, "b" * 40, 42)
     document = yaml.safe_load((path / "iteration.yaml").read_text())
     assert document["state"] == "merged"
@@ -108,3 +109,24 @@ def test_finalize_rejects_nonaccepted_and_bad_sha(finalizer: Any, tmp_path: Path
     path = _iteration(tmp_path, state="created")
     with pytest.raises(finalizer.WriterError):
         finalizer.finalize(path, "bad", 0)
+
+
+def test_finalize_rejects_nonaccepted_with_valid_metadata(
+    finalizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """即使 SHA 和 PR 格式正确，也不得从非 accepted 终态收口。"""
+    path = _iteration(tmp_path, state="created")
+    monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
+    with pytest.raises(finalizer.WriterError, match="accepted"):
+        finalizer.finalize(path, "b" * 40, 42)
+
+
+def test_finalize_rejects_coverage_gap(
+    finalizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """受保护分支收口前必须再次通过当前分支的完整覆盖链。"""
+    path = _iteration(tmp_path)
+    monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
+    monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 1)
+    with pytest.raises(finalizer.WriterError, match="覆盖链"):
+        finalizer.finalize(path, "b" * 40, 42)

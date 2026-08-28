@@ -25,6 +25,7 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "schemas"
 _FTD = REPO_ROOT / ".agents/skills/functional-test-design/schemas"
 _ATD = REPO_ROOT / ".agents/skills/api-test-design/schemas"
 _PAYLOADS = REPO_ROOT / "plugins/_interface/schemas"
+_SCRIPTS_SCHEMAS = REPO_ROOT / "scripts/schemas"
 
 SCHEMAS: dict[str, Path] = {
     "requirements": _FTD / "requirements.schema.json",
@@ -38,6 +39,7 @@ SCHEMAS: dict[str, Path] = {
     "run_summary": REPO_ROOT / "scripts/schemas/run_summary.schema.json",
     "requirement_source_payload": _PAYLOADS / "requirement_source_payload.schema.json",
     "api_source_payload": _PAYLOADS / "api_source_payload.schema.json",
+    "medusa_source": _SCRIPTS_SCHEMAS / "medusa_source.schema.json",
 }
 
 

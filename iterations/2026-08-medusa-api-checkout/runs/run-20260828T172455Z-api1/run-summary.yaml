@@ -1,0 +1,17 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-api-checkout
+run_id: run-20260828T172455Z-api1
+started_at: '2026-08-28T17:24:55Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: passed
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: pass
+  failure_class: none
+  summary: fresh reset 后真实 Medusa Store API checkout module 22/22 通过（20 个正式 API case
+    与 2 个既有 fixture），无 patch。JUnit：api-checkout-junit.xml
+finished_at: '2026-08-28T17:25:41Z'

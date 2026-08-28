@@ -253,8 +253,8 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
     "automation/api": {"conftest.py", "clients", "models", "tests", "har"},
     "automation/perf": {"locustfiles", "scenarios"},
     "shared": {"utils", "assertions", "config", "db", "notify", "testdata"},
-    # junit.xml 是回归工作流的运行时产物，和 Allure 目录一样被 gitignore。
-    "reports": {"allure-results", "allure-report", "junit.xml"},
+    # junit.xml 与 visual 是回归工作流的运行时产物，和 Allure 目录一样被 gitignore。
+    "reports": {"allure-results", "allure-report", "visual", "junit.xml"},
     "knowledge": {
         "patterns.md",
         "anti-patterns.md",
@@ -293,6 +293,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "_writers.py",
         "record_event.py",
         "record_approval.py",
+        "record_delegation.py",
         "reopen_iteration.py",
         "run_plugin.py",
         "_target_app.py",
@@ -485,7 +486,7 @@ def test_skill_entrypoint_matches_agent_skills_contract(skill_name: str) -> None
     assert set(metadata) == {"name", "description", "metadata"}
     assert metadata["name"] == skill_name
     assert 1 <= len(metadata["description"]) <= 1024
-    assert metadata["metadata"] == {"version": "1.0.0"}
+    assert metadata["metadata"] == {"version": "1.1.0"}
     assert "# Outcome" in body
     assert "## Steps" in body
     assert "## Guardrails" in body

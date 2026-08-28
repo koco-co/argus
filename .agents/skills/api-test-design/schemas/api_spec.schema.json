@@ -44,6 +44,8 @@
           "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
           "summary": {"type": "string"},
           "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "requirement_ids": {"type": "array", "minItems": 1,
+            "items": {"type": "string", "pattern": "^R[0-9]{4}$"}},
           "authentication": {"type": "string"},
           "parameters": {"type": "array", "items": {"$ref": "#/definitions/param"}},
           "request_body": {

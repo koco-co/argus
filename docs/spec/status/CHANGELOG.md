@@ -1,5 +1,15 @@
 # Changelog
 
+- 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报同步当前 430 项框架测试和 38 条全栈回归证据。
+
+- 2026-08-29：针对审计复核重建 API iteration 的真实验收链。新增结构化、限时用户 delegation（basis_sha256、scope、有效期和 delegation_id 语义校验），禁止终态后追加 acceptance 记录，并要求 agent reopen 具备 lifecycle_reopen scope；API 来源信封改为严格 Schema 并补充有效/无效夹具。Medusa 真实负向响应统一按已探测的 400/404 声明，A0018 缺少 provider 改为 400，整个 setup 链副作用改为 creates；fresh reset 后新 run `run-20260828T182611Z-api3` 为 22/22，通过新的 endpoint/status/模型/孤儿闭包门禁。
+
+- 2026-08-29：fresh reset 后重新执行正式 UI checkout，10/10 Chromium 用例通过并归档为 `run-20260828T183412Z-ui03`；此前的 locator/timing 证据保留为历史 attempt，不被新 run 覆盖。
+
+- 2026-08-29：完成正式 Medusa API checkout 迭代的 M4–M9 机器验收。固定 2.19.0 Store API 来源与 live probe，保留 10 个 endpoint 的参数、组件 `$ref` 及真实错误响应；生成 20 个带 `requirement_ids`、可回放变量和副作用声明的 API case、XLSX v4、R→A→nodeid traceability，以及增量 `FullStoreClient`/Pydantic 模型/pytest 用例。fresh reset 后真实 API 回归为 22/22 通过；`validate_iteration`、`check_api_coverage`、模型/marker/layering/orphan 门禁和黄金基线均通过。正式 iteration 的 delegated 审查由唯一批准写入器留痕；真实通知、非作者 PR 批准和受保护合并仍未伪造或宣称完成。
+
+- 2026-08-29：将六个项目 Skill 升级到 1.1.0，并把原 1.0.0 入口保存到各自 `versions/1.0.0.md`；批准契约新增带非空审查说明的 `action: delegated, actor: agent`，仅覆盖当前任务中可审计的仓库产物和本地执行。新增 Medusa 来源 schema registry 绑定，并让 API 模型检查器支持间接继承的 Pydantic 基类；同时拒绝空白 delegated note、允许视觉运行时报告目录；框架回归后续补充治理夹具后为 427 passed。
+
 - 2026-08-28：修复共享 POM 增量生成与 Skill 黄金基线的冲突。`python_ast_compatible` 保持冻结样例中的既有类、函数和方法 AST 不变，同时允许新 iteration 复用同一路由对象并新增 import/方法；旧方法被删除或改写仍会失败，禁止用覆盖 expected 快照掩盖漂移。
 
 - 2026-08-28：补齐 CI 通知 Secrets 的环境变量装配契约。`shared/notify/dispatcher.py` 现在可在不生成携密文件的前提下从 Actions Secrets 映射装配钉钉、飞书、企业微信或邮件渠道；不完整邮件配置会明确失败，空值仍保持零渠道兼容。两条工作流、示例配置与回归测试同步覆盖。

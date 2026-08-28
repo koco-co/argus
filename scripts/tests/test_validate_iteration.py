@@ -1,11 +1,9 @@
-"""Roadmap 1.3 acceptance tests for scripts/validate_iteration.py.
+"""scripts/validate_iteration.py 的 Roadmap 1.3 验收测试。
 
-Covers the DoD fixture list: legal UI/API route chains (incl.
-requirements_mapped on the API branch), explicit Hybrid rejection, illegal
-jumps, stale downgrade verdicts shown but unwritten (and written by --fix),
-stale-input consumption surfaced, attempt-ordering and passed-last-attempt
-violations, hand-edited state/events rejection, blocked(
-validation_budget_exhausted) acceptance, second-in-progress rejection.
+覆盖 DoD 夹具清单：合法 UI/API 路由链（含 API 分支的 requirements_mapped）、显式 Hybrid
+拒绝、非法跳转、只显示但不写入 stale 降级 verdict（以及由 --fix 写入）、stale 输入消费提示、
+attempt 排序与最后一次通过约束、手工编辑 state/events 拒绝、blocked(validation_budget_exhausted)
+接受和第二个进行中迭代拒绝。
 """
 
 from __future__ import annotations
@@ -58,6 +56,19 @@ def _approval(stage: str, action: str) -> dict:
         "actor": "user",
         "timestamp": "2026-08-28T09:59:00Z",
         "artifact_sha256": SHA,
+    }
+
+
+def _delegation() -> dict:
+    basis = "测试夹具中的用户持续授权"
+    return {
+        "id": "delegation-test-fixture",
+        "granted_by": "user",
+        "basis": basis,
+        "basis_sha256": hashlib.sha256(basis.encode("utf-8")).hexdigest(),
+        "scope": ["exemptions", "lifecycle_reopen"],
+        "granted_at": "2026-08-28T09:00:00Z",
+        "expires_at": "2026-12-31T23:59:59Z",
     }
 
 
@@ -197,6 +208,47 @@ def test_legal_api_route_chain_with_requirements_mapped(validator: Any, tmp_path
     assert validator.main([str(iteration_dir)]) == 0
 
 
+def test_delegated_approval_satisfies_artifact_gate(validator: Any, tmp_path: Path) -> None:
+    """用户持续授权下的 agent 审查决定可推进内部产物门禁。"""
+    delegated = _approval("exemptions", "delegated")
+    delegated["actor"] = "agent"
+    delegated["note"] = "依据用户持续授权，由 agent 审查当前豁免清单后推进。"
+    delegated["delegation_id"] = "delegation-test-fixture"
+    doc = _iteration_doc(
+        "2026-08-api-delegated",
+        ui=False,
+        state="requirements_mapped",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+        ],
+        approvals=[_approval("requirements", "accepted"), delegated],
+    )
+    doc["delegation"] = _delegation()
+    iteration_dir = _scaffold(tmp_path, "2026-08-api-delegated", doc)
+    assert validator.main([str(iteration_dir)]) == 0
+
+
+def test_whitespace_only_delegated_note_is_rejected(validator: Any, tmp_path: Path) -> None:
+    """delegated 记录必须携带可审计的非空说明，空白不能绕过门禁。"""
+    delegated = _approval("requirements", "delegated")
+    delegated["actor"] = "agent"
+    delegated["note"] = "   "
+    doc = _iteration_doc(
+        "2026-08-delegated-note",
+        ui=False,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[delegated],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-delegated-note", doc)
+    assert validator.main([str(iteration_dir)]) == 1
+
+
 def test_requirements_mapped_rejected_on_ui_branch(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-ui-mapped",
@@ -334,7 +386,7 @@ def test_approval_gate_requires_user_actor(validator: Any, tmp_path: Path, capsy
     iteration_yaml.write_text(yaml.safe_dump(persisted, sort_keys=False), encoding="utf-8")
 
     assert validator.main([str(iteration_dir)]) == 1
-    assert "not one of ['user']" in capsys.readouterr().err
+    assert "'user' was expected" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("ui", [True, False])
@@ -416,7 +468,7 @@ def test_blocked_with_budget_reason_accepted_and_user_unblock(
     )
     doc["blocked_reason"] = None  # unblocked again
     iteration_dir = _scaffold(tmp_path, "2026-08-budget", doc)
-    # the blocked hop lacks a reason only while IN blocked; we left it, so OK
+    # blocked 跳转仅在进入 blocked 时要求理由；这里保持解阻状态，因此合法。
     assert validator.main([str(iteration_dir)]) == 0
 
 
@@ -449,7 +501,7 @@ def test_non_user_unblock_rejected(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(iteration_dir)]) == 1
 
 
-def test_reopen_edge_is_user_only(validator: Any, tmp_path: Path) -> None:
+def test_reopen_agent_requires_structured_delegation(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-reopen",
         ui=True,
@@ -465,6 +517,46 @@ def test_reopen_edge_is_user_only(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(iteration_dir)]) == 1
 
 
+def test_acceptance_approval_after_terminal_event_is_rejected(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """终态之后追加 acceptance 不能伪造新的验收链。"""
+    doc = _iteration_doc(
+        "2026-08-late-acceptance",
+        ui=False,
+        state="accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+            _event("requirements_mapped", "spec_normalizing"),
+            _event("spec_normalizing", "spec_valid"),
+            _event("spec_valid", "api_cases_generating"),
+            _event("api_cases_generating", "api_cases_exported"),
+            _event("api_cases_exported", "api_automation_generating"),
+            _event("api_automation_generating", "api_automation_generated"),
+            _event("api_automation_generated", "env_pending"),
+            _event("env_pending", "env_configured"),
+            _event("env_configured", "executing"),
+            _event("executing", "execution_passed"),
+            _event("execution_passed", "acceptance_pending"),
+            _event("acceptance_pending", "accepted"),
+        ],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
+            _approval("acceptance", "accepted"),
+        ],
+    )
+    late = _approval("acceptance", "accepted")
+    late["timestamp"] = "2026-08-28T10:01:00Z"
+    doc["approvals"].append(late)
+    iteration_dir = _scaffold(tmp_path, "2026-08-late-acceptance", doc)
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "appended after the terminal accepted event" in capsys.readouterr().err
+
+
 def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, capsys: Any) -> None:
     requirements_raw = _raw("requirements--accepted.valid.yaml")
     doc = _iteration_doc(
@@ -478,7 +570,7 @@ def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, cap
         approvals=[_approval("requirements", "accepted")],
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-stale", doc, requirements_raw)
-    # point generated_from at a live upstream, then tamper with the file
+    # 先让 generated_from 指向现存上游，再篡改该文件。
     requirements = iteration_dir / "requirements.yaml"
     document = yaml.safe_load(requirements.read_text(encoding="utf-8"))
     document["generated_from"] = {

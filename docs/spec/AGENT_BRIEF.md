@@ -1,6 +1,6 @@
 # 项目接续入口 / Agent Brief
 
-核对日期：2026-08-28
+核对日期：2026-08-29
 
 ## 最新执行覆盖：完整交付 Goal
 
@@ -8,13 +8,13 @@
 
 当前实现已覆盖六个项目级 Skill、契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。两类来源连接器仍是 v1 明确排除的 post-v1 插件边界；运行器已经实现信封校验、失败隔离和安全拒绝。
 
-本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **417 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；UI 与 API 共 4 条真实 Medusa 业务自动化及 6 条靶场/CI 基础设施探针通过；本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针；GitHub PR #1 的 `static-checks` 与 Compose-only `e2e` 均在提交 `74897fe` 通过（run `33174100956` / `33174100952`）。该提交同时补齐 Actions Secrets 到通知 dispatcher 的环境变量装配；当前仓库没有实际通知 Secret，因此真实外部送达仍未验收。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
+本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。远端 PR #1 的历史 `static-checks` 与 Compose-only `e2e` 证据仍对应提交 `74897fe`（run `33176595798` / `33176595811`）；本地新增提交尚未推送。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
 
 ## 当前状态
 
-AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）当前已完成所有不依赖外部责任方的 v1 实现与机器验收。ROADMAP 中尚未勾选的项目包含人工确认或真实外部系统 DoD，不能由 agent 代签：正式 iteration 工件批准、真实通知送达、非作者 PR 批准、合并后真实 SHA 收口，以及达到阈值后的 Skill 优化提案确认。测试 fixture 只证明框架能力，不冒充这些正式事实。
+AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）当前已完成所有不依赖外部责任方的 v1 实现与机器验收。针对本任务，用户已明确授予持续代理决策权：对仓库内正式 iteration 工件，agent 在完成 Schema、覆盖、来源和真实行为审查后可通过唯一写入器记录 `action: delegated`，不再反复请求同类确认。该记录如实标明 `actor: agent` 和授权说明，不冒充用户亲自接受。真实通知送达、非作者 PR 批准、受保护分支合并及合并后真实 SHA 仍只能由对应外部事实完成；测试 fixture 只证明框架能力，不冒充这些事实。
 
-2026-08-28 前次真实自检：Docker daemon、Compose、uv、Python 3.12、项目 Playwright Chromium 实际启动、GitHub 远程读取与 Actions 配置读取均成功；账号具备仓库 ADMIN 权限。当时 `config/notify.yaml`、通知环境变量和仓库 Actions Secrets/Environments 均未配置，因此没有真实通知证据。历史自检记录可用 `git show 2b61331:docs/spec/status/STEP0_CHECK_2026-08-28.md` 复核；该临时文件的当前工作区删除状态予以保留。本轮未重复检查 webhook，也未将其标记为已验证。
+2026-08-29 复核：Docker/Compose、uv、Python 3.12、项目 Playwright Chromium 和 GitHub 远程读取均可用；`config/notify.yaml` 仍不存在，`gh secret list` 与 `gh variable list` 均无通知配置，因此没有真实通知证据。历史自检记录可用 `git show 2b61331:docs/spec/status/STEP0_CHECK_2026-08-28.md` 复核；该临时文件的当前工作区删除状态予以保留。本轮没有把适配器单测或零渠道日志标记为真实送达。API iteration 已通过合法 delegated reopen 重建状态链，旧 run 仅作历史记录，不作为本轮终态摘要。
 
 规范文档仍以 v1.6 基线为权威。本轮用户明确禁止以 mock/本地单测替代真实依赖验收，覆盖历史“通知降级”许可；历史记录保留但不再作为当前验收依据。本仓库直接施工、采用 Emoji Conventional Commit 并持续推送；人工确认记录仍只针对具体工件生效，不从总目标推断或补记。
 
@@ -30,9 +30,9 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 - Phase 2 已完成：插件契约由用户明确签收；来源信封 Schema、运行器、失败变体、目录说明和 AGENTS 引用均已有代码、测试与提交证据。真实连接器仍按 PRD §8 保留到 post-v1。
 - 已完成：六个项目级 Skill、确定性辅助脚本、Medusa 靶场、Web/API 生成、M9 四类证明、移动端视觉证据、双 CI 门禁、周回归连续失败升级、通知隔离重试与合并收口实现。
 - 外部待办：提供 `config/notify.yaml` 或 CI Secret 后执行真实频道送达；适配器和 CI `always()` 调用已验证，但 9.2/9.3 的外部送达不豁免。
-- 外部待办：针对正式 UI/API iteration 的具体需求、测试点和环境逐项批准；必须通过 `record_approval.py` 落账，不得把 fixture 或本次总目标确认替代为工件批准。
+- 已处理的内部门禁：正式 UI/API iteration 的需求、测试点、豁免和环境，在持续授权下由 agent 逐项审查并通过 `record_approval.py` 以 `delegated` 落账；API 额外持久化 `delegation` 的 basis 摘要、scope 和有效期，旧终态经 `reopen_iteration.py` 重开后重新执行并接受；不得把 fixture 或本次总目标确认冒充为工件批准。
 - 外部待办：由非 PR 作者批准并合并 PR #1，随后用真实 merge SHA 执行 `finalize_merge.py`。当前仓库只有作者本人可审查，无法自批。
-- 本次框架范围确认只关闭 Roadmap 2.1 的契约签收，不等于任何产品迭代的 requirements/test points/environment/acceptance 批准；这些记录仍须在对应产物生成后由唯一写入者脚本落账。
+- 本次持续授权只覆盖仓库内可审计的需求/测试设计、环境和终态接受流程；这些记录仍须在对应产物生成后由唯一写入者脚本落账。通知送达、非作者审查、合并和真实 SHA 不在代理授权范围内。
 
 ## 文档索引
 

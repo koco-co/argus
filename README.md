@@ -92,7 +92,7 @@ ARGUS_RUN_ID=readme-smoke TEST_ENV=local \
   automation/api/tests/checkout
 ```
 
-<p>预期结果是 4 条真实用例通过：购物车折扣正向/负向与 <b>Store API</b> 促销正向/非法载荷负向。完成后清理容器、网络与卷：</p>
+<p>预期结果是仓库当前收集的 38 条测试通过（包含正式 Medusa UI/API、既有 fixture 与靶场探针）；其中 UI/API 业务链会对真实 Storefront 和 Store API 执行断言。完成后清理容器、网络与卷：</p>
 
 ```bash
 make target-app-down
@@ -142,7 +142,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑬𝒗𝒊𝒅𝒆𝒏𝒄𝒆 · 验证证据</h2>
 
-<p>2026-08-28 的当前检出已实际完成 405 项框架测试、双工作进程的 4 条 <b>Medusa</b> 业务全栈用例、6 条靶场/<b>CI</b> 基础设施探针、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
+<p>2026-08-29 的当前检出已实际完成 430 项框架测试、fresh reset 后正式 <b>Medusa</b> UI 10/10 与 API 22/22、靶场/<b>CI</b> 基础设施探针、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及历史 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
 
 - [验收证据矩阵](docs/spec/status/ACCEPTANCE_2026-08-28.md)
 - [Medusa 真实路由与种子事实](knowledge/target-app-notes/medusa.md)

@@ -23,7 +23,8 @@
           "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
           "title": {"type": "string", "minLength": 1},
           "case_type": {"enum": ["happy_path", "negative", "edge"]},
-          "side_effect": {"enum": ["none", "creates", "updates", "deletes"], "default": "none"},
+          "side_effect": {"enum": ["none", "creates", "updates", "deletes"], "default": "none",
+                           "description": "整个 case（含 setup 与 replay 前置链）的副作用；依赖 prev_response 时不得为 none"},
           "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
           "request": {
             "type": "object", "additionalProperties": false,

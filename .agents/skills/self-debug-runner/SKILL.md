@@ -2,7 +2,7 @@
 name: self-debug-runner
 description: 在 Argus 会话内执行 M9 测试、自调试、证据归档与会话恢复。用于已生成 Web/API 自动化且环境获批后的失败分类和受限修复；CI 只能只读执行测试，不得调用本 Skill 自动改代码。
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Outcome
@@ -11,7 +11,7 @@ metadata:
 
 ## Routing
 
-- 入口要求 automation generated、`settings.py check` 通过且 environment approval 已记录。
+- 入口要求 automation generated、`settings.py check` 通过且 environment approval 已记录；环境批准可以是用户 `provided`，也可以是持续授权下 agent 的 `delegated`，两者都必须由唯一写入器记录。
 - CI 只使用 `self_debug_helper.py record-ci` 记录单次执行，不进入修复循环。
 - escalation-only 证据立即终止；不得被模型降级为可修复分类。
 

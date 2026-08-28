@@ -9,7 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _writers import WriterError, record_event
+from _writers import WriterError, load_iteration, record_event
+from check_coverage import main as coverage_main
 from validate_iteration import IterationReport, check_iteration
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,12 @@ def finalize(iteration_dir: Path, merge_sha: str, pr_number: int) -> None:
     check_iteration(iteration_dir, report)
     if report.errors:
         raise WriterError("合并前 iteration 验证失败：" + "; ".join(report.errors))
+    _, document = load_iteration(iteration_dir)
+    if document.get("state") != "accepted":
+        raise WriterError("只有 accepted 终态的 iteration 才能执行合并收口")
+    coverage_status = coverage_main([str(iteration_dir), "--tier", "from-iteration"])
+    if coverage_status != 0:
+        raise WriterError("合并前分支覆盖链校验失败")
     record_event(
         iteration_dir,
         "accepted",

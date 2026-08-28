@@ -1,9 +1,7 @@
-"""Roadmap 1.15b acceptance tests: the three sole writers.
+"""Roadmap 1.15b 三个唯一写入器的验收测试。
 
-DoD: hand-edited approval path is rejected; hand-edited state/events[] is
-rejected; explicit approval records actor/artifact hash; event records
-reference legal transitions only; reopen preserves IDs, marks downstream
-stale, and blocks stale consumers.
+DoD：拒绝手工编辑批准路径与 state/events[]；显式批准记录 actor 和产物摘要；事件只引用
+合法迁移；重开保留 ID、标记下游 stale，并阻止 stale 消费者。
 """
 
 from __future__ import annotations
@@ -52,6 +50,11 @@ def record_event() -> Any:
 @pytest.fixture(scope="module")
 def record_approval() -> Any:
     return _load_script("record_approval")
+
+
+@pytest.fixture(scope="module")
+def record_delegation() -> Any:
+    return _load_script("record_delegation")
 
 
 @pytest.fixture(scope="module")
@@ -433,6 +436,125 @@ def test_record_approval_records_user_actor_and_artifact_hash(
     assert len(approval["artifact_sha256"]) == 64
 
 
+def test_delegated_approval_requires_note_and_records_agent(
+    record_approval: Any, record_delegation: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """持续授权必须如实记录代理决策者，并保留可审计的授权说明。"""
+    iteration_dir = _scaffold(tmp_path, "2026-08-delegated", "requirements_accepted")
+    artifact = tmp_path / "exemptions.yaml"
+    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "exemptions",
+                "--action",
+                "delegated",
+                "--artifact",
+                str(artifact),
+            ]
+        )
+        == 1
+    )
+    assert "requires a non-empty --note" in capsys.readouterr().err
+    assert yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"] == []
+
+    assert (
+        record_delegation.main(
+            [
+                str(iteration_dir),
+                "--id",
+                "delegation-test-writer",
+                "--basis",
+                "依据用户持续授权的写入器夹具",
+                "--scope",
+                "exemptions",
+                "--granted-at",
+                "2026-08-28T09:00:00Z",
+                "--expires-at",
+                "2026-12-31T23:59:59Z",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "exemptions",
+                "--action",
+                "delegated",
+                "--artifact",
+                str(artifact),
+                "--note",
+                "依据用户在当前任务中的持续授权，由 agent 审查空豁免清单后推进。",
+                "--delegation-id",
+                "delegation-test-writer",
+            ]
+        )
+        == 0
+    )
+    approval = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"][-1]
+    assert approval["action"] == "delegated"
+    assert approval["actor"] == "agent"
+    assert approval["note"].startswith("依据用户")
+    assert approval["delegation_id"] == "delegation-test-writer"
+
+
+def test_expired_delegation_rejects_new_approval(
+    record_approval: Any, record_delegation: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """授权窗口过期后，唯一批准写入器不得产生新的代理决定。"""
+    iteration_dir = _scaffold(tmp_path, "2026-08-delegated-expired", "requirements_accepted")
+    artifact = tmp_path / "exemptions.yaml"
+    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+
+    assert (
+        record_delegation.main(
+            [
+                str(iteration_dir),
+                "--id",
+                "delegation-expired-writer",
+                "--basis",
+                "依据用户持续授权的过期窗口夹具",
+                "--scope",
+                "exemptions",
+                "--granted-at",
+                "2020-01-01T00:00:00Z",
+                "--expires-at",
+                "2020-01-02T00:00:00Z",
+            ]
+        )
+        == 0
+    )
+    before = (iteration_dir / "iteration.yaml").read_text(encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "exemptions",
+                "--action",
+                "delegated",
+                "--artifact",
+                str(artifact),
+                "--note",
+                "过期授权不得继续写入代理决定。",
+                "--delegation-id",
+                "delegation-expired-writer",
+            ]
+        )
+        == 1
+    )
+    assert "iteration.delegation has expired" in capsys.readouterr().err
+    assert (iteration_dir / "iteration.yaml").read_text(encoding="utf-8") == before
+
+
 def test_record_approval_supports_exemptions_stage(record_approval: Any, tmp_path: Path) -> None:
     """需求豁免必须能经唯一写入器形成独立的用户批准记录。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-exemptions", "requirements_accepted")
@@ -559,14 +681,14 @@ def test_reopen_preserves_ids_and_marks_downstream_stale(
 def test_reopen_blocks_stale_consumers_via_validator(
     reopen_iteration: Any, validators: Any, tmp_path: Path
 ) -> None:
-    """A stale artifact + advanced state is refused by validate_iteration."""
+    """validate_iteration 拒绝携带 stale 产物却已推进的状态。"""
     validate_iteration = validators[0]
     iteration_dir = _scaffold(tmp_path, "2026-08-block", "test_points_accepted")
     document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
     document["artifacts"]["test_points"]["status"] = "accepted"
     (iteration_dir / "iteration.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
     assert reopen_iteration.main([str(iteration_dir)]) == 0
-    # simulate downstream progress while still carrying stale statuses
+    # 模拟下游仍携带 stale 状态却继续推进。
     document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
     document["state"] = "functional_cases_exported"
     (iteration_dir / "iteration.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
