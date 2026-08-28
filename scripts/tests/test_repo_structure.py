@@ -375,6 +375,15 @@ def test_executable_checkers_invoke_main_from_cli() -> None:
     assert missing == []
 
 
+def test_make_lint_checks_format_for_untracked_python_files() -> None:
+    """pre-commit 不枚举未跟踪文件，lint 必须直接覆盖整个工作树格式。"""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    lint_body = makefile.split("lint:\n", 1)[1].split("\n\n", 1)[0]
+    assert "uv run ruff check ." in lint_body
+    assert "uv run ruff format --check ." in lint_body
+    assert "uv run pyright" in lint_body
+
+
 def test_artifact_upload_action_uses_node24_release() -> None:
     """上传证据的 Action 必须使用已迁移到 Node 24 的主版本。"""
     workflow = (REPO_ROOT / ".github/workflows/regression.yml").read_text(encoding="utf-8")

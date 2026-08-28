@@ -37,6 +37,7 @@ api-tests:
 
 lint:
 	uv run ruff check .
+	uv run ruff format --check .
 	uv run pyright
 
 skill-golden:
