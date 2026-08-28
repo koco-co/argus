@@ -155,7 +155,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "skill-self-optimizer",
     },
     "plugins": {"README.md", "registry.yaml", "_interface", "requirement-sources", "api-sources"},
-    "plugins/_interface": {"schemas"},
+    "plugins/_interface": {"contract.md", "schemas"},
     "config": {"env.example.yaml", "notify.example.yaml"},
     "automation": {"conftest.py", "web", "mobile", "miniprogram", "api", "perf"},
     "automation/web": {"pages", "components", "fixtures", "tests"},
