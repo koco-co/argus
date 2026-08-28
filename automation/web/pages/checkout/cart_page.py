@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from playwright.sync_api import Locator, Page
 
 
@@ -21,6 +23,25 @@ class CartPage:
     def promotion(self, code: str) -> Locator:
         return self.page.get_by_text(code, exact=True)
 
+    def promotion_heading(self) -> Locator:
+        return self.page.get_by_role("heading", name="Promotion(s) applied:")
+
     def total(self, formatted_amount: str) -> Locator:
         summary_row = self.page.get_by_text("Total", exact=True).locator("..")
         return summary_row.get_by_text(formatted_amount, exact=True)
+
+    def item_variant(self) -> Locator:
+        return self.page.get_by_text("S / Black", exact=True)
+
+    def quantity_selector(self) -> Locator:
+        return self.page.get_by_role("combobox").first
+
+    def go_to_checkout(self) -> None:
+        self.page.get_by_role("link", name="Go to checkout").click()
+
+    def checkout_link(self) -> Locator:
+        return self.page.get_by_role("link", name="Go to checkout")
+
+    def capture(self, path: Path, *, full_page: bool = True) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=path, full_page=full_page)

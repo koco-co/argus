@@ -1,6 +1,6 @@
 schema_version: "1.0"
 iteration_id: 2026-08-medusa-ui-checkout
-status: review
+status: accepted
 generated_from:
   artifact: iterations/2026-08-medusa-ui-checkout/requirements.yaml
   sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
