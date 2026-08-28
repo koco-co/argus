@@ -53,6 +53,9 @@ def test_workflow_derives_nonempty_job_status(workflow_name: str) -> None:
     assert "--status success" in workflow
     assert "--status failure" in workflow
     assert "--status cancelled" in workflow
+    for line in workflow.splitlines():
+        if "failure()" in line or "cancelled()" in line:
+            assert line.strip().startswith("- if:"), line
 
 
 def test_notify_job_rejects_empty_status() -> None:
