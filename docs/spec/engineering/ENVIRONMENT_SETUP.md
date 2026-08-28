@@ -4,7 +4,7 @@ Prerequisites, initialization steps, and every operational command the framework
 
 ## Prerequisites
 
-Latest live preflight: [2026-08-28 Step 0 evidence](../status/STEP0_CHECK_2026-08-28.md). Docker/Compose, uv/Python 3.12, project Chromium startup and GitHub/Actions access were checked successfully; the real notification webhook is missing, so Step 0 is **blocked**. This check does not validate target-app bring-up, generated regression, M8 configuration, notification delivery, or final acceptance, and does not promote the historical command statuses below.
+最近真实自检见 [2026-08-28 Step 0 证据](../status/STEP0_CHECK_2026-08-28.md)：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。真实 webhook 尚无验证证据；按用户最新要求，该缺项在 Phase 7 首个实际依赖它的 DoD 前列为非阻塞待办，不提前阻塞开发。本次自检不等于靶应用启动、生成测试、M8 配置、通知送达或最终验收通过，也不改变下表历史命令状态。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
 
 | Requirement | Version / note | Why |
 | --- | --- | --- |

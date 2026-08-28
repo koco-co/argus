@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-28 — 按用户要求调整 Goal 的阻塞判断与汇总时机
+
+- 用户明确要求“不阻塞主流程的，在任务结束后通知”，并要求中文注释/备注。保存完整 [Goal 修订提示词](./GOAL_PROMPT.md)，同步 AGENT_BRIEF 和环境自检入口；旧自检结果保留为历史证据。
+- 裁决：最新用户执行指令覆盖旧 Goal 的“任意缺项即停”。结合 ROADMAP 5.5 明确 Phase 7 前执行终态在会话内呈现，webhook 归为后续阶段待办；到 Phase 7 首个真实通知 DoD 时仍须真实配置和验证。未修改 PRD/ROADMAP 的 DoD、任务顺序、人工签收或最终验收标准，未将 mock 当成真实验收。
+- 当前应用 Goal 工具没有目标正文编辑参数，Computer Use 操作 Codex 界面被安全策略禁止；原生 Goal 正文尚未替换。没有手改应用内部存储、重建目标或伪报目标完成；仓库中的修订文本和当前用户补充指令可供后续接续。
+
 ## 2026-08-28 — Step 0 recheck blocked; recovery ledger corrected
 
 - Resumed from ROADMAP + AGENT_BRIEF and the current checkout, not a fresh scaffold. ROADMAP records 0.1–0.8 and Phase 1 complete, with 0.9 deferred to 7.5. Existing commit `c0212c2` contains the 2.1 contract draft; human sign-off remains pending. Corrected the stale “Phase 2 not started” / “local hooks are stubs” descriptions in AGENT_BRIEF without changing any task checkbox or approval/event artifact.
