@@ -1,6 +1,6 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: escalated
+state: env_configured
 blocked_reason: null
 branches:
   ui: true
@@ -26,7 +26,7 @@ artifacts:
     input_sha256: null
   web_automation:
     status: generated
-    input_sha256: a7139c44849059bdb35e3dc83ab67eba3ce274725eb1519bc1b33f00b57a3002
+    input_sha256: 342838ca0919ae631141ecec398196dc8c8fef871d31f55652ab208b63c1d8d5
   api_automation:
     status: not_started
     input_sha256: null
@@ -58,6 +58,30 @@ approvals:
   timestamp: '2026-08-28T14:08:14Z'
   artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
   note: 用户于 2026-08-28 明确批准使用当前 local 环境配置执行 M9
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:26Z'
+  artifact_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+  note: 用户于 2026-08-28 重开时明确继续接受当前 requirements.yaml
+- stage: test_points
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:37Z'
+  artifact_sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+  note: 用户于 2026-08-28 重开时明确继续接受当前 test_points.yaml
+- stage: exemptions
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:37Z'
+  artifact_sha256: 277396e0fec3a97a9fc665d5d0e84aff486e841141e6be9581eaf2a6c0163f90
+  note: 用户于 2026-08-28 重开时明确继续接受当前 exemptions.yaml
+- stage: environment
+  action: provided
+  actor: user
+  timestamp: '2026-08-28T14:23:30Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 用户于 2026-08-28 重开时明确授权沿用当前 local 环境重新执行 M9
 events:
 - from_state: created
   to_state: requirements_clarifying
@@ -107,5 +131,45 @@ events:
   to_state: escalated
   timestamp: '2026-08-28T14:15:30Z'
   triggered_by: agent
+- from_state: escalated
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T14:20:15Z'
+  triggered_by: user
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T14:20:26Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-28T14:20:37Z'
+  triggered_by: agent
+- from_state: test_points_review
+  to_state: test_points_accepted
+  timestamp: '2026-08-28T14:20:49Z'
+  triggered_by: user
+- from_state: test_points_accepted
+  to_state: functional_cases_generating
+  timestamp: '2026-08-28T14:21:40Z'
+  triggered_by: agent
+- from_state: functional_cases_generating
+  to_state: functional_cases_exported
+  timestamp: '2026-08-28T14:22:15Z'
+  triggered_by: agent
+- from_state: functional_cases_exported
+  to_state: web_automation_generating
+  timestamp: '2026-08-28T14:22:25Z'
+  triggered_by: agent
+- from_state: web_automation_generating
+  to_state: web_automation_generated
+  timestamp: '2026-08-28T14:23:18Z'
+  triggered_by: agent
+- from_state: web_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-28T14:23:18Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T14:23:30Z'
+  triggered_by: user
 source_manifest: []
-updated_at: '2026-08-28T14:15:30Z'
+updated_at: '2026-08-28T14:23:30Z'

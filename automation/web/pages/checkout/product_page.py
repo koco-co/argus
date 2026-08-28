@@ -14,11 +14,25 @@ class ProductPage:
     def open_tshirt(self) -> None:
         self.page.goto("/dk/products/t-shirt")
 
-    def add_small_black_tshirt(self) -> None:
+    def select_small_black_variant(self) -> None:
         self.page.get_by_role("button", name="Black", exact=True).click()
         self.page.get_by_role("button", name="S", exact=True).click()
+
+    def add_selected_variant(self) -> None:
         # 移动布局会同时渲染桌面与吸底按钮，只操作当前可见实例。
-        self.page.get_by_role("button", name="Add to cart").filter(visible=True).first.click()
+        # 等待 Next.js server action 完成，确保购物车 Cookie 已持久化后再允许导航。
+        with self.page.expect_response(
+            lambda response: (
+                response.request.method == "POST"
+                and "/products/t-shirt" in response.url
+                and response.ok
+            )
+        ):
+            self.add_button().click()
+
+    def add_small_black_tshirt(self) -> None:
+        self.select_small_black_variant()
+        self.add_selected_variant()
 
     def cart_count(self, count: int = 1) -> Locator:
         return self.page.get_by_text(f"Cart ({count})", exact=True)

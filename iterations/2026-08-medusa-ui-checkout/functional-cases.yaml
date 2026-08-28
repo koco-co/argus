@@ -13,10 +13,10 @@ cases:
     tags: ["module:checkout"]
     steps:
       - action: 打开 Shirts 分类并进入 Medusa T-Shirt 商品页。
-        expected: 页面展示 Black、S 和 Add to cart 可操作控件。
+        expected: 页面展示 Black 与 S 可选控件；未完成规格选择前不要求 Add to cart 可用。
         expected_kind: ui_state
-      - action: 选择 Black 与 S 后单击 Add to cart，并打开购物车。
-        expected: 购物车展示 S / Black 商品行且数量为 1。
+      - action: 依次选择 Black 与 S，确认 Add to cart 可见且可用后单击，并打开购物车。
+        expected: 选择完成后 Add to cart 可操作；购物车展示 S / Black 商品行且数量为 1。
         expected_kind: ui_state
   - case_id: C0002
     title: 单次加购保持一条初始商品行
