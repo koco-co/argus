@@ -38,7 +38,7 @@ tags: [medusa, dtc-starter, ui, api, seed]
 
 - 导航：`get_by_role("link", name="Medusa Store")`、`get_by_role("link", name=re.compile(r"Cart \\(\\d+\\)"))`。
 - 分类/商品：`get_by_role("heading", name="Shirts")`、`get_by_role("link", name=re.compile("Medusa T-Shirt"))`。
-- 规格与加购：`get_by_role("button", name="Black")`、`get_by_role("button", name="S")`、`get_by_role("button", name="Add to cart")`。
+- 规格与加购：`get_by_role("button", name="Black")`、`get_by_role("button", name="S")`。移动布局会同时渲染桌面与吸底的两个 `Add to cart`，须用 `get_by_role("button", name="Add to cart").filter(visible=True).first`，禁止依赖 DOM 顺序点击隐藏或重复实例。
 - 优惠入口的当前可访问名称未稳定暴露给 role 查询；已验证 `get_by_text("Add Promotion Code(s)", exact=True)` 可见且可点击。输入框无 label/placeholder，可在购物车摘要页面对象内用唯一 `get_by_role("textbox")`，并记录本回退原因。
 - 优惠提交与结果：`get_by_role("button", name="Apply")`、`get_by_role("heading", name="Promotion(s) applied:")`、`get_by_text("ARGUS10", exact=False)`。
 - 禁止在测试文件里直接写以上定位器；测试只能调用 `automation/web/pages/**` 的页面对象方法。
