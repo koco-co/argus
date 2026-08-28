@@ -1,20 +1,20 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: requirements_clarifying
+state: test_points_review
 blocked_reason: null
 branches:
   ui: true
   api: false
 artifacts:
   requirements:
-    status: clarified
+    status: accepted
     input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
   exemptions:
-    status: not_started
-    input_sha256: null
+    status: review
+    input_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
   test_points:
-    status: not_started
-    input_sha256: null
+    status: review
+    input_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
   functional_cases:
     status: not_started
     input_sha256: null
@@ -33,11 +33,25 @@ artifacts:
   execution:
     status: not_started
     input_sha256: null
-approvals: []
+approvals:
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T13:39:42Z'
+  artifact_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+  note: 用户于 2026-08-28 明确回复：接受该 requirements.yaml
 events:
 - from_state: created
   to_state: requirements_clarifying
   timestamp: '2026-08-28T11:50:49Z'
   triggered_by: agent
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T13:39:42Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-28T13:39:58Z'
+  triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-28T11:50:49Z'
+updated_at: '2026-08-28T13:39:58Z'

@@ -1,0 +1,19 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-ui-checkout
+links:
+  - requirement_id: R0001
+    test_point_id: T0001
+  - requirement_id: R0001
+    test_point_id: T0002
+  - requirement_id: R0002
+    test_point_id: T0003
+  - requirement_id: R0002
+    test_point_id: T0004
+  - requirement_id: R0003
+    test_point_id: T0005
+  - requirement_id: R0003
+    test_point_id: T0006
+  - requirement_id: R0004
+    test_point_id: T0007
+  - requirement_id: R0004
+    test_point_id: T0008

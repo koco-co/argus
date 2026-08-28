@@ -1,6 +1,6 @@
 # Requirements — 2026-08-medusa-ui-checkout
 
-Status: `clarified`
+Status: `accepted`
 
 ## R0001 — 游客选择种子商品并加入购物车
 
