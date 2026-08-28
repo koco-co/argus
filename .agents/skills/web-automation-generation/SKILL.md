@@ -23,14 +23,14 @@ metadata:
 
 ## Steps
 
-1. 读取 PRD §4.5、CODING_STANDARDS 的生成规则、靶应用 notes 和 seed registry；确认当前状态为 `functional_cases_exported`，运行 iteration、Schema、functional expectation 与 T→C 检查；写文件前记录 `functional_cases_exported → web_automation_generating`。
-2. 比较全部输入 hash。hash 相同且 nodeid 仍可收集时 no-op；不得产生格式噪声。
+1. 读取 PRD §4.5、CODING_STANDARDS 的生成规则、靶应用 notes 和 seed registry，运行 iteration、Schema、functional expectation 与 T→C 检查。
+2. 在任何状态转换前比较全部输入 hash。若当前已是 `web_automation_generated`、hash 相同且 nodeid 仍可收集，则 no-op；不得产生格式噪声。只有确需首次生成且当前为 `functional_cases_exported` 时，才记录 `functional_cases_exported → web_automation_generating`；再生成必须先走 reopen/stale 协议回到合法状态。
 3. 先搜索并复用 page/component 方法。新 locator 按 role→label→placeholder→text→testid→CSS 选择；使用后位策略时在代码中写明真实理由。
 4. page/component 只封装 locator、action 与读取值；tests 只通过对象交互并持有 assertions。value 方法必须从 locator 派生，不得返回常量桩。
 5. 从 seed context 运行时推导 expected value，不复制 derived literal。每个 test 添加 module、case_id、iteration markers，behavior 使用不含 ID、长度不超过 50 的 snake_case 动词短语。
 6. 幂等 upsert traceability 的 C→nodeid；不得删除仍被其他 active iteration 引用的方法或 nodeid，retirement 必须有记录并通过 coverage。
-7. 依次运行 ruff、pyright、`check_pom_boundary.py`、`check_test_markers.py`、`check_layering.py`、`check_functional_expectations.py`、`check_orphan_tests.py` 与 C→automation coverage。失败修复并重验最多 3 次，耗尽后记录 validation budget blocked。
-8. 收集实际 pytest nodeid 并再次验证 traceability；通过 `../../../scripts/record_event.py` 记录 `web_automation_generating → web_automation_generated`。
+7. 依次运行 ruff、pyright、`check_pom_boundary.py`、`check_test_markers.py`、`check_layering.py`、`check_functional_expectations.py`、`check_orphan_tests.py` 与 C→automation coverage。失败修复并重验最多 3 次；耗尽后通过 `uv run python scripts/record_event.py ... --to blocked --reason validation_budget_exhausted` 进入阻塞终态。
+8. 收集实际 pytest nodeid 并再次验证 traceability；通过 `uv run python scripts/record_event.py ...` 记录 `web_automation_generating → web_automation_generated`。
 
 ## Guardrails
 

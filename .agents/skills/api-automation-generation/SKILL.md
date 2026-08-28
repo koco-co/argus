@@ -23,14 +23,14 @@ metadata:
 
 ## Steps
 
-1. 读取 PRD §4.6、CODING_STANDARDS API 规则及全部输入；确认当前状态为 `api_cases_exported`，运行 Schema、API coverage、R→A coverage 与 staleness 验证；写文件前记录 `api_cases_exported → api_automation_generating`。
-2. 比较输入 hash；未变化且 nodeid 可收集时 no-op。
+1. 读取 PRD §4.6、CODING_STANDARDS API 规则及全部输入；运行 Schema、API coverage、R→A coverage 与 staleness 验证。
+2. 在任何状态转换前比较输入 hash。若当前已是 `api_automation_generated`、hash 未变化且 nodeid 可收集，则 no-op。只有确需首次生成且当前为 `api_cases_exported` 时，才记录 `api_cases_exported → api_automation_generating`；再生成必须先走 reopen/stale 协议回到合法状态。
 3. 先搜索并复用同 module 的 clients/models；按 endpoint schema 生成 Pydantic request/response models，保留 required、enum、format、nested object、array、`$ref` 与 combinator 可表达语义。
 4. 使用同步 `httpx.Client` 生成类型化 client method；输入和返回值都引用模型，不返回 raw dict，不使用源 Schema 之外的字段。
 5. 从 API cases 生成 tests，解析 seed/path/prev_response variables；按 side_effect 标明重跑边界。assertion 位于 tests，client/model 不嵌入业务预期。
 6. 每个 test 添加 module、case_id、iteration markers，并以幂等 upsert 写入 A→nodeid traceability。
-7. 运行 ruff、pyright、`check_api_models.py`、`check_test_markers.py`、`check_layering.py`、`check_orphan_tests.py`、API coverage 与 A→automation coverage。失败修复并重验最多 3 次。
-8. 收集真实 nodeid，验证完整 R→A→nodeid 链，并通过 `../../../scripts/record_event.py` 记录 `api_automation_generating → api_automation_generated`。
+7. 运行 ruff、pyright、`check_api_models.py`、`check_test_markers.py`、`check_layering.py`、`check_orphan_tests.py`、API coverage 与 A→automation coverage。失败修复并重验最多 3 次；耗尽后通过 `uv run python scripts/record_event.py ... --to blocked --reason validation_budget_exhausted` 进入阻塞终态。
+8. 收集真实 nodeid，验证完整 R→A→nodeid 链，并通过 `uv run python scripts/record_event.py ...` 记录 `api_automation_generating → api_automation_generated`。
 
 ## Guardrails
 

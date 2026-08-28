@@ -25,12 +25,12 @@ metadata:
 
 1. 读取 `AGENTS.md`、PRD §4.4、DATA_MODEL §2.1/§6/§7/§8 与当前 iteration；运行 Schema 和 iteration 验证，拒绝 stale 或错误分支。
 2. 对 requirements、源文件和所有直接父输入计算 SHA-256。输入 hash 未变化时默认 no-op。
-3. 完成 requirements mapping：每个 accepted requirement 映射到至少一个 endpoint candidate，或进入带 kind 与非空 reason 的 exemption，不得遗漏。先生成并呈现 `exemptions.yaml` 与 mapping；只有用户明确接受时才调用 `../../../scripts/record_approval.py <iteration> --stage exemptions --action accepted --artifact <exemptions.yaml>`，随后记录 `requirements_accepted → requirements_mapped`。以幂等 upsert 写入 `traceability.yaml` 的 R→A 候选行。
+3. 完成 requirements mapping：每个 accepted requirement 映射到 normalized spec 中可由 `operation_id` 稳定标识的 endpoint candidate，或进入带 kind 与非空 reason 的 exemption，不得遗漏。mapping 作为 `api/spec.normalized.yaml` 的 endpoint `requirement_ids[]` 输入保留，不能伪装成尚不存在的 R→A traceability 行。先生成并呈现 `exemptions.yaml` 与 mapping；只有用户明确接受时才调用 `uv run python scripts/record_approval.py <iteration> --stage exemptions --action accepted --artifact <exemptions.yaml>`，随后记录 `requirements_accepted → requirements_mapped`。
 4. M4 开始时记录 `requirements_mapped → spec_normalizing`。规范化真实来源：保留 parameter、request body、response、components 与 `$ref`；组合器原样保留；解析深度最多 5，超限降级必须写 `normalization_warnings[]`。原始来源保留在 `00-raw/` 并进入 source manifest。全部规范门禁通过后记录 `spec_normalizing → spec_valid`。
 5. 检测到 dangling ref、丢失 schema、无理由 out-of-scope 或无法恢复的类型时，使本阶段失败并保留诊断证据。Schema validation 失败自动修复并重验，最多 3 次，耗尽后进入 `blocked(validation_budget_exhausted)`。
 6. M5 开始时记录 `spec_valid → api_cases_generating`。为每个 in-scope endpoint 生成至少一个 happy 与一个 negative/edge case。每个 case 必须含 `requirement_ids[]`、module、operation_id、side_effect、可回放变量和 typed expected response；不得从 normalization warning 猜测模型。
-7. 运行 `../../../scripts/check_api_coverage.py`、branch R→A coverage 与 Schema validation；以幂等 upsert 写入 traceability。
-8. 调用 `../../../scripts/export_xlsx.py`，用 openpyxl round-trip 校验列与值；在隔离输出中连续导出两次并比较 SHA-256，字节不一致即失败。成功后记录 `api_cases_generating → api_cases_exported` 并呈现导出路径。
+7. A#### case 生成后，按每个 `(requirement_id, api_case_id)` 组合幂等 upsert 真实 R→A traceability；运行 `uv run python scripts/check_api_coverage.py ...`、branch R→A coverage 与 Schema validation。
+8. 调用 `uv run python scripts/export_xlsx.py ...`，用 openpyxl round-trip 校验列与值；在隔离输出中连续导出两次并比较 SHA-256，字节不一致即失败。成功后记录 `api_cases_generating → api_cases_exported` 并呈现导出路径。
 
 ## Guardrails
 

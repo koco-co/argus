@@ -44,6 +44,24 @@ approvals:
   actor: user
   timestamp: '2026-08-28T12:00:00Z'
   artifact_sha256: f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d
+- stage: exemptions
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T08:01:02Z'
+  artifact_sha256: 690bcd228eb573de3725dd9ecad57cbbb2b545252d4ce8fc34d08499168112c5
+  note: 永久脚本测试夹具：空豁免清单
+- stage: exemptions
+  action: rejected
+  actor: user
+  timestamp: '2026-08-28T08:01:34Z'
+  artifact_sha256: 690bcd228eb573de3725dd9ecad57cbbb2b545252d4ce8fc34d08499168112c5
+  note: 夹具迁移时上游摘要填写错误，拒绝该版本
+- stage: exemptions
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T08:01:52Z'
+  artifact_sha256: 7b479c7d6e47c9a3d1c927291e615cec6e11cdeca9141a00c2352f9e85b096d0
+  note: 永久脚本测试夹具：空豁免清单，已核对上游摘要
 events:
 - from_state: created
   to_state: requirements_clarifying
@@ -62,4 +80,4 @@ events:
   timestamp: '2026-08-28T12:00:00Z'
   triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-28T12:00:00Z'
+updated_at: '2026-08-28T08:01:52Z'
