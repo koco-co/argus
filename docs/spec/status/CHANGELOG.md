@@ -8,6 +8,8 @@
 - 根 conftest 在 PROD 环境机械剔除非 `read_only` 用例，并以每个 xdist worker 独立 HTTP 会话和命名空间隔离状态；真实 harness 模块连续三轮 `pytest -n 2` 通过，PROD dry collect 显示 4/5 收集、1 项非只读探针被剔除。
 - 新增运行时 `ReadOnlyDBClient`：语句头白名单、多语句阻断、WITH/EXPLAIN 的 DML/ANALYZE 扫描和共享数据库断言。框架全量测试增至 331 项通过，Ruff、Pyright、DB/marker/orphan 静态门禁通过；这些证据不替代后续生成迭代与最终 UI/API E2E 验收。
 - 新增 M9 故障分类器与唯一证据记录器：run 目录不可覆盖、attempt 连续编号、预算计算、diff 引用解析、终态 Schema 校验、恢复检查点强制先验验证组合、patch-scope 调用及 AST import closure 受影响模块选择均已机械测试；升级类证据不能被细分为可修复类。
+- 新增钉钉、飞书、企业微信与 SMTP 通知适配器及统一 dispatcher；每个渠道独立按 1/2/4 秒退避重试，失败只记录不阻断兄弟渠道或测试终态；`notify.py --summary auto` 从 append-only run 证据树解析最新摘要，并支持 `flaky-suspect` 分类。
+- `self_debug_helper.py record-ci` 将 JUnit 绿/红结果写成唯一一条 `scope=full` attempt；报告归档拒绝覆盖既有 run 证据。真实外部渠道送达仍须在 7.2 DoD 单独验收，未用 mock 代替。
 
 ## 2026-08-28 — 完整交付 Goal 与 Phase 2 运行器实现
 

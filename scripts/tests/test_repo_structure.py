@@ -193,6 +193,7 @@ EXPECTED_FILES: set[str] = {
     "scripts/validate_iteration.py",
     "scripts/check_db_readonly.py",
     "scripts/check_secrets.py",
+    "scripts/notify.py",
     "target-app/Dockerfile",
     "target-app/compose.yaml",
     "target-app/medusa.lock.yaml",
@@ -258,6 +259,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "check_patch_scope.py",
         "classify_failure.py",
         "self_debug_helper.py",
+        "notify.py",
         "check_functional_expectations.py",
         "_writers.py",
         "record_event.py",
@@ -286,6 +288,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_automation_conftest.py",
         "test_classify_failure.py",
         "test_self_debug_helper.py",
+        "test_notify.py",
         "test_new_iteration.py",
         "test_repo_structure.py",
         "test_schemas.py",
@@ -361,6 +364,7 @@ def test_automation_module_leaf_dirs_are_empty_beyond_keepers() -> None:
             "shared/config",
             "shared/db",
             "shared/assertions",
+            "shared/notify",
             "automation/web/tests",
         }
         and (REPO_ROOT / d).is_dir()

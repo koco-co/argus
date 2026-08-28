@@ -7,7 +7,9 @@ import argparse
 import ast
 import json
 import re
+import shutil
 import sys
+import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -260,6 +262,53 @@ def verify_patch(patch: Path) -> list[str]:
     return report.problems
 
 
+def record_ci(
+    iteration_dir: Path,
+    run_id: str,
+    modules: list[str],
+    env: str,
+    junit: Path,
+) -> Path:
+    """将 CI 单次只读执行转换成 scope=full 的一条 attempt。"""
+
+    root = ET.parse(junit).getroot()
+    failures = sum(int(suite.get("failures", "0")) for suite in root.iter("testsuite"))
+    errors = sum(int(suite.get("errors", "0")) for suite in root.iter("testsuite"))
+    run_dir = initialize_run(iteration_dir, run_id, modules, env, 0, scope="full")
+    if failures + errors:
+        append_attempt(
+            run_dir,
+            "fail",
+            "unknown",
+            f"CI 单次执行失败：failures={failures}, errors={errors}",
+            None,
+        )
+        finalize(run_dir, "failed")
+    else:
+        append_attempt(run_dir, "pass", "none", "CI 单次完整执行通过", None)
+        finalize(run_dir, "passed")
+    return run_dir
+
+
+def archive_reports(run_dir: Path, sources: list[Path]) -> list[Path]:
+    """把显示层报告复制进本 run，不覆盖既有证据。"""
+
+    _assert_run_dir(run_dir)
+    archived: list[Path] = []
+    for source in sources:
+        if not source.exists():
+            continue
+        target = run_dir / source.name
+        if target.exists():
+            raise EvidenceError(f"证据目标已存在，禁止覆盖：{target}")
+        if source.is_dir():
+            shutil.copytree(source, target)
+        else:
+            shutil.copy2(source, target)
+        archived.append(target)
+    return archived
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -293,6 +342,15 @@ def main(argv: list[str] | None = None) -> int:
     impact.add_argument("changed_file", type=Path, nargs="+")
     scope = sub.add_parser("verify-patch")
     scope.add_argument("patch", type=Path)
+    ci = sub.add_parser("record-ci")
+    ci.add_argument("iteration", type=Path)
+    ci.add_argument("--run-id", required=True)
+    ci.add_argument("--module", action="append", required=True)
+    ci.add_argument("--env", choices=("local", "test", "ci", "prod"), default="ci")
+    ci.add_argument("--junit", type=Path, required=True)
+    archive = sub.add_parser("archive")
+    archive.add_argument("run_dir", type=Path)
+    archive.add_argument("source", type=Path, nargs="+")
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -328,6 +386,11 @@ def main(argv: list[str] | None = None) -> int:
             for problem in problems:
                 print(f"patch-scope violation: {problem}")
             return 1 if problems else 0
+        elif args.command == "record-ci":
+            print(record_ci(args.iteration, args.run_id, args.module, args.env, args.junit))
+        elif args.command == "archive":
+            for path in archive_reports(args.run_dir, args.source):
+                print(path)
     except EvidenceError as exc:
         print(f"self-debug evidence error: {exc}", file=sys.stderr)
         return 1

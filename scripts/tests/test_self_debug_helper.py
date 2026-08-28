@@ -106,3 +106,32 @@ def test_helper_invokes_patch_scope_gate(helper: Any, tmp_path: Path) -> None:
     )
     problems = helper.verify_patch(patch)
     assert any("outside allow-list" in problem for problem in problems)
+
+
+@pytest.mark.parametrize(("failures", "status"), [(0, "passed"), (1, "failed")])
+def test_record_ci_writes_one_full_scope_attempt(
+    helper: Any, tmp_path: Path, failures: int, status: str
+) -> None:
+    iteration = tmp_path / "iterations" / f"ci-{status}"
+    iteration.mkdir(parents=True)
+    junit = tmp_path / f"{status}.xml"
+    junit.write_text(
+        f'<testsuites><testsuite tests="1" failures="{failures}" errors="0"/></testsuites>',
+        encoding="utf-8",
+    )
+    run_id = "run-20260828T130000Z-abcd" if status == "passed" else "run-20260828T130001Z-abcd"
+    run_dir = helper.record_ci(iteration, run_id, ["checkout"], "ci", junit)
+    summary = yaml.safe_load((run_dir / "run-summary.yaml").read_text())
+    assert summary["scope"] == "full"
+    assert summary["status"] == status
+    assert len(summary["attempts"]) == 1
+
+
+def test_archive_reports_never_overwrites(helper: Any, tmp_path: Path) -> None:
+    run_dir = _init(helper, tmp_path)
+    report = tmp_path / "allure-results"
+    report.mkdir()
+    (report / "result.json").write_text("{}\n", encoding="utf-8")
+    assert helper.archive_reports(run_dir, [report]) == [run_dir / "allure-results"]
+    with pytest.raises(helper.EvidenceError, match="禁止覆盖"):
+        helper.archive_reports(run_dir, [report])
