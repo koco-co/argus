@@ -1,6 +1,6 @@
 # Static-checks CI (Roadmap 1.16; job shape per ARCHITECTURE §8).
-# The e2e job (regression.yml) lands with Phase 7 wiring; notification steps
-# land with M11 (Phase 7) - both are deliberately absent here.
+# e2e 位于 regression.yml；static-checks 与 e2e 都在 always() 路径调用通知器，
+# 通知失败不改变权威检查结论。
 #
 # Hardening contract (ARCHITECTURE §8): actions pinned to full commit SHAs,
 # minimal top-level permissions, explicit timeout-minutes, PR-scoped
