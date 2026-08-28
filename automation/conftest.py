@@ -41,6 +41,13 @@ def env_config() -> EnvConfig:
 
 
 @pytest.fixture(scope="session")
+def base_url(env_config: EnvConfig) -> str:
+    """覆盖 pytest-base-url，使 page.goto 可使用站内相对路径。"""
+
+    return env_config.base_url
+
+
+@pytest.fixture(scope="session")
 def worker_namespace(worker_id: str) -> str:
     """xdist 同一轮共享 run id、各 worker 拥有独立后缀。"""
 

@@ -1,0 +1,13 @@
+diff --git a/automation/web/pages/checkout/cart_page.py b/automation/web/pages/checkout/cart_page.py
+--- a/automation/web/pages/checkout/cart_page.py
++++ b/automation/web/pages/checkout/cart_page.py
+@@ -13,7 +13,8 @@ class CartPage:
+         self.page.goto("/dk/cart")
+ 
+     def apply_promotion(self, code: str) -> None:
+-        self.page.get_by_role("button", name="Add Promotion Code(s)").click()
++        # 真实 trace 显示该控件为无 button role 的可点击文本，按 locator 回退顺序使用 text。
++        self.page.get_by_text("Add Promotion Code(s)", exact=True).click()
+         self.page.get_by_role("textbox").fill(code)
+         self.page.get_by_role("button", name="Apply").click()
+ 

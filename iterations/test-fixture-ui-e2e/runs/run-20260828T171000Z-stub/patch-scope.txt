@@ -1,0 +1,6 @@
+结论：无可提交 patch
+故障分类：import_type_error（允许自修复）
+实际失败轮次：5
+允许范围内产生的补丁：0
+冻结范围改动：0
+预算终态：budget_exceeded

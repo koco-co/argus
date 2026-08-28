@@ -1,0 +1,5 @@
+结论：通过
+命令：uv run python scripts/self_debug_helper.py verify-patch attempt-2.patch
+允许范围：automation/web/pages/checkout/cart_page.py
+冻结范围改动：0
+违规项：0

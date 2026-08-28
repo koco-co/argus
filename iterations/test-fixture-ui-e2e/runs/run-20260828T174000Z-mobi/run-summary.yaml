@@ -1,0 +1,21 @@
+schema_version: '1.0'
+iteration_id: test-fixture-ui-e2e
+run_id: run-20260828T174000Z-mobi
+started_at: '2026-08-28T09:09:27Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: passed
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: fail
+  failure_class: locator_drift
+  summary: 390×844 真实视口下 Add to cart 严格定位命中两个可见按钮。
+- attempt_number: 2
+  result: pass
+  failure_class: none
+  summary: 改为 role + visible 过滤后，桌面与移动截图流程均真实通过。
+  diff_ref: attempt-2.patch
+finished_at: '2026-08-28T09:09:28Z'
