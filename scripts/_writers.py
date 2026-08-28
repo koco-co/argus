@@ -81,6 +81,8 @@ def record_event(
     to_state: str,
     triggered_by: str,
     reason: str | None = None,
+    merge_sha: str | None = None,
+    pr_number: int | None = None,
 ) -> dict[str, Any]:
     from validate_iteration import legal_transition
 
@@ -95,12 +97,19 @@ def record_event(
         raise WriterError(f"illegal transition {from_state} -> {to_state}: {violation}")
     if to_state == "blocked" and not (reason or "").strip():
         raise WriterError("moving to blocked requires a non-empty --reason")
-    event = {
+    event: dict[str, Any] = {
         "from_state": from_state,
         "to_state": to_state,
         "timestamp": _now(),
         "triggered_by": triggered_by,
     }
+    if to_state == "merged":
+        if triggered_by != "script" or not merge_sha or pr_number is None:
+            raise WriterError("merged 事件必须由 script 写入真实 merge_sha 与 pr_number")
+        event["merge_sha"] = merge_sha
+        event["pr_number"] = pr_number
+    elif merge_sha is not None or pr_number is not None:
+        raise WriterError("merge_sha/pr_number 只能写入 merged 事件")
     document["events"].append(event)
     document["state"] = to_state
     if to_state == "blocked":

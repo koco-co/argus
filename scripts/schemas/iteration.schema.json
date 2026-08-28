@@ -69,8 +69,14 @@
           "from_state": {"type": "string"},
           "to_state": {"type": "string"},
           "timestamp": {"type": "string", "format": "date-time"},
-          "triggered_by": {"enum": ["agent", "script", "user"]}
-        }
+          "triggered_by": {"enum": ["agent", "script", "user"]},
+          "merge_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+          "pr_number": {"type": "integer", "minimum": 1}
+        },
+        "allOf": [{
+          "if": {"properties": {"to_state": {"const": "merged"}}, "required": ["to_state"]},
+          "then": {"required": ["merge_sha", "pr_number"]}
+        }]
       }
     },
     "source_manifest": {

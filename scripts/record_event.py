@@ -25,11 +25,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--to", dest="to_state", required=True)
     parser.add_argument("--by", choices=ACTORS, required=True)
     parser.add_argument("--reason", help="required when --to blocked")
+    parser.add_argument("--merge-sha", help="仅 accepted -> merged 使用")
+    parser.add_argument("--pr-number", type=int, help="仅 accepted -> merged 使用")
     args = parser.parse_args(argv)
 
     try:
         document = record_event(
-            args.iteration, args.from_state, args.to_state, args.by, args.reason
+            args.iteration,
+            args.from_state,
+            args.to_state,
+            args.by,
+            args.reason,
+            args.merge_sha,
+            args.pr_number,
         )
     except WriterError as exc:
         print(f"error: {exc}", file=sys.stderr)

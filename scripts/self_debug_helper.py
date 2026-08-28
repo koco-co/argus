@@ -309,6 +309,50 @@ def archive_reports(run_dir: Path, sources: list[Path]) -> list[Path]:
     return archived
 
 
+def _case_modules(iteration_dir: Path) -> list[str]:
+    modules: set[str] = set()
+    for relative in ("functional-cases.yaml", "api/cases.yaml"):
+        path = iteration_dir / relative
+        if not path.exists():
+            continue
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for case in document.get("cases", []):
+            module = case.get("module")
+            if isinstance(module, str):
+                modules.add(module)
+            for tag in case.get("tags", []):
+                if isinstance(tag, str) and tag.startswith("module:"):
+                    modules.add(tag.split(":", 1)[1])
+    return sorted(modules)
+
+
+def record_ci_auto(iterations_dir: Path, junit: Path, env: str) -> list[Path]:
+    """为所有进入自动化或执行阶段的迭代分别写入 CI 证据。"""
+
+    eligible = {
+        "web_automation_generated",
+        "api_automation_generated",
+        "env_pending",
+        "env_configured",
+        "executing",
+        "execution_passed",
+        "acceptance_pending",
+        "accepted",
+        "merged",
+    }
+    run_id = datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
+    written: list[Path] = []
+    for iteration_dir in sorted(iterations_dir.iterdir()):
+        aggregate = iteration_dir / "iteration.yaml"
+        if not aggregate.exists():
+            continue
+        document = yaml.safe_load(aggregate.read_text(encoding="utf-8")) or {}
+        modules = _case_modules(iteration_dir)
+        if document.get("state") in eligible and modules:
+            written.append(record_ci(iteration_dir, run_id, modules, env, junit))
+    return written
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -351,6 +395,10 @@ def main(argv: list[str] | None = None) -> int:
     archive = sub.add_parser("archive")
     archive.add_argument("run_dir", type=Path)
     archive.add_argument("source", type=Path, nargs="+")
+    ci_auto = sub.add_parser("record-ci-auto")
+    ci_auto.add_argument("--iterations", type=Path, default=REPO_ROOT / "iterations")
+    ci_auto.add_argument("--env", choices=("local", "test", "ci", "prod"), default="ci")
+    ci_auto.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -390,6 +438,9 @@ def main(argv: list[str] | None = None) -> int:
             print(record_ci(args.iteration, args.run_id, args.module, args.env, args.junit))
         elif args.command == "archive":
             for path in archive_reports(args.run_dir, args.source):
+                print(path)
+        elif args.command == "record-ci-auto":
+            for path in record_ci_auto(args.iterations, args.junit, args.env):
                 print(path)
     except EvidenceError as exc:
         print(f"self-debug evidence error: {exc}", file=sys.stderr)
