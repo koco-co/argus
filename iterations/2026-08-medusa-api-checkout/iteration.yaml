@@ -1,17 +1,17 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-api-checkout
-state: requirements_clarifying
+state: requirements_accepted
 blocked_reason: null
 branches:
   ui: false
   api: true
 artifacts:
   requirements:
-    status: clarified
+    status: accepted
     input_sha256: ba1d6be1f2c6dc4e4ecd59eb3518815abf74ddfecbd27dd8c1c2e2701df7fa63
   exemptions:
-    status: not_started
-    input_sha256: null
+    status: review
+    input_sha256: 3e0c273c1072c67003397967ed41e99261b92e9cdcddae6c072aaafa19391164
   test_points:
     status: not_started
     input_sha256: null
@@ -33,11 +33,21 @@ artifacts:
   execution:
     status: not_started
     input_sha256: null
-approvals: []
+approvals:
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T16:11:52Z'
+  artifact_sha256: 3e0c273c1072c67003397967ed41e99261b92e9cdcddae6c072aaafa19391164
+  note: 用户于 2026-08-29 明确回复：接受该 API requirements.yaml
 events:
 - from_state: created
   to_state: requirements_clarifying
   timestamp: '2026-08-28T16:01:13Z'
   triggered_by: agent
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T16:11:52Z'
+  triggered_by: user
 source_manifest: []
-updated_at: '2026-08-28T16:01:13Z'
+updated_at: '2026-08-28T16:11:52Z'

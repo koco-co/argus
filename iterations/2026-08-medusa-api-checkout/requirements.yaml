@@ -1,6 +1,6 @@
 schema_version: "1.0"
 iteration_id: 2026-08-medusa-api-checkout
-status: clarified
+status: accepted
 generated_from:
   artifact: iterations/2026-08-medusa-api-checkout/00-raw/requirements-dump.md
   sha256: ba1d6be1f2c6dc4e4ecd59eb3518815abf74ddfecbd27dd8c1c2e2701df7fa63

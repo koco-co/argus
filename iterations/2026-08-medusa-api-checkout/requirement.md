@@ -1,6 +1,6 @@
 # Requirements — 2026-08-medusa-api-checkout
 
-Status: `clarified`
+Status: `accepted`
 
 ## R0001 — 通过 Store API 建立黑色 S 码商品购物车
 
