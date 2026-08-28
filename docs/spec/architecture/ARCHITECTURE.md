@@ -147,6 +147,8 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_layering.py
 │   ├── check_secrets.py             # ⭐ credential-pattern scan over trackable text
 │   ├── check_patch_scope.py          # ⭐ self-debug frozen-scope and banned-pattern guard
+│   ├── classify_failure.py           # M9 结构化证据机械预分类（升级类不可降级）
+│   ├── self_debug_helper.py          # ⭐ run 摘要、预算、检查点、patch 门禁与受影响模块
 │   ├── classify_failure.py           # pytest evidence → bounded failure class
 │   ├── find_affected_modules.py      # AST import-closure selection for regression
 │   ├── record_approval.py            # sole approval writer; requires explicit user action

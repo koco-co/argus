@@ -35,18 +35,14 @@ class ReadOnlyDBClient:
             raise PermissionError(f"ReadOnlyDBClient 已阻止语句：{sql[:80]!r}")
         if _MULTI_STATEMENT.search(sql):
             raise PermissionError(f"ReadOnlyDBClient 已阻止多语句：{sql[:80]!r}")
-        if head in {"with", "explain"} and (
-            _WRITE_TOKEN.search(sql) or _ANALYZE_TOKEN.search(sql)
-        ):
+        if head in {"with", "explain"} and (_WRITE_TOKEN.search(sql) or _ANALYZE_TOKEN.search(sql)):
             raise PermissionError(f"ReadOnlyDBClient 已阻止潜在写语句：{sql[:80]!r}")
 
     def query(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
         self.validate(sql)
         return list(self._connection.execute(sql, params).fetchall())
 
-    def query_mappings(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> list[Mapping[str, Any]]:
+    def query_mappings(self, sql: str, params: tuple[Any, ...] = ()) -> list[Mapping[str, Any]]:
         rows = self.query(sql, params)
         if not all(isinstance(row, Mapping) for row in rows):
             raise TypeError("数据库驱动必须返回 Mapping 行，才能执行字段断言")
