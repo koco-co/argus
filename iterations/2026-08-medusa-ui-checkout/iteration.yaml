@@ -1,0 +1,43 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-ui-checkout
+state: requirements_clarifying
+blocked_reason: null
+branches:
+  ui: true
+  api: false
+artifacts:
+  requirements:
+    status: clarifying
+    input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
+  exemptions:
+    status: not_started
+    input_sha256: null
+  test_points:
+    status: not_started
+    input_sha256: null
+  functional_cases:
+    status: not_started
+    input_sha256: null
+  api_spec:
+    status: not_started
+    input_sha256: null
+  api_cases:
+    status: not_started
+    input_sha256: null
+  web_automation:
+    status: not_started
+    input_sha256: null
+  api_automation:
+    status: not_started
+    input_sha256: null
+  execution:
+    status: not_started
+    input_sha256: null
+approvals: []
+events:
+- from_state: created
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T11:50:49Z'
+  triggered_by: agent
+source_manifest: []
+updated_at: '2026-08-28T11:50:49Z'
