@@ -6,7 +6,7 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 386 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 389 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
@@ -20,7 +20,7 @@
 | M9 防伪 | 常量返回 patch 虽在路径白名单内，仍被 POM `stub-return` 启发式拒绝并回滚 | `run-20260828T173000Z-lite` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 功能提交 `3288842` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；后续仅同步验收文档 | Actions run `33159389849`、`33159389846` |
+| GitHub Actions | 功能提交 `62a19ef` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 386 项框架测试与 9 条全栈/靶场测试，通知入口无 traceback | Actions run `33165604668`、`33165604658` |
 
 ## 不可伪造的外部事实
 

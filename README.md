@@ -142,7 +142,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑬𝒗𝒊𝒅𝒆𝒏𝒄𝒆 · 验证证据</h2>
 
-<p>2026-08-28 的当前检出已实际完成 386 项框架测试、双工作进程的 4 条 <b>Medusa</b> 全栈用例、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
+<p>2026-08-28 的当前检出已实际完成 389 项框架测试、双工作进程的 4 条 <b>Medusa</b> 全栈用例、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查，以及 <b>GitHub static-checks/e2e</b>。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
 
 - [验收证据矩阵](docs/spec/status/ACCEPTANCE_2026-08-28.md)
 - [Medusa 真实路由与种子事实](knowledge/target-app-notes/medusa.md)

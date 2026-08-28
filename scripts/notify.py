@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.summary and not args.job:
         parser.error("必须传 --summary 或 --job")
+    if args.job and not (args.classification or args.status).strip():
+        parser.error("--job 模式的 --status 不得为空")
     config = load_config(args.config)
     if args.summary:
         path = (

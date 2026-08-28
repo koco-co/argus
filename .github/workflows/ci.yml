@@ -39,4 +39,12 @@ jobs:
       - run: uv run python scripts/check_orphan_tests.py
       - if: ${{ always() }}
         continue-on-error: true
-        run: uv run python scripts/notify.py --job static-checks --status "${{ job.status }}"
+        shell: bash
+        run: |
+          status=success
+          if [[ "${{ failure() }}" == "true" ]]; then
+            status=failure
+          elif [[ "${{ cancelled() }}" == "true" ]]; then
+            status=cancelled
+          fi
+          uv run python scripts/notify.py --job static-checks --status "$status"

@@ -42,6 +42,38 @@ def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> 
     assert "scripts/notify.py --job e2e" in workflow
 
 
+@pytest.mark.parametrize("workflow_name", ["ci.yml", "regression.yml"])
+def test_workflow_derives_nonempty_job_status(workflow_name: str) -> None:
+    """GitHub runner 未提供 job.status 时，通知状态也不得为空。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+    assert "job.status" not in workflow
+    assert "${{ failure() }}" in workflow
+    assert "${{ cancelled() }}" in workflow
+    assert '--status "$status"' in workflow
+
+
+def test_notify_job_rejects_empty_status() -> None:
+    """空状态会形成误导消息，CLI 必须在分发前拒绝。"""
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/notify.py"),
+            "--job",
+            "e2e",
+            "--status",
+            "",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "--status 不得为空" in result.stderr
+
+
 class _Fake(Notifier):
     def __init__(self, failures: int) -> None:
         self.failures = failures
