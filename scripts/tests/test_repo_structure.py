@@ -10,8 +10,58 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+SKILL_NAMES = (
+    "functional-test-design",
+    "api-test-design",
+    "web-automation-generation",
+    "api-automation-generation",
+    "self-debug-runner",
+    "skill-self-optimizer",
+)
+
+SKILL_REQUIRED_CONTRACTS = {
+    "functional-test-design": (
+        "traceability.yaml",
+        "created",
+        "requirements_clarifying",
+        "--stage exemptions",
+        "functional_cases_generating",
+        "functional_cases_exported",
+    ),
+    "api-test-design": (
+        "--stage exemptions",
+        "requirements_mapped",
+        "spec_normalizing",
+        "spec_valid",
+        "api_cases_generating",
+        "api_cases_exported",
+    ),
+    "web-automation-generation": (
+        "functional_cases_exported",
+        "web_automation_generating",
+        "web_automation_generated",
+    ),
+    "api-automation-generation": (
+        "api_cases_exported",
+        "api_automation_generating",
+        "api_automation_generated",
+    ),
+    "self-debug-runner": (
+        "side_effect=creates/deletes",
+        "fresh reset",
+        "scripts/classify_failure.py",
+        "scripts/self_debug_helper.py",
+    ),
+    "skill-self-optimizer": (
+        "golden baseline",
+        "--stage skill_change",
+        "--action approved",
+    ),
+}
 
 # Runner/tool noise and sanctioned structural placeholders never count.
 IGNORED_NAMES = {
@@ -281,3 +331,39 @@ def test_no_stray_files_at_repo_root() -> None:
     actual = {p.name for p in REPO_ROOT.iterdir()}
     stray = sorted(actual - expected_root)
     assert stray == [], f"undeclared entries at repo root: {stray}"
+
+
+@pytest.mark.parametrize("skill_name", SKILL_NAMES)
+def test_skill_entrypoint_matches_agent_skills_contract(skill_name: str) -> None:
+    """六个项目级 Skill 都必须提供最小、可发现且版本化的入口。"""
+    path = REPO_ROOT / ".agents" / "skills" / skill_name / "SKILL.md"
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    _, frontmatter, body = text.split("---", 2)
+    metadata = yaml.safe_load(frontmatter)
+    assert set(metadata) == {"name", "description", "metadata"}
+    assert metadata["name"] == skill_name
+    assert 1 <= len(metadata["description"]) <= 1024
+    assert metadata["metadata"] == {"version": "1.0.0"}
+    assert "# Outcome" in body
+    assert "## Steps" in body
+    assert "## Guardrails" in body
+
+
+@pytest.mark.parametrize("skill_name", SKILL_NAMES)
+def test_skill_entrypoint_contains_required_project_contracts(skill_name: str) -> None:
+    """关键状态、批准和证据义务必须直接写入 Skill，不能依赖模型猜测。"""
+    path = REPO_ROOT / ".agents" / "skills" / skill_name / "SKILL.md"
+    text = path.read_text(encoding="utf-8")
+    missing = [token for token in SKILL_REQUIRED_CONTRACTS[skill_name] if token not in text]
+    assert missing == [], f"{skill_name} 缺少项目契约：{missing}"
+
+
+@pytest.mark.parametrize("skill_name", SKILL_NAMES)
+def test_claude_skill_adapter_is_relative_in_repo_symlink(skill_name: str) -> None:
+    """Claude 适配入口只能链接到仓库内的唯一 Skill 规范源。"""
+    link = REPO_ROOT / ".claude" / "skills" / skill_name
+    source = REPO_ROOT / ".agents" / "skills" / skill_name
+    assert link.is_symlink()
+    assert not link.readlink().is_absolute()
+    assert link.resolve() == source.resolve()
