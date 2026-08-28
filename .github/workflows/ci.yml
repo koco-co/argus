@@ -37,14 +37,12 @@ jobs:
       - run: uv run python scripts/check_prod_scope.py --all
       # Roadmap 1.18: no hand-written test can slip in through the side door.
       - run: uv run python scripts/check_orphan_tests.py
-      - if: ${{ always() }}
+      - if: ${{ success() }}
         continue-on-error: true
-        shell: bash
-        run: |
-          status=success
-          if [[ "${{ failure() }}" == "true" ]]; then
-            status=failure
-          elif [[ "${{ cancelled() }}" == "true" ]]; then
-            status=cancelled
-          fi
-          uv run python scripts/notify.py --job static-checks --status "$status"
+        run: uv run python scripts/notify.py --job static-checks --status success
+      - if: ${{ failure() }}
+        continue-on-error: true
+        run: uv run python scripts/notify.py --job static-checks --status failure
+      - if: ${{ cancelled() }}
+        continue-on-error: true
+        run: uv run python scripts/notify.py --job static-checks --status cancelled

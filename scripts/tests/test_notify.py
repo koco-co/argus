@@ -48,9 +48,11 @@ def test_workflow_derives_nonempty_job_status(workflow_name: str) -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
     assert "job.status" not in workflow
-    assert "${{ failure() }}" in workflow
-    assert "${{ cancelled() }}" in workflow
-    assert '--status "$status"' in workflow
+    assert "failure()" in workflow
+    assert "cancelled()" in workflow
+    assert "--status success" in workflow
+    assert "--status failure" in workflow
+    assert "--status cancelled" in workflow
 
 
 def test_notify_job_rejects_empty_status() -> None:

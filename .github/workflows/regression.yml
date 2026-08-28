@@ -89,17 +89,15 @@ jobs:
       - if: "${{ always() && hashFiles('reports/junit.xml') != '' }}"
         continue-on-error: true
         run: uv run python scripts/notify.py --summary auto --classification "${{ steps.regression.outputs.classification }}"
-      - if: "${{ always() && hashFiles('reports/junit.xml') == '' }}"
+      - if: "${{ hashFiles('reports/junit.xml') == '' && success() }}"
         continue-on-error: true
-        shell: bash
-        run: |
-          status=success
-          if [[ "${{ failure() }}" == "true" ]]; then
-            status=failure
-          elif [[ "${{ cancelled() }}" == "true" ]]; then
-            status=cancelled
-          fi
-          uv run python scripts/notify.py --job e2e --status "$status"
+        run: uv run python scripts/notify.py --job e2e --status success
+      - if: "${{ hashFiles('reports/junit.xml') == '' && failure() }}"
+        continue-on-error: true
+        run: uv run python scripts/notify.py --job e2e --status failure
+      - if: "${{ hashFiles('reports/junit.xml') == '' && cancelled() }}"
+        continue-on-error: true
+        run: uv run python scripts/notify.py --job e2e --status cancelled
       - if: ${{ always() && github.event_name == 'schedule' && steps.regression.outputs.classification == 'failed' }}
         continue-on-error: true
         env:
