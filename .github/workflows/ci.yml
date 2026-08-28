@@ -33,6 +33,14 @@ jobs:
       contents: read
     env:
       ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
+      ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
+      ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
+      ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
+      ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
+      ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
+      ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
+      ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

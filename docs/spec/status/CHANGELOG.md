@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-28：补齐 CI 通知 Secrets 的环境变量装配契约。`shared/notify/dispatcher.py` 现在可在不生成携密文件的前提下从 Actions Secrets 映射装配钉钉、飞书、企业微信或邮件渠道；不完整邮件配置会明确失败，空值仍保持零渠道兼容。两条工作流、示例配置与回归测试同步覆盖。
+
 - 2026-08-28：补齐 Roadmap 8.2 的可执行黄金基线基础设施。四个生成 Skill 各保存一份 1.0.0 冻结输入与代表性期望；`check_skill_golden.py` 校验输入 SHA-256、YAML Schema/解析后结构语义和 Python AST 语义，明确允许排版/注释变化而拒绝行为漂移。M13 的候选阈值、具体 proposal 展示与用户批准门禁保持未完成、未伪造。
 - 2026-08-28：真实 CI 发现 `pre-commit --all-files` 不枚举尚未跟踪的新文件，本地曾因此漏过新脚本的格式检查；`make lint` 现直接执行 `ruff format --check .`，并由回归测试固定该入口，避免生成后提交前的同类假绿。
 

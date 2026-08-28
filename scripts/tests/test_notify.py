@@ -30,7 +30,84 @@ def test_notify_script_entrypoint_imports_shared_package() -> None:
 
 def test_missing_notify_config_is_an_explicit_noop(tmp_path: Path) -> None:
     """尚未配置真实渠道时，CI 仍应执行通知器而不是抛出 traceback。"""
-    assert load_config(tmp_path / "missing.yaml") == {"channels": {}}
+    assert load_config(tmp_path / "missing.yaml", environ={}) == {"channels": {}}
+
+
+def test_notify_config_can_be_assembled_from_ci_environment(tmp_path: Path) -> None:
+    """Actions Secrets 必须能通过环境变量直接装配渠道，不落盘真实值。"""
+    config = load_config(
+        tmp_path / "missing.yaml",
+        environ={
+            "ARGUS_NOTIFY_FEISHU_WEBHOOK": "https://notify.invalid/feishu",
+            "ARGUS_NOTIFY_EMAIL_SMTP_HOST": "smtp.invalid",
+            "ARGUS_NOTIFY_EMAIL_SMTP_PORT": "587",
+            "ARGUS_NOTIFY_EMAIL_USERNAME": "argus@example.invalid",
+            "ARGUS_NOTIFY_EMAIL_PASSWORD": "secret",
+            "ARGUS_NOTIFY_EMAIL_TO": "qa@example.invalid, owner@example.invalid",
+        },
+    )
+    assert config == {
+        "channels": {
+            "feishu": {"webhook": "https://notify.invalid/feishu"},
+            "email": {
+                "smtp_host": "smtp.invalid",
+                "smtp_port": 587,
+                "username": "argus@example.invalid",
+                "password": "secret",
+                "to": ["qa@example.invalid", "owner@example.invalid"],
+            },
+        }
+    }
+
+
+def test_notify_environment_overrides_file_without_discarding_sibling_channels(
+    tmp_path: Path,
+) -> None:
+    """CI 注入值优先于本地文件，但不得删除文件中的其他完整渠道。"""
+    path = tmp_path / "notify.yaml"
+    path.write_text(
+        "channels:\n"
+        "  dingtalk:\n"
+        "    webhook: https://notify.invalid/old\n"
+        "  wecom:\n"
+        "    webhook: https://notify.invalid/wecom\n",
+        encoding="utf-8",
+    )
+    config = load_config(
+        path,
+        environ={"ARGUS_NOTIFY_DINGTALK_WEBHOOK": "https://notify.invalid/new"},
+    )
+    assert config["channels"] == {
+        "dingtalk": {"webhook": "https://notify.invalid/new"},
+        "wecom": {"webhook": "https://notify.invalid/wecom"},
+    }
+
+
+def test_partial_email_environment_is_rejected(tmp_path: Path) -> None:
+    """不完整的 Secret 组合必须明确失败，避免把错误配置伪装为零渠道。"""
+    with pytest.raises(ValueError, match="邮件通知环境变量不完整"):
+        load_config(
+            tmp_path / "missing.yaml",
+            environ={"ARGUS_NOTIFY_EMAIL_SMTP_HOST": "smtp.invalid"},
+        )
+
+
+@pytest.mark.parametrize("workflow_name", ["ci.yml", "regression.yml"])
+def test_workflow_maps_notification_secrets_to_environment(workflow_name: str) -> None:
+    """工作流必须显式把 Actions Secrets 映射给通知器。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+    for name in (
+        "ARGUS_NOTIFY_DINGTALK_WEBHOOK",
+        "ARGUS_NOTIFY_FEISHU_WEBHOOK",
+        "ARGUS_NOTIFY_WECOM_WEBHOOK",
+        "ARGUS_NOTIFY_EMAIL_SMTP_HOST",
+        "ARGUS_NOTIFY_EMAIL_SMTP_PORT",
+        "ARGUS_NOTIFY_EMAIL_USERNAME",
+        "ARGUS_NOTIFY_EMAIL_PASSWORD",
+        "ARGUS_NOTIFY_EMAIL_TO",
+    ):
+        assert f"{name}: ${{{{ secrets.{name} }}}}" in workflow
 
 
 def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> None:

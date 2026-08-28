@@ -57,6 +57,14 @@ jobs:
       ARGUS_BASE_URL: http://localhost:8000
       ARGUS_API_BASE_URL: http://localhost:9000
       ARGUS_CI_ACCEPTANCE_SCENARIO: ${{ inputs.acceptance_scenario || 'normal' }}
+      ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
+      ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
+      ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
+      ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
+      ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
+      ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
+      ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
+      ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
