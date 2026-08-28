@@ -55,7 +55,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
 | Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-27（43 passed；Phase 0 范围 = scaffolder + 结构 diff；DATA_MODEL 块解析测试属 1.1） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现（`validate_schema.py` 目前为 0.3 桩，1.2 落地） |
-| Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已定义 / 待实现 |
+| Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（1.17 验收；无参形态评估全部迭代，CI 采用） |
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-27（骨架绿：ruff 实际执行；四个本地钩子按 0.3 为 no-op 桩） |
 | Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
 | Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |

@@ -185,11 +185,15 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
 
     recorder = _Recorder()
     root_absolute = str(root.resolve())
-    # Isolate the nested run from this repository (cwd, sys.path, conftest
-    # module) so collection cannot leak state into or out of the session.
+    # Isolate the nested run from this repository and from the surrounding
+    # session (cwd, sys.path, conftest module, plugin autoload) so collection
+    # cannot leak state into or out of the session.
     previous_cwd = Path.cwd()
     saved_path = list(sys.path)
     saved_conftest = sys.modules.get("conftest")
+    saved_flag = os.environ.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD")
+    modules_before = set(sys.modules)
+    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     os.chdir(root.parent)
     try:
         pytest.main(
@@ -205,10 +209,19 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     finally:
         os.chdir(previous_cwd)
         sys.path[:] = saved_path
+        if saved_flag is None:
+            os.environ.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD", None)
+        else:
+            os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = saved_flag
         if saved_conftest is not None:
             sys.modules["conftest"] = saved_conftest
         else:
             sys.modules.pop("conftest", None)
+        # drop test modules the nested collection imported so later runs with
+        # same-basename files in different roots never hit import mismatch
+        for name in set(sys.modules) - modules_before:
+            if name.startswith("test_") or name == "conftest":
+                sys.modules.pop(name, None)
     # nodeid form varies with the rootdir pytest infers: normalize every
     # variant to the stable "automation/..." repo-relative shape.
     absolute_prefix = f"{root_absolute}/"

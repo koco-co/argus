@@ -185,6 +185,8 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "check_pom_boundary.py",
         "check_test_markers.py",
         "check_api_models.py",
+        "check_prod_scope.py",
+        "check_orphan_tests.py",
         "render_md.py",
         "export_xmind.py",
         "export_xlsx.py",
@@ -222,6 +224,8 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_check_api_models.py",
         "test_check_secrets.py",
         "test_check_layering.py",
+        "test_check_prod_scope.py",
+        "test_check_orphan_tests.py",
     },
     "target-app": set(),
 }

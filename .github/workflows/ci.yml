@@ -33,3 +33,7 @@ jobs:
       - run: uv run pre-commit run --all-files
       - run: uv run pytest scripts/tests
       - run: uv run python scripts/check_coverage.py --tier from-iteration
+      # Roadmap 1.17: any future TEST_ENV=prod run requires this green scan.
+      - run: uv run python scripts/check_prod_scope.py --all
+      # Roadmap 1.18: no hand-written test can slip in through the side door.
+      - run: uv run python scripts/check_orphan_tests.py
