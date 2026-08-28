@@ -532,3 +532,24 @@ def test_run_summary_unresolvable_diff_ref(validator: Any, tmp_path: Path) -> No
     )
     (run_dir / "run-summary.yaml").write_text(yaml.safe_dump(bad, sort_keys=False))
     assert validator.main([str(iteration_dir)]) == 1
+
+
+def test_run_summary_resolves_diff_ref_from_its_run_directory(
+    validator: Any, tmp_path: Path
+) -> None:
+    """记录器接受的相对 patch 路径必须也能通过迭代校验器。"""
+    doc = _iteration_doc("2026-08-runs4", ui=True, state="created", events=[], approvals=[])
+    iteration_dir = _scaffold(tmp_path, "2026-08-runs4", doc)
+    run_dir = iteration_dir / "runs" / "run-20260828T101500Z-a3f2"
+    run_dir.mkdir(parents=True)
+    summary = _run_summary_doc(
+        "passed",
+        [_attempt(1, "pass", diff_ref="attempt-1.patch")],
+        started_at="2026-08-28T10:15:00Z",
+        finished_at="2026-08-28T10:16:00Z",
+        env="local",
+        scope="module_set",
+    )
+    (run_dir / "attempt-1.patch").write_text("diff --git a/a b/a\n", encoding="utf-8")
+    (run_dir / "run-summary.yaml").write_text(yaml.safe_dump(summary, sort_keys=False))
+    assert validator.main([str(iteration_dir)]) == 0

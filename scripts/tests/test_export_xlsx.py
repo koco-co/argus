@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -92,3 +94,17 @@ def test_missing_source_refused(exporter: Any, tmp_path: Path) -> None:
     iteration_dir.mkdir(parents=True)
     with pytest.raises(Exception, match="missing source"):
         exporter.export(iteration_dir)
+
+
+def test_cli_entrypoint_writes_export(iteration_dir: Path) -> None:
+    """Makefile 调用脚本时必须真正执行 main，而不是静默空跑。"""
+    result = subprocess.run(
+        [sys.executable, "scripts/export_xlsx.py", str(iteration_dir)],
+        cwd=Path(__file__).resolve().parents[2],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "export_xlsx: wrote" in result.stdout
+    assert list((iteration_dir / "exports").glob("*.xlsx"))

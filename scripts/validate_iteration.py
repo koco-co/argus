@@ -147,9 +147,8 @@ def sha256_of(path: Path) -> str:
 
 
 def resolve_recorded(recorded: str, iterations_dir: Path) -> Path | None:
-    """A generated_from.artifact value is repo-relative by convention; sandbox
-    trees additionally resolve against the iterations root."""
-    for base in (REPO_ROOT, iterations_dir.parent):
+    """解析仓库相对、迭代相对或当前证据目录相对的记录路径。"""
+    for base in (REPO_ROOT, iterations_dir.parent, iterations_dir):
         candidate = base / recorded
         if candidate.exists():
             return candidate
@@ -317,7 +316,9 @@ def check_run_summary(run_summary: Path, report: IterationReport) -> None:
         if not diff_ref:
             continue
         if diff_ref.endswith(".patch") or "/" in diff_ref:
-            candidate = resolve_recorded(diff_ref, run_summary.parent.parent)
+            # self_debug_helper 以单次 run 目录为相对路径基准写入 diff_ref，
+            # 校验器必须使用同一契约，否则记录器生成的合法证据会被误判。
+            candidate = resolve_recorded(diff_ref, run_summary.parent)
             if candidate is None and not diff_ref.startswith("stash"):
                 report.error(f"{label}: attempts[{index}].diff_ref does not resolve: {diff_ref}")
 

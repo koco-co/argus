@@ -221,5 +221,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-    print(f"export_xmind: wrote {destination.relative_to(REPO_ROOT).as_posix()} (sha256 {digest})")
+    try:
+        display_path = destination.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        display_path = destination.as_posix()
+    print(f"export_xmind: wrote {display_path} (sha256 {digest})")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
