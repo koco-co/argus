@@ -59,6 +59,7 @@ SKILL_REQUIRED_CONTRACTS = {
     ),
     "skill-self-optimizer": (
         "golden baseline",
+        "scripts/check_skill_golden.py",
         "--stage skill_change",
         "--action approved",
     ),
@@ -90,6 +91,15 @@ EXPECTED_DIRS: set[str] = {
             "skill-self-optimizer",
         )
         for sub in ("schemas", "examples", "versions")
+    ),
+    *(
+        f".agents/skills/{skill}/versions/baselines/1.0.0"
+        for skill in (
+            "functional-test-design",
+            "api-test-design",
+            "web-automation-generation",
+            "api-automation-generation",
+        )
     ),
     ".claude/skills",
     "plugins/_interface/schemas",
@@ -194,6 +204,7 @@ EXPECTED_FILES: set[str] = {
     "scripts/validate_iteration.py",
     "scripts/check_db_readonly.py",
     "scripts/check_secrets.py",
+    "scripts/check_skill_golden.py",
     "scripts/finalize_merge.py",
     "scripts/notify.py",
     ".github/workflows/ci.yml",
@@ -209,6 +220,15 @@ EXPECTED_FILES: set[str] = {
     "shared/db/readonly_client.py",
     "shared/assertions/__init__.py",
     "shared/assertions/db_asserts.py",
+    *(
+        f".agents/skills/{skill}/versions/baselines/1.0.0/manifest.yaml"
+        for skill in (
+            "functional-test-design",
+            "api-test-design",
+            "web-automation-generation",
+            "api-automation-generation",
+        )
+    ),
     *(f"{d}/.gitkeep" for d in KEEPER_DIRS),
 }
 
@@ -251,6 +271,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "validate_iteration.py",
         "check_db_readonly.py",
         "check_secrets.py",
+        "check_skill_golden.py",
         "check_layering.py",
         "check_pom_boundary.py",
         "check_test_markers.py",
@@ -318,6 +339,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_check_test_markers.py",
         "test_check_api_models.py",
         "test_check_secrets.py",
+        "test_check_skill_golden.py",
         "test_check_layering.py",
         "test_check_prod_scope.py",
         "test_check_orphan_tests.py",

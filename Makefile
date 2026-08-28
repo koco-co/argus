@@ -5,7 +5,7 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint \
+.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint skill-golden \
 	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
 	target-app-down
 
@@ -38,6 +38,12 @@ api-tests:
 lint:
 	uv run ruff check .
 	uv run pyright
+
+skill-golden:
+	@for manifest in .agents/skills/*/versions/baselines/*/manifest.yaml; do \
+		baseline=$$(dirname "$$manifest"); \
+		uv run python scripts/check_skill_golden.py --baseline "$$baseline" --actual-root . || exit 1; \
+	done
 
 target-app-up:
 	uv run python scripts/target_app_up.py

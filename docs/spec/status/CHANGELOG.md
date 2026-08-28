@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-28：补齐 Roadmap 8.2 的可执行黄金基线基础设施。四个生成 Skill 各保存一份 1.0.0 冻结输入与代表性期望；`check_skill_golden.py` 校验输入 SHA-256、YAML Schema/解析后结构语义和 Python AST 语义，明确允许排版/注释变化而拒绝行为漂移。M13 的候选阈值、具体 proposal 展示与用户批准门禁保持未完成、未伪造。
+
 - 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；`record_event.py` 在持久化前复用同一门禁，三个唯一写入器还会拒绝 Schema 合法但生命周期链断裂的文件；reopen 的 stale 传播与事件改为一次写入，失败不再留下半写状态。新增批准主体、摘要不匹配、后续拒绝、产物缺失、无批准事件写入、断链写入与 reopen 字节不变回归，永久测试夹具通过唯一批准写入器校正。
 - 正式 UI iteration 首次接入提交钩子时发现永久 `test-fixture-*` 会反向把真实非终态 iteration 误报为兄弟冲突；单迭代规则现对夹具双向豁免，新增“真实 iteration + 永久夹具同批校验”回归。框架全量回归增至 405 项。
 

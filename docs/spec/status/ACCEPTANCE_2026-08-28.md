@@ -6,7 +6,7 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 405 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 411 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
@@ -20,6 +20,7 @@
 | M9 预算耗尽 | 不可用生成桩连续 5 轮真实失败后 `budget_exceeded` | `run-20260828T171000Z-stub` |
 | M9 产品差异 | 错误总额预期被分类为 `product_behavior_mismatch`，立即升级，预算保持 5/5 | `run-20260828T172000Z-prod` |
 | M9 防伪 | 常量返回 patch 虽在路径白名单内，仍被 POM `stub-return` 启发式拒绝并回滚 | `run-20260828T173000Z-lite` |
+| Skill 黄金基线 | 四个生成 Skill 各有 1 份版本化冻结输入；10 项代表性 YAML/Python 产物通过 Schema、结构语义或 AST 语义比较，输入/YAML/AST 漂移反向测试均会失败 | `make skill-golden`；`scripts/tests/test_check_skill_golden.py` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
 | GitHub Actions | 正式 UI 迭代启动提交 `6df174f` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 405 项框架测试与 10 条全栈/靶场测试；另有 static 强制失败、E2E 持续失败和 flaky 对抗证据 | Actions run `33168853788`、`33168853803`、`33167112164`、`33167112680`、`33167439010` |

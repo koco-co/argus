@@ -1,0 +1,9 @@
+schema_version: "1.0"
+iteration_id: test-fixture-ui-e2e
+status: draft
+requirements:
+  - requirement_id: R0001
+    title: 访客使用折扣码结算
+    description: 访客把黑色 S 码 T 恤加入购物车并应用 ARGUS10 后，总额按种子价格与折扣比例计算。
+    priority: 1
+ambiguities: []

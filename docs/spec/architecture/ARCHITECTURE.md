@@ -71,7 +71,8 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   │                                # web-automation-generation, api-automation-generation,
 │   │                                # self-debug-runner, skill-self-optimizer
 │   │                                # each: SKILL.md + schemas/ + examples/
-│   └── <skill>/versions/            # ⭐ prior SKILL.md snapshots kept by optimizer (Roadmap 8.2)
+│   └── <skill>/versions/            # ⭐ prior SKILL.md snapshots + baselines/<version>/
+│                                    #    frozen inputs/manifests/semantic expectations (Roadmap 8.2)
 ├── .claude/skills/                  # one symlink per skill → .agents/skills/<name>
 ├── plugins/
 │   ├── README.md
@@ -146,6 +147,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_test_markers.py        # ⭐ module/case_id/iteration markers present & consistent
 │   ├── check_layering.py
 │   ├── check_secrets.py             # ⭐ credential-pattern scan over trackable text
+│   ├── check_skill_golden.py        # ⭐ frozen-input SHA + YAML Schema/semantics + Python AST baseline
 │   ├── check_patch_scope.py          # ⭐ self-debug frozen-scope and banned-pattern guard
 │   ├── classify_failure.py           # M9 结构化证据机械预分类（升级类不可降级）
 │   ├── self_debug_helper.py          # ⭐ run 摘要、预算、检查点、patch 门禁、AST 受影响模块与 CI 证据
