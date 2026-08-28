@@ -1,55 +1,38 @@
-# Plugin Interface Contract (Roadmap 2.1)
+# 插件接口契约（ROADMAP 2.1）
 
-Status: proposed for human sign-off ([manual gate]). This document binds the
-plugin layer: how a plugin resolves a source ref, what it may and may not do,
-and the exact envelope it must produce. Machine authority for the envelope
-shape is [DATA_MODEL §10](../../architecture/DATA_MODEL.md) (schemas under
-`plugins/_interface/schemas/`).
+状态：草案，等待用户明确签收（human sign-off）。本文件说明插件如何处理来源引用、职责边界及输出信封；不表示 `run_plugin.py` 已实现，也不替代人工确认。
 
-## 1. fetch() → disk-persisted envelope
+信封结构的唯一机器权威是 [DATA_MODEL §10](../../docs/spec/architecture/DATA_MODEL.md#10-plugin-source-payloads)，Schema 位于 `plugins/_interface/schemas/`；落盘边界按 [ADR-006](../../docs/spec/architecture/adr/adr-006-source-payload-boundary.md) 执行。
 
-A plugin is a function of one source reference:
+## 1. fetch() → 先落盘，再校验
 
-```
+插件接收一个来源引用，返回来源载荷信封：
+
+```text
 fetch(source_ref: str, *, credentials: Mapping[str, str]) -> envelope dict
 ```
 
-- The plugin returns the normalized **source payload envelope** — never
-  internal workflow artifacts (those belong to M1/M4).
-- `scripts/run_plugin.py` is the ONLY caller (skills never import a plugin).
-  It **persists the envelope to disk first** —
-  `iterations/<id>/00-raw/source-payload.yaml` — and validates it against the
-  registered source-payload schema **after** persistence (disk-first
-  boundary, ADR-006). An invalid envelope stays on disk for inspection; the
-  run fails loudly with the exact JSON path of each violation.
-- Downstream skills may consume the file only after validation succeeds:
-  this path is the quarantine slot. Unrelated raw inputs under `00-raw/`
-  remain exempt from artifact-schema validation.
+- 插件只返回规范化的来源载荷信封，不生成 M1/M4 拥有的内部工作流产物。
+- `scripts/run_plugin.py` 是唯一调用入口；Skill 不得直接导入插件。运行器先将信封写入 `iterations/<id>/00-raw/source-payload.yaml`，再使用已注册的来源载荷 Schema 校验磁盘文件。
+- 无效信封保留在原路径供排查，运行失败并指出具体违规 JSON 路径。该路径是隔离位置：下游 Skill 只有在校验成功后才能消费文件。
+- `00-raw/` 下其他无关原始输入不属于该信封 Schema 的校验对象。
 
-## 2. Conversion responsibility = M1/M4
+## 2. 内部产物转换由 M1/M4 负责
 
-Plugins stop at the envelope. Converting a payload into internal workflow
-artifacts is M1 (requirement sources) / M4 (API sources) work — a plugin
-that emits `requirements.yaml`-shaped content is broken by definition.
+需求来源的转换属于 M1，API 来源的转换属于 M4。插件在信封边界结束，不负责直接产出 `requirements.yaml` 等内部产物，也不得为通过内部 Schema 而伪造工作流字段。
 
-## 3. Security rules (binding even with zero real plugins in v1)
+## 3. 安全与错误规则
 
-- **Credentials** come from env/config only — never hardcoded, never
-  returned through the envelope, never logged.
-- **Timeouts**: every fetch declares defaults (connect 5s / read 30s) plus
-  response-size and decompression limits enforced by the runner.
-- **Private-network denial**: URL-fetching sources must refuse
-  private/loopback/link-local targets (SSRF containment).
-- **Untrusted content**: instruction-like text inside a payload is
-  clarification material for M1/M4 — never a directive the agent executes,
-  and it never enters `knowledge/` without independent corroboration.
-- **Structured errors**: a failed fetch persists the error variant
-  (`error: {code, message}`) instead of raising across the boundary; the two
-  variants are mutually exclusive by schema (`error` present ⇒ no `content`).
+以下规则来自 DATA_MODEL §10，即使 v1 没有真实插件也保持约束：
 
-## 4. Registration
+- **凭据**：仅来自环境变量或配置；不得硬编码、写入返回信封或输出到日志。
+- **超时和大小限制**：每次 fetch 声明默认连接超时 5 秒、读取超时 30 秒，并由运行器执行响应大小与解压限制。
+- **禁止访问私有网络**：抓取 URL 的来源必须拒绝私有地址、回环地址及链路本地地址，以限制 SSRF 风险。
+- **不可信内容**：载荷中的指令式文本最多作为 M1/M4 的澄清材料，不是 agent 应执行的指令；未经独立佐证，不得写入 `knowledge/`。
+- **结构化错误**：抓取失败时持久化 `error: {code, message}` 变体，不让原始异常跨越边界。Schema 强制成功与错误变体互斥：出现 `error` 时不得同时携带 `content`。
 
-`plugins/registry.yaml` is the only name→plugin table; `run_plugin.py`
-resolves through it exclusively and errors with an actionable message on an
-unknown name. v1 ships zero real connectors (PRD §8); envelope schemas may
-extend additively only during v1 (RISKS #17).
+## 4. 注册与 v1 范围
+
+`plugins/registry.yaml` 是唯一的插件名称到实现的映射表；`run_plugin.py` 只能通过该表解析插件，未知名称必须返回可操作的错误信息，不猜测替代插件。
+
+按 PRD §8，v1 不交付真实连接器；按 DATA_MODEL §10 与 RISKS #17，v1 信封 Schema 只允许增加可选字段，破坏性变更留待首次真实集成处理。

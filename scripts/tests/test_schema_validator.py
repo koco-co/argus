@@ -72,17 +72,19 @@ def test_malformed_datetime_rejected(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(run_summary)]) == 1
 
 
-def test_source_payload_any_of_semantics(validator: Any, tmp_path: Path) -> None:
-    good = _write(
-        tmp_path / "iterations/2026-08-tree/00-raw/source-payload.yaml",
-        "api_source_payload--openapi.valid.yaml",
-    )
-    assert validator.main([str(good)]) == 0
-    bad = _write(
-        tmp_path / "iterations/2026-08-tree/00-raw/source-payload.yaml",
-        "requirement_source_payload--error-with-content.invalid.yaml",
-    )
-    assert validator.main([str(bad)]) == 1
+@pytest.mark.parametrize(
+    "source",
+    sorted((FIXTURES_DIR / "schemas").glob("*source_payload--*.yaml")),
+    ids=lambda path: path.name,
+)
+def test_source_payload_any_of_semantics(validator: Any, tmp_path: Path, source: Path) -> None:
+    """两类信封的成功、失败和非法变体均通过真实文件路径绑定验证。"""
+    artifact = _write(tmp_path / "iterations/2026-08-tree/00-raw/source-payload.yaml", source.name)
+    expected = 1 if source.name.endswith(".invalid.yaml") else 0
+    if source.name == "api_source_payload--wrong-source-type.invalid.yaml":
+        # 注册表接受两类信封；该样本中的 jira 类型对需求信封合法。
+        expected = 0
+    assert validator.main([str(artifact)]) == expected
 
 
 def test_dash_all_reports_registered_files_only(validator: Any, tmp_path: Path) -> None:

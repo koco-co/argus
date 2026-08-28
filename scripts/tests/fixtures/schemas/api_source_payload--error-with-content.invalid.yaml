@@ -1,0 +1,8 @@
+schema_version: "1.0"
+source_type: openapi
+fetched_at: "2026-08-28T09:00:00Z"
+content:
+  openapi: 3.0.3
+error:
+  code: source_unavailable
+  message: 失败变体不得同时携带 content

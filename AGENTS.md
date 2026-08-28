@@ -69,3 +69,5 @@
 | 靶应用 | `make target-app-up\|seed\|reset\|healthcheck\|down` |
 
 详细说明：[ENVIRONMENT_SETUP](docs/spec/engineering/ENVIRONMENT_SETUP.md)（状态列标注"已运行"的命令才被验证过）。
+
+插件层入口：[需求来源占位说明](plugins/requirement-sources/README.md)、[API 来源占位说明](plugins/api-sources/README.md)；v1 仅提供信封边界和运行器，不交付真实连接器。

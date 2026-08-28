@@ -68,10 +68,12 @@ _Parallelizable: 1.1–1.15b all depend only on Phase 0; 1.16–1.18 last._
 
 ## Phase 2 — Plugin Layer Skeleton
 
+2026-08-28 执行说明：用户最新指令取消本次开发会话的中途停顿；2.1 的既有签收待办不再阻塞后续实现，但不得伪造历史签收。产品迭代的审批能力和真实验收要求仍须实现。以下勾选仅代表对应 DoD 已有实际证据，未提交项仍明确保留。
+
 - [ ] **2.1** `plugins/_interface/contract.md`: fetch() → disk-persisted envelope validated against source-payload schemas; conversion responsibility = M1/M4; credentials/timeouts/private-network denial/structured error rules (DATA_MODEL §10). **DoD**: human sign-off.
-- [ ] **2.2** Registry entries for the two payload schemas authored in 1.1 + success/error-variant fixture pairs (including the mutual-exclusion case: envelope carrying `error` must not carry `content`). **DoD**: schema fixture pairs validate/reject. *(v1.3 duplicated authoring between 1.1 and here; 1.1 owns definitions, Phase 2 owns plugin-side wiring.)*
-- [ ] **2.3** `run_plugin.py`: resolve registry → execute plugin path OR write-persist then validate; unknown-name error path. **DoD**: `run_plugin.py nonexistent ref` exits non-zero with actionable message; persistence-before-validation order covered by a test; envelope lands in `iterations/<id>/00-raw/source-payload.yaml`.
-- [ ] **2.4** Placeholder READMEs for requirement/api sources. **DoD**: committed, referenced from AGENTS.md.
+- [x] **2.2** Registry entries for the two payload schemas authored in 1.1 + success/error-variant fixture pairs (including the mutual-exclusion case: envelope carrying `error` must not carry `content`). **DoD**: schema fixture pairs validate/reject. *(2026-08-28：两类失败变体、互斥变体与实际文件路径注册绑定均验证；完整框架测试 267 passed。v1.3 duplicated authoring between 1.1 and here; 1.1 owns definitions, Phase 2 owns plugin-side wiring.)*
+- [x] **2.3** `run_plugin.py`: resolve registry → execute plugin path OR write-persist then validate; unknown-name error path. **DoD**: `run_plugin.py nonexistent ref` exits non-zero with actionable message; persistence-before-validation order covered by a test; envelope lands in `iterations/<id>/00-raw/source-payload.yaml`. *(2026-08-28：真实 CLI 退出 1；子进程及落盘顺序测试通过；未交付真实连接器。)*
+- [ ] **2.4** Placeholder READMEs for requirement/api sources. **DoD**: committed, referenced from AGENTS.md. *(2026-08-28：说明和 AGENTS 引用已实现；当前未提交，不提前勾选。)*
 
 ## Phase 3 — Core Skill: `functional-test-design`
 
