@@ -71,6 +71,27 @@ def test_budget_exceeded_requires_consumed_budget(helper: Any, tmp_path: Path) -
         helper.finalize(run_dir, "budget_exceeded")
 
 
+def test_escalation_only_attempt_does_not_consume_repair_budget(
+    helper: Any, tmp_path: Path
+) -> None:
+    """产品行为不符等升级类只记录证据，不占用自动修复预算。"""
+    run_dir = _init(helper, tmp_path, budget=2)
+    helper.append_attempt(
+        run_dir,
+        "fail",
+        "product_behavior_mismatch",
+        "真实商品总额与需求预期不符",
+        None,
+    )
+    assert helper.remaining_budget(run_dir) == 2
+    helper.finalize(
+        run_dir,
+        "escalated",
+        "product_behavior_mismatch",
+        "断言证据完整，禁止自动修改预期",
+    )
+
+
 def test_evidence_writer_refuses_outside_run_directory(helper: Any, tmp_path: Path) -> None:
     with pytest.raises(helper.EvidenceError, match="run 目录"):
         helper.load_summary(tmp_path)

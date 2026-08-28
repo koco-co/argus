@@ -172,7 +172,12 @@ def append_attempt(
 
 def remaining_budget(run_dir: Path) -> int:
     summary = load_summary(run_dir)
-    return max(0, int(summary["retry_budget"]) - len(summary["attempts"]))
+    # 升级类只收集一次事实证据并立即停止，不能消耗自动修复预算；
+    # 预算只约束允许自动改码的循环。
+    consumed = sum(
+        1 for attempt in summary["attempts"] if attempt.get("failure_class") not in ESCALATION_ONLY
+    )
+    return max(0, int(summary["retry_budget"]) - consumed)
 
 
 def validate_summary(summary: dict[str, Any]) -> list[str]:
