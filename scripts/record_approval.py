@@ -26,6 +26,8 @@ from _writers import (
     redacted_digest,
 )
 
+from shared.config.settings import check_path
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
@@ -36,6 +38,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sha256", help="pre-computed artifact digest (64 hex)")
     parser.add_argument("--note", help="human context, e.g. the approved parameter set")
     args = parser.parse_args(argv)
+
+    if args.stage == "environment":
+        if args.artifact is None:
+            print(
+                "error: environment approval requires --artifact so settings.py check can run",
+                file=sys.stderr,
+            )
+            return 1
+        problems = check_path(args.artifact, args.iteration)
+        if problems:
+            for problem in problems:
+                print(f"error: environment check failed: {problem}", file=sys.stderr)
+            return 1
 
     if args.artifact is not None:
         digest = (

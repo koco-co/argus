@@ -253,9 +253,7 @@ def test_record_approval_records_user_actor_and_artifact_hash(
     assert len(approval["artifact_sha256"]) == 64
 
 
-def test_record_approval_supports_exemptions_stage(
-    record_approval: Any, tmp_path: Path
-) -> None:
+def test_record_approval_supports_exemptions_stage(record_approval: Any, tmp_path: Path) -> None:
     """需求豁免必须能经唯一写入器形成独立的用户批准记录。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-exemptions", "requirements_accepted")
     artifact = tmp_path / "exemptions.yaml"
@@ -277,6 +275,61 @@ def test_record_approval_supports_exemptions_stage(
     )
     document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
     assert document["approvals"][-1]["stage"] == "exemptions"
+
+
+def test_environment_approval_requires_green_settings_check(
+    record_approval: Any, tmp_path: Path, capsys: Any
+) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-env-red", "env_pending")
+    document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
+    document["branches"] = {"ui": False, "api": True}
+    (iteration_dir / "iteration.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
+    env_file = tmp_path / "env.local.yaml"
+    env_file.write_text("base_url: http://localhost:9000\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "environment",
+                "--action",
+                "provided",
+                "--artifact",
+                str(env_file),
+            ]
+        )
+        == 1
+    )
+    error = capsys.readouterr().err
+    assert "auth.username: 缺失" in error
+    assert "db.dsn: 必须是 PostgreSQL DSN" in error
+    assert yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"] == []
+
+
+def test_environment_approval_records_only_after_green_settings_check(
+    record_approval: Any, tmp_path: Path
+) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-env-green", "env_pending")
+    env_file = tmp_path / "env.local.yaml"
+    env_file.write_text("base_url: http://localhost:8000\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "environment",
+                "--action",
+                "provided",
+                "--artifact",
+                str(env_file),
+            ]
+        )
+        == 0
+    )
+    document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
+    assert document["approvals"][-1]["stage"] == "environment"
 
 
 def test_hand_edited_state_blocks_event_writer(

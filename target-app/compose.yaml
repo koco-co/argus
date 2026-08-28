@@ -1,0 +1,82 @@
+name: argus-medusa
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    environment:
+      POSTGRES_DB: medusa
+      POSTGRES_USER: medusa
+      POSTGRES_PASSWORD: medusa_local_only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medusa -d medusa"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: ${REDIS_IMAGE}
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    image: argus-medusa-dtc:${DTC_COMMIT}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE}
+        DTC_SOURCE_URL: ${DTC_SOURCE_URL}
+        DTC_COMMIT: ${DTC_COMMIT}
+        PNPM_VERSION: ${PNPM_VERSION}
+    env_file: runtime.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://medusa:medusa_local_only@postgres:5432/medusa
+      REDIS_URL: redis://redis:6379
+      STORE_CORS: http://localhost:8000
+      ADMIN_CORS: http://localhost:9000,http://localhost:5173
+      AUTH_CORS: http://localhost:8000,http://localhost:9000,http://localhost:5173
+    command: ["pnpm", "--filter", "@dtc/backend", "exec", "medusa", "develop"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - "9000:9000"
+
+  storefront:
+    image: argus-medusa-dtc:${DTC_COMMIT}
+    env_file: runtime.env
+    environment:
+      NODE_ENV: development
+      MEDUSA_INTERNAL_BACKEND_URL: http://backend:9000
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: http://localhost:9000
+      NEXT_PUBLIC_DEFAULT_REGION: dk
+      NEXT_PUBLIC_BASE_URL: http://localhost:8000
+    working_dir: /server/apps/storefront
+    command: ["pnpm", "exec", "next", "dev", "-H", "0.0.0.0", "-p", "8000"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres-data:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
+
+- 固定并容器化 Medusa 2.19.0 开源靶场，提供 build/up/seed/reset/healthcheck/canary/down 生命周期；Admin API 种子覆盖区域与货币、商品库存、配送、手工支付、客户、促销、publishable key，并以私有运行时文件保存凭据。
+- 两次 reset 的种子状态字节一致；实时金丝雀验证 EUR 10.00、ARGUS10 10% 与 EUR 9.00 的派生关系，故意破坏价格时按预期失败；完整 down 后未残留 Argus 容器、网络或卷，重新全新启动通过。
+- 新增 `settings.py` 的 CLI/TEST_ENV/local 优先级、空 YAML 防护、CI 环境变量注入、`check`/`assemble` 命令，以及 `record_approval(stage=environment)` 的强制前置检查；审批摘要继续只记录脱敏结构。
+- 根 conftest 在 PROD 环境机械剔除非 `read_only` 用例，并以每个 xdist worker 独立 HTTP 会话和命名空间隔离状态；真实 harness 模块连续三轮 `pytest -n 2` 通过，PROD dry collect 显示 4/5 收集、1 项非只读探针被剔除。
+- 新增运行时 `ReadOnlyDBClient`：语句头白名单、多语句阻断、WITH/EXPLAIN 的 DML/ANALYZE 扫描和共享数据库断言。框架全量测试增至 331 项通过，Ruff、Pyright、DB/marker/orphan 静态门禁通过；这些证据不替代后续生成迭代与最终 UI/API E2E 验收。
+
 ## 2026-08-28 — 完整交付 Goal 与 Phase 2 运行器实现
 
 - 按用户最新指令重设原生 Goal：持续实现全部剩余 v1 需求，以真实开源靶项目的完整 Web/API 自动化验收作为成功终点，不再沿用旧 Goal 在 2.1 处停止的开发安排。没有补造签收、审批或执行证据。

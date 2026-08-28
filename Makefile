@@ -6,7 +6,8 @@ ENV ?= local
 BRANCH ?= ui
 
 .PHONY: setup new-iteration validate-iteration export web-tests api-tests lint \
-	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-down
+	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
+	target-app-down
 
 setup:
 	uv sync
@@ -45,6 +46,9 @@ target-app-reset:
 
 target-app-healthcheck:
 	uv run python scripts/target_app_healthcheck.py
+
+target-app-canary:
+	uv run python scripts/target_app_canary.py
 
 target-app-down:
 	uv run python scripts/target_app_down.py

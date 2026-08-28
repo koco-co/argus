@@ -48,7 +48,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 已运行 2026-08-27（uv ✓；docker 未验证 — Phase 0 无靶应用步骤，Phase 5 前置） |
 | Project init | root | create `pyproject.toml`, `uv python pin 3.12` then `make setup` | creates `.venv`, installs deps + chromium + hooks | 已运行 2026-08-27（fresh-clone 验收通过；本机 playwright 下载需绕过系统代理，见 CHANGELOG） |
 | Scaffold iteration | root | `make new-iteration ID=test-fixture-001` | builds full `iterations/<id>/` tree incl. `iteration.yaml`; second same-ID call errors unless `--force` | 已运行 2026-08-27（BRANCH=ui\|api 声明分支；测试覆盖重复/ID/单迭代规则） |
-| Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 待实现 (harness task, pre-Phase-5) |
+| Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 已运行 2026-08-28（全新 build/up、连续健康探测、down 清场与再次全新 up 均通过） |
 
 ## Development & Verification Commands
 
@@ -60,6 +60,8 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（1.17 验收；无参形态评估全部迭代，CI 采用） |
 | Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-27（骨架绿：ruff 实际执行；四个本地钩子按 0.3 为 no-op 桩） |
 | Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
+| Harness parallel smoke | root | `ARGUS_RUN_ID=smoke TEST_ENV=local uv run pytest -n 2 automation/web/tests/harness` | gw0/gw1 均执行，worker 会话和命名空间隔离 | 已运行 2026-08-28（连续三轮全绿；PROD collect 另验证 1 项非只读探针被剔除） |
+| Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 已运行 2026-08-28（完整/破损/API/UI/空 YAML 夹具均通过预期） |
 | Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
 | Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive --run-id <rid>` | summary/allure/logs copied into `iterations/<id>/runs/<rid>/`, previous runs untouched | 已定义 / 待实现 |
 | CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已定义 / 待实现 |

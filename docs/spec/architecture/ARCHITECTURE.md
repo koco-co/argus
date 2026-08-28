@@ -105,7 +105,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │                                    #    patch refs committed; allure-results/, logs/, traces/
 │                                    #    gitignored — append-only, never overwritten by later runs
 ├── target-app/                      # ⭐ pinned harness home (ADR-002; policy in TESTING_STRATEGY):
-│                                    #    medusa.lock.yaml, compose.yaml
+│                                    #    medusa.lock.yaml, compose.yaml, overrides/
 ├── automation/
 │   ├── web/{pages,components,fixtures,tests}/<module>/, web/conftest.py
 │   ├── mobile/{android,ios,screens,tests}/<module>/, mobile/conftest.py
@@ -156,11 +156,12 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── check_prod_scope.py           # ⭐ static write-call audit of read_only-marked tests (PRD §6)
 │   ├── check_orphan_tests.py         # ⭐ reverse closure: collected nodeids must resolve to cases + trace
 │   ├── run_plugin.py
+│   ├── _target_app.py               # ⭐ 靶应用锁定配置、Compose 调用与健康探测的共享实现
 │   ├── notify.py                    # ⭐ CLI wrapper around shared/notify/dispatcher.py
 │   ├── self_debug_helper.py         # ⭐ budget bookkeeping/attempt-log helper used by the agent-driven loop;
 │   │                                #    invokes patch-scope checks and affected-module regression;
 │   │                                #    the LOOP ITSELF is the skill (session-side), never CI (ADR-004)
-│   ├── target_app_up.py / target_app_seed.py / target_app_reset.py / target_app_healthcheck.py / target_app_down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
+│   ├── target_app_up.py / target_app_seed.py / target_app_reset.py / target_app_healthcheck.py / target_app_canary.py / target_app_down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
 │   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
 │       └── fixtures/                # incl. a checked-in hand-written sample iteration
 ├── .github/workflows/{ci.yml,regression.yml}

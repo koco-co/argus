@@ -1,6 +1,8 @@
 # --- environment & secrets (PRD §6; ENVIRONMENT_SETUP) ---
 # Real values are user-provided at M8; only *.example.yaml files are tracked.
 config/env.local.yaml
+target-app/runtime.env
+target-app/seed-state.yaml
 config/env.test.yaml
 config/env.prod.yaml
 config/env.ci.yaml

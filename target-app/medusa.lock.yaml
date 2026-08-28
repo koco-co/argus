@@ -1,0 +1,19 @@
+schema_version: "1.0"
+medusa:
+  version: "2.19.0"
+  source_url: "https://github.com/medusajs/dtc-starter.git"
+  commit: "cb603dfda0a82e8bb5e81622f295e0ff90ac6913"
+storefront:
+  source_url: "https://github.com/medusajs/dtc-starter.git"
+  commit: "cb603dfda0a82e8bb5e81622f295e0ff90ac6913"
+node:
+  version: "22.12.0"
+  image: "node:22.12.0-bookworm-slim@sha256:35531c52ce27b6575d69755c73e65d4468dba93a25644eed56dc12879cae9213"
+postgres:
+  version: "17.6"
+  image: "postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
+redis:
+  version: "7.4.6"
+  image: "redis:7.4.6-alpine3.21@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98"
+pnpm:
+  version: "10.11.1"

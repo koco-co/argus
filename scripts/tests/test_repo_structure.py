@@ -182,6 +182,9 @@ EXPECTED_FILES: set[str] = {
     "knowledge/anti-patterns.md",
     "knowledge/optimization-candidates.yaml",
     "automation/conftest.py",
+    "automation/web/tests/harness/test_harness_smoke.py",
+    "automation/web/tests/harness/test_prod_gate_probe.py",
+    "scripts/orphan-allowlist.yaml",
     "scripts/new_iteration.py",
     "scripts/_registry_lib.py",
     "scripts/schema_registry.yaml",
@@ -190,6 +193,16 @@ EXPECTED_FILES: set[str] = {
     "scripts/validate_iteration.py",
     "scripts/check_db_readonly.py",
     "scripts/check_secrets.py",
+    "target-app/Dockerfile",
+    "target-app/compose.yaml",
+    "target-app/medusa.lock.yaml",
+    "shared/testdata/seed-registry.yaml",
+    "shared/config/__init__.py",
+    "shared/config/settings.py",
+    "shared/db/__init__.py",
+    "shared/db/readonly_client.py",
+    "shared/assertions/__init__.py",
+    "shared/assertions/db_asserts.py",
     *(f"{d}/.gitkeep" for d in KEEPER_DIRS),
 }
 
@@ -249,6 +262,14 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "record_approval.py",
         "reopen_iteration.py",
         "run_plugin.py",
+        "_target_app.py",
+        "target_app_up.py",
+        "target_app_seed.py",
+        "target_app_reset.py",
+        "target_app_healthcheck.py",
+        "target_app_canary.py",
+        "target_app_down.py",
+        "orphan-allowlist.yaml",
         "schemas",
         "tests",
     },
@@ -257,6 +278,10 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "fixtures",
         "test_writers.py",
         "test_run_plugin.py",
+        "test_target_app_harness.py",
+        "test_settings.py",
+        "test_readonly_client.py",
+        "test_automation_conftest.py",
         "test_new_iteration.py",
         "test_repo_structure.py",
         "test_schemas.py",
@@ -279,7 +304,14 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_check_prod_scope.py",
         "test_check_orphan_tests.py",
     },
-    "target-app": set(),
+    "target-app": {
+        "Dockerfile",
+        "compose.yaml",
+        "medusa.lock.yaml",
+        "overrides",
+        "runtime.env",
+        "seed-state.yaml",
+    },
 }
 
 
@@ -303,6 +335,11 @@ def test_governed_roots_have_no_undeclared_children(root: str) -> None:
     root_path = REPO_ROOT / root
     assert root_path.is_dir(), f"governed root {root} missing"
     actual = {p.name for p in root_path.iterdir() if p.name not in IGNORED_NAMES}
+    if root == "config":
+        # env.<name>.yaml 是 M8 生成且 gitignored 的运行时文件，不属于仓库结构漂移。
+        actual = {
+            name for name in actual if not name.startswith("env.") or name == "env.example.yaml"
+        }
     declared = GOVERNED_CHILDREN[root]
     undeclared = sorted(actual - declared)
     assert undeclared == [], f"undeclared entries under {root}: {undeclared}"
@@ -313,7 +350,16 @@ def test_automation_module_leaf_dirs_are_empty_beyond_keepers() -> None:
     leaf_dirs = [
         d
         for d in EXPECTED_DIRS
-        if d.startswith(("automation/", "shared/")) and (REPO_ROOT / d).is_dir()
+        if d.startswith(("automation/", "shared/"))
+        and d
+        not in {
+            "shared/testdata",
+            "shared/config",
+            "shared/db",
+            "shared/assertions",
+            "automation/web/tests",
+        }
+        and (REPO_ROOT / d).is_dir()
     ]
     polluted = sorted(
         d

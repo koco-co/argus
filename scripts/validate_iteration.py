@@ -232,9 +232,7 @@ def check_iteration(
         if gate is None:
             continue
         for stage, action in gate:
-            if not any(
-                a.get("stage") == stage and a.get("action") == action for a in approvals
-            ):
+            if not any(a.get("stage") == stage and a.get("action") == action for a in approvals):
                 report.error(
                     f"transition to {event['to_state']} requires an approvals[] entry "
                     f"(stage={stage}, action={action}) recorded by record_approval.py"

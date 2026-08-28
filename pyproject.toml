@@ -36,11 +36,13 @@ perf = [
 # expressions (ENVIRONMENT_SETUP.md); markers are metadata checked by
 # scripts/check_test_markers.py (Phase 1).
 addopts = "--strict-markers"
+pythonpath = ["."]
 testpaths = ["scripts/tests"]
 markers = [
     "module(name): business module this test belongs to (metadata; run selection is by directory)",
     "case_id(id): owning functional/API case id within the iteration (e.g. C0012 / A0007)",
     "iteration(id): iteration_id this generated test belongs to",
+    "read_only: test does not mutate the target and may be collected for production runs",
 ]
 
 [tool.ruff]
