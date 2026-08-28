@@ -8,6 +8,8 @@ stale, and blocks stale consumers.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,19 @@ import yaml
 from conftest import _load_script
 
 SHA = "a" * 64
+
+
+def test_record_approval_script_entrypoint_imports_shared_package() -> None:
+    """唯一批准写入器必须支持 AGENTS.md 规定的脚本路径调用。"""
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts/record_approval.py"), "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.fixture()

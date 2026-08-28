@@ -75,6 +75,9 @@ def dispatch(
 
 
 def load_config(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        LOGGER.warning("通知配置不存在，按零渠道执行：%s", path)
+        return {"channels": {}}
     document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(document, dict):
         raise ValueError("notify 配置顶层必须是映射")

@@ -4,20 +4,24 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import logging
+import sys
 from pathlib import Path
 
 import yaml
 
-from shared.notify.dispatcher import (
-    build_notifiers,
-    dispatch,
-    load_config,
-    newest_summary,
-    render_summary,
-)
-
+# 规范命令以脚本路径执行；此时 Python 只把 scripts/ 放入 sys.path。
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+_dispatcher = importlib.import_module("shared.notify.dispatcher")
+build_notifiers = _dispatcher.build_notifiers
+dispatch = _dispatcher.dispatch
+load_config = _dispatcher.load_config
+newest_summary = _dispatcher.newest_summary
+render_summary = _dispatcher.render_summary
 
 
 def main(argv: list[str] | None = None) -> int:

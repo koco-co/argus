@@ -14,6 +14,7 @@ oracles against low-entropy secrets. See scripts/_writers.py.
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
 from pathlib import Path
 
@@ -26,7 +27,11 @@ from _writers import (
     redacted_digest,
 )
 
-from shared.config.settings import check_path
+# AGENTS.md 规定直接执行本脚本；显式加入仓库根目录才能导入 shared/。
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+check_path = importlib.import_module("shared.config.settings").check_path
 
 
 def main(argv: list[str] | None = None) -> int:

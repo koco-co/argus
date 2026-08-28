@@ -2,10 +2,30 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from shared.notify.base import Notifier
-from shared.notify.dispatcher import dispatch, newest_summary, render_summary
+from shared.notify.dispatcher import dispatch, load_config, newest_summary, render_summary
+
+
+def test_notify_script_entrypoint_imports_shared_package() -> None:
+    """文档和 CI 使用脚本路径调用时，仓库根包仍必须可导入。"""
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts/notify.py"), "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_missing_notify_config_is_an_explicit_noop(tmp_path: Path) -> None:
+    """尚未配置真实渠道时，CI 仍应执行通知器而不是抛出 traceback。"""
+    assert load_config(tmp_path / "missing.yaml") == {"channels": {}}
 
 
 class _Fake(Notifier):
