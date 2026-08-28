@@ -151,6 +151,21 @@ def test_unknown_return_model_fails(checker: Any, tmp_path: Path) -> None:
     assert any("'ThingReply' which is not a model" in p for p in report.problems)
 
 
+def test_non_client_fixture_helpers_are_outside_client_contract(
+    checker: Any, tmp_path: Path
+) -> None:
+    """conftest/tests 中的 dict 夹具不是传输客户端，不应被误报。"""
+    helper = tmp_path / "automation" / "api" / "conftest.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text(
+        "def seed_state() -> dict[str, str]:\n    return {}\n",
+        encoding="utf-8",
+    )
+    report = checker.Report()
+    checker.check_clients([helper], {}, report)
+    assert report.problems == []
+
+
 def test_unknown_field_against_spec_fails(checker: Any, tmp_path: Path) -> None:
     _models_dir(
         tmp_path,

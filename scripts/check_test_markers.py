@@ -173,3 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_test_markers: {len(targets)} file(s) consistent")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

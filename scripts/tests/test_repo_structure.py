@@ -226,13 +226,14 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
     "plugins/_interface": {"contract.md", "schemas"},
     "config": {"env.example.yaml", "notify.example.yaml"},
     "automation": {"conftest.py", "web", "mobile", "miniprogram", "api", "perf"},
-    "automation/web": {"pages", "components", "fixtures", "tests"},
+    "automation/web": {"conftest.py", "pages", "components", "fixtures", "tests"},
     "automation/mobile": {"android", "ios", "screens", "tests"},
     "automation/miniprogram": {"pages", "tests"},
-    "automation/api": {"clients", "models", "tests", "har"},
+    "automation/api": {"conftest.py", "clients", "models", "tests", "har"},
     "automation/perf": {"locustfiles", "scenarios"},
     "shared": {"utils", "assertions", "config", "db", "notify", "testdata"},
-    "reports": {"allure-results", "allure-report"},
+    # junit.xml 是回归工作流的运行时产物，和 Allure 目录一样被 gitignore。
+    "reports": {"allure-results", "allure-report", "junit.xml"},
     "knowledge": {
         "patterns.md",
         "anti-patterns.md",
@@ -339,6 +340,16 @@ def test_expected_files_exist() -> None:
     assert missing == []
 
 
+def test_executable_checkers_invoke_main_from_cli() -> None:
+    """所有 check_*.py 门禁都必须在命令行调用时真正执行。"""
+    missing = []
+    for path in sorted((REPO_ROOT / "scripts").glob("check_*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "def main(" in source and 'if __name__ == "__main__":' not in source:
+            missing.append(path.name)
+    assert missing == []
+
+
 def test_keeper_dirs_hold_a_gitkeep() -> None:
     empty = sorted(d for d in KEEPER_DIRS if not (REPO_ROOT / d / ".gitkeep").is_file())
     assert empty == []
@@ -359,8 +370,12 @@ def test_governed_roots_have_no_undeclared_children(root: str) -> None:
     assert undeclared == [], f"undeclared entries under {root}: {undeclared}"
 
 
-def test_automation_module_leaf_dirs_are_empty_beyond_keepers() -> None:
-    """Generated modules arrive with the generation skills (Phases 5/6)."""
+def test_unimplemented_automation_leaf_dirs_are_empty_beyond_keepers() -> None:
+    """尚未交付的端类型目录只能保留占位文件。
+
+    Web/API 已进入生成阶段，模块子目录及 conftest 属于预期产物，不再应用
+    初始化阶段的“必须为空”约束。
+    """
     leaf_dirs = [
         d
         for d in EXPECTED_DIRS
@@ -372,7 +387,14 @@ def test_automation_module_leaf_dirs_are_empty_beyond_keepers() -> None:
             "shared/db",
             "shared/assertions",
             "shared/notify",
+            "automation/web/pages",
+            "automation/web/components",
+            "automation/web/fixtures",
             "automation/web/tests",
+            "automation/api/clients",
+            "automation/api/models",
+            "automation/api/tests",
+            "automation/api/har",
         }
         and (REPO_ROOT / d).is_dir()
     ]

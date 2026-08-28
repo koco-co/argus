@@ -91,6 +91,10 @@ def model_fields(path: Path, class_name: str) -> dict[str, int]:
 
 def check_clients(client_files: list[Path], models: dict[str, Path], report: Report) -> None:
     for path in client_files:
+        # --all 会同时发现 conftest、models 与 tests；只有 clients/** 属于
+        # “公开传输方法必须返回 Pydantic 模型”的契约边界。
+        if "/clients/" not in f"/{path.as_posix()}":
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -191,3 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_api_models: {len(targets)} file(s) conformant")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -49,55 +49,82 @@ def is_exempt(nodeid: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(nodeid, pattern) for pattern in patterns)
 
 
+def _marker_value(node: ast.expr) -> tuple[str, str] | None:
+    """从 ``pytest.mark.<name>("value")`` 表达式读取受治理标记。"""
+    if not isinstance(node, ast.Call) or not node.args:
+        return None
+    attr: ast.expr = node.func
+    parts: list[str] = []
+    while isinstance(attr, ast.Attribute):
+        parts.insert(0, attr.attr)
+        attr = attr.value
+    if isinstance(attr, ast.Name):
+        parts.insert(0, attr.id)
+    if len(parts) < 2 or parts[-2] != "mark":
+        return None
+    name = parts[-1]
+    arg = node.args[0]
+    if name not in ("module", "case_id", "iteration"):
+        return None
+    if not isinstance(arg, ast.Constant) or not isinstance(arg.value, str):
+        return None
+    return name, arg.value
+
+
 def extract_markers(path: Path, function_name: str) -> dict[str, str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (OSError, SyntaxError):
         return {}
     markers: dict[str, str] = {}
+    # 生成代码采用模块级 pytestmark 列表，函数装饰器仍可覆盖同名标记。
+    for statement in tree.body:
+        if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+        if not any(
+            isinstance(target, ast.Name) and target.id == "pytestmark" for target in targets
+        ):
+            continue
+        value = statement.value
+        if value is None:
+            continue
+        values = value.elts if isinstance(value, (ast.List, ast.Tuple)) else [value]
+        for item in values:
+            parsed = _marker_value(item)
+            if parsed is not None:
+                markers[parsed[0]] = parsed[1]
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if node.name != function_name:
             continue
         for decorator in node.decorator_list:
-            call = decorator if isinstance(decorator, ast.Call) else None
-            attr = decorator.func if isinstance(decorator, ast.Call) else decorator
-            parts: list[str] = []
-            while isinstance(attr, ast.Attribute):
-                parts.insert(0, attr.attr)
-                attr = attr.value
-            if isinstance(attr, ast.Name):
-                parts.insert(0, attr.id)
-            if len(parts) < 2 or parts[-2] != "mark":
-                continue
-            name = parts[-1]
-            if name in ("module", "case_id", "iteration") and call and call.args:
-                arg = call.args[0]
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    markers[name] = arg.value
+            parsed = _marker_value(decorator)
+            if parsed is not None:
+                markers[parsed[0]] = parsed[1]
     return markers
 
 
 def resolves(case_id: str, iteration_dir: Path, report: Report, nodeid: str) -> None:
     case_found = False
     trace_found = False
-    for source, key in (
-        ("functional-cases.yaml", "functional_case_id"),
-        ("api/cases.yaml", "api_case_id"),
+    for source, case_key, trace_key in (
+        ("functional-cases.yaml", "case_id", "functional_case_id"),
+        ("api/cases.yaml", "api_case_id", "api_case_id"),
     ):
         path = iteration_dir / source
         if not path.exists():
             continue
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        case_ids = {c["case_id"] for c in document.get("cases", [])}
-        if key == "functional_case_id" and case_id in case_ids:
+        case_ids = {c[case_key] for c in document.get("cases", []) if case_key in c}
+        if case_id in case_ids:
             case_found = True
         trace_path = iteration_dir / "traceability.yaml"
         if trace_path.exists():
             trace = yaml.safe_load(trace_path.read_text(encoding="utf-8")) or {}
             for row in trace.get("links", []):
-                if row.get(key) == case_id:
+                if row.get(trace_key) == case_id:
                     trace_found = True
     if not case_found:
         report.fail(
@@ -164,3 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_orphan_tests: {len(nodeids)} collected nodeid(s) all resolve")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
