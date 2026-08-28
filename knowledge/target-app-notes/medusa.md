@@ -28,10 +28,16 @@ tags: [medusa, dtc-starter, ui, api, seed]
 | Shirts 分类 | `/dk/categories/shirts` | `Shirts` 一级标题；`Medusa T-Shirt €10.00` 商品链接 |
 | T-Shirt 详情 | `/dk/products/t-shirt` | `Black`、`S` 按钮；选择后出现 `Add to cart` |
 | 购物车 | `/dk/cart` | 商品行、数量下拉框、`Summary`、`Add Promotion Code(s)`、`Go to checkout` |
-| 地址结算 | `/dk/checkout?step=address` | 购物车页已核对其真实链接；完整字段在 UI 迭代中继续验收 |
+| 地址结算 | `/dk/checkout?step=address` | 姓名、地址、邮编、城市、国家、邮箱、电话与“账单地址同配送地址”；提交后进入 delivery |
+| 配送结算 | `/dk/checkout?step=delivery` | `Standard Shipping`/`Express Shipping` 与 `Continue to payment`；选择标准配送后进入 payment |
+| 支付结算 | `/dk/checkout?step=payment` | 隔离测试提供者 `Manual Payment` 和 `Continue to review` |
+| 下单复核 | `/dk/checkout?step=review` | 地址、配送、测试支付摘要及 `Place order`；本地测试订单可成功创建 |
+| 订单确认 | `/dk/order/{order_id}/confirmed` | `Your order was placed successfully.`、订单号、商品、配送和支付摘要；购物车归零 |
 | Admin 登录 | `/app/login` | `Email` 标签文本框、`Password` 占位符文本框、`Continue with Email` 按钮 |
 
 2026-08-28 的可见交互核对：选择 `Black` + `S` 后加入购物车，应用 `ARGUS10`；页面展示 `Promotion(s) applied:`、`ARGUS10 (10%)`、`Discount - €1.00` 和 `Total €9.00`。这证明折扣断言依赖真实 Store API 与购物车状态，不是静态页面检查。
+
+同日又以 `argus-customer@example.invalid` 和纯虚构地址实际完成地址、标准配送、`Manual Payment`、复核、`Place order` 到订单确认页；确认页展示订单创建成功、订单号、商品、配送与支付摘要，且购物车由 1 归零。因此正式 UI 迭代的“完整游客结账”在锁定靶场上技术可达，不需要把成功边界降级为仅进入结账页。
 
 ## 定位器策略
 
@@ -42,6 +48,7 @@ tags: [medusa, dtc-starter, ui, api, seed]
 - 规格与加购：`get_by_role("button", name="Black")`、`get_by_role("button", name="S")`。移动布局会同时渲染桌面与吸底的两个 `Add to cart`，须用 `get_by_role("button", name="Add to cart").filter(visible=True).first`，禁止依赖 DOM 顺序点击隐藏或重复实例。
 - 优惠入口的当前可访问名称未稳定暴露给 role 查询；已验证 `get_by_text("Add Promotion Code(s)", exact=True)` 可见且可点击。输入框无 label/placeholder，可在购物车摘要页面对象内用唯一 `get_by_role("textbox")`，并记录本回退原因。
 - 优惠提交与结果：`get_by_role("button", name="Apply")`、`get_by_role("heading", name="Promotion(s) applied:")`、`get_by_text("ARGUS10", exact=False)`。
+- 结账步骤：地址页的 9 个文本框按页面对象封装，国家使用 `get_by_role("combobox")`；配送选择 `Standard Shipping €10.00`，测试支付选择 `Manual Payment Attention: For testing purposes only.`，复核提交为 `Place order`。完成断言必须同时检查确认页成功标题、订单号和 `Cart (0)`。
 - 禁止在测试文件里直接写以上定位器；测试只能调用 `automation/web/pages/**` 的页面对象方法。
 
 ## Seed 实体参考
