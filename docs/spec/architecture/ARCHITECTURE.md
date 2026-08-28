@@ -340,13 +340,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@<full-sha>        # v4 — pin exact SHA; Dependabot updates
+        with: {fetch-depth: 0}                    # PR base SHA 必须可供范围选择器解析
       - uses: astral-sh/setup-uv@<full-sha>      # v5
       - run: uv sync --group dev
       - run: uv run pre-commit run --all-files   # schemas/state/staleness/POM/
                                                   # models/markers/db/secrets/lint
       - run: uv run pytest scripts/tests          # framework's own suites
                                                   # includes schema-block and patch-scope fixtures
-      - run: uv run python scripts/check_coverage.py --tier from-iteration
+      - run: uv run python scripts/check_coverage.py --tier from-iteration --changed-base "$ARGUS_BASE_SHA"
+                                                  # PR 仅检查变更 iteration；自动化/共享门禁变化检查全部
       - if: always()
         continue-on-error: true
         run: uv run python scripts/notify.py --job static-checks

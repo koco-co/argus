@@ -358,3 +358,67 @@ def test_from_iteration_merged_demands_complete_chain(
     (ui_iteration / "iteration.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
     code, _, _ = _run(coverage, tmp_path, capsys, "--tier", "from-iteration")
     assert code == 1  # c-auto unmet (no traceability) - complete chain demanded
+
+
+def test_changed_scope_selects_only_touched_iterations(coverage: Any, tmp_path: Path) -> None:
+    """只改 iteration 工件时，不应让历史 iteration 阻断当前草稿。"""
+    iterations = tmp_path / "iterations"
+    for iteration_id in ("order-ui", "order-api"):
+        (iterations / iteration_id).mkdir(parents=True)
+        (iterations / iteration_id / "iteration.yaml").write_text("state: created\n")
+
+    selected = coverage.select_changed_iteration_dirs(
+        iterations,
+        ["iterations/order-api/api/cases.yaml", "docs/spec/product/PRD.md"],
+    )
+    assert selected == [iterations / "order-api"]
+
+
+@pytest.mark.parametrize(
+    "changed_path",
+    [
+        "automation/api/tests/orders/test_order.py",
+        "shared/config/settings.py",
+        "scripts/check_coverage.py",
+    ],
+)
+def test_changed_scope_checks_all_iterations_for_shared_impact(
+    coverage: Any, tmp_path: Path, changed_path: str
+) -> None:
+    """自动化或共享门禁变化可能破坏任一历史链，必须检查全部 iteration。"""
+    iterations = tmp_path / "iterations"
+    expected = []
+    for iteration_id in ("order-ui", "order-api"):
+        path = iterations / iteration_id
+        path.mkdir(parents=True)
+        (path / "iteration.yaml").write_text("state: created\n")
+        expected.append(path)
+
+    assert coverage.select_changed_iteration_dirs(iterations, [changed_path]) == sorted(expected)
+
+
+def test_changed_scope_ignores_unrelated_paths(coverage: Any, tmp_path: Path) -> None:
+    """纯文档变化不需要重复执行 iteration 覆盖门禁。"""
+    iterations = tmp_path / "iterations"
+    iterations.mkdir()
+    assert coverage.select_changed_iteration_dirs(iterations, ["README.md"]) == []
+
+
+def test_changed_scope_rejects_deleted_iteration(coverage: Any, tmp_path: Path) -> None:
+    """删除 iteration 不能被范围筛选静默跳过。"""
+    iterations = tmp_path / "iterations"
+    iterations.mkdir()
+    with pytest.raises(coverage.CoverageError, match="已不存在"):
+        coverage.select_changed_iteration_dirs(
+            iterations,
+            ["iterations/deleted-one/iteration.yaml"],
+        )
+
+
+def test_static_ci_uses_pull_request_changed_scope() -> None:
+    """PR 覆盖门禁必须取得完整基线，并把 base SHA 交给范围选择器。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "fetch-depth: 0" in workflow
+    assert "ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert '--changed-base "$ARGUS_BASE_SHA"' in workflow

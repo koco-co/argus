@@ -24,15 +24,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
       - run: uv sync --group dev
       - run: uv run pre-commit run --all-files
       - run: uv run pytest scripts/tests
-      - run: uv run python scripts/check_coverage.py --tier from-iteration
+      - shell: bash
+        run: |
+          if [[ -n "$ARGUS_BASE_SHA" ]]; then
+            uv run python scripts/check_coverage.py --tier from-iteration --changed-base "$ARGUS_BASE_SHA"
+          else
+            uv run python scripts/check_coverage.py --tier from-iteration
+          fi
       # Roadmap 1.17: any future TEST_ENV=prod run requires this green scan.
       - run: uv run python scripts/check_prod_scope.py --all
       # Roadmap 1.18: no hand-written test can slip in through the side door.
