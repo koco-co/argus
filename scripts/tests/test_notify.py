@@ -5,9 +5,14 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, cast
+
+import pytest
 
 from shared.notify.base import Notifier
 from shared.notify.dispatcher import dispatch, load_config, newest_summary, render_summary
+from shared.notify.email import EmailNotifier
+from shared.notify.webhook import WebhookNotifier
 
 
 def test_notify_script_entrypoint_imports_shared_package() -> None:
@@ -75,3 +80,84 @@ def test_render_summary_supports_flaky_suspect_classification() -> None:
     )
     assert "状态: flaky-suspect" in text
     assert "尝试次数: 1" in text
+
+
+class _WebhookResponse:
+    content = b"{}"
+
+    def __init__(self, body: dict[str, Any]) -> None:
+        self.body = body
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, Any]:
+        return self.body
+
+
+class _WebhookClient:
+    def __init__(self, body: dict[str, Any]) -> None:
+        self.body = body
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def post(self, url: str, *, json: dict[str, Any]) -> _WebhookResponse:
+        self.calls.append((url, json))
+        return _WebhookResponse(self.body)
+
+
+def test_webhook_adapters_render_channel_specific_payloads() -> None:
+    """飞书与钉钉/企业微信必须使用各自真实文本信封。"""
+    for channel, expected in {
+        "feishu": {"msg_type": "text", "content": {"text": "Argus 结果"}},
+        "dingtalk": {"msgtype": "text", "text": {"content": "Argus 结果"}},
+        "wecom": {"msgtype": "text", "text": {"content": "Argus 结果"}},
+    }.items():
+        client = _WebhookClient({"code": 0})
+        WebhookNotifier(channel, "https://notify.invalid", client=cast(Any, client)).send(
+            "Argus 结果"
+        )
+        assert client.calls == [("https://notify.invalid", expected)]
+
+
+def test_webhook_business_error_is_not_treated_as_delivery() -> None:
+    client = _WebhookClient({"errcode": 40035})
+    with pytest.raises(RuntimeError, match="40035"):
+        WebhookNotifier("dingtalk", "https://notify.invalid", client=cast(Any, client)).send(
+            "Argus 结果"
+        )
+
+
+def test_email_adapter_logs_in_and_sends_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, Any]] = []
+
+    class _SMTP:
+        def __init__(self, host: str, port: int, timeout: int) -> None:
+            calls.append(("connect", (host, port, timeout)))
+
+        def __enter__(self) -> _SMTP:
+            return self
+
+        def __exit__(self, *_: Any) -> None:
+            return None
+
+        def login(self, username: str, password: str) -> None:
+            calls.append(("login", (username, password)))
+
+        def send_message(self, message: Any) -> None:
+            calls.append(("send", (message["To"], message.get_content().strip())))
+
+    monkeypatch.setattr("shared.notify.email.smtplib.SMTP_SSL", _SMTP)
+    EmailNotifier(
+        {
+            "smtp_host": "smtp.invalid",
+            "smtp_port": 465,
+            "username": "argus@example.invalid",
+            "password": "secret",
+            "to": ["qa@example.invalid"],
+        }
+    ).send("Argus 结果")
+    assert calls == [
+        ("connect", ("smtp.invalid", 465, 10)),
+        ("login", ("argus@example.invalid", "secret")),
+        ("send", ("qa@example.invalid", "Argus 结果")),
+    ]
