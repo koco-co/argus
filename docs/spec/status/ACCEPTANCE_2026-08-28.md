@@ -6,9 +6,9 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 374 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 376 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
-| Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过 | `knowledge/target-app-notes/medusa.md` |
+| Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
 | API 生成链 | 需求→规范化 API→API 用例→Pydantic 模型/客户端→两条真实 API 用例→traceability 完整 | `iterations/test-fixture-api-e2e/`；`automation/api/` |
 | 全栈并发回归 | 双 worker 下 UI 正向/负向与 API 正向/负向共 4 条通过 | 本地最终运行：`4 passed`；GitHub e2e 使用相同 Compose-only 生命周期 |

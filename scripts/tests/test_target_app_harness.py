@@ -28,6 +28,7 @@ def test_lockfile_pins_every_moving_dependency(harness: Any) -> None:
 def test_compose_declares_single_full_stack(harness: Any) -> None:
     document = yaml.safe_load(harness.COMPOSE_FILE.read_text(encoding="utf-8"))
     assert set(document["services"]) == {"postgres", "redis", "backend", "storefront"}
+    assert document["services"]["postgres"]["ports"] == ["127.0.0.1:15432:5432"]
     assert document["services"]["backend"]["ports"] == ["9000:9000"]
     assert document["services"]["storefront"]["ports"] == ["8000:8000"]
 
@@ -58,6 +59,50 @@ def test_up_rebuilds_backend_before_migration() -> None:
     assert 'compose(["build", "backend"])' in up_script
     assert up_script.index('compose(["build", "backend"])') < up_script.index('"db:migrate"')
     assert '"./src/migration-scripts/initial-data-seed.ts"' not in up_script
+
+
+def test_up_provisions_readonly_role_after_migration() -> None:
+    """只读角色必须在业务表迁移完成后、测试 seed 前创建并授权。"""
+    source = (Path(__file__).resolve().parents[1] / "target_app_up.py").read_text(encoding="utf-8")
+    assert "ensure_readonly_role" in source
+    assert source.index('"db:migrate"') < source.index("ensure_readonly_role()")
+    assert source.index("ensure_readonly_role()") < source.index("seed()")
+
+
+def test_readonly_role_contract_is_fail_closed(
+    harness: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """本地数据库角色同时具备 SELECT 授权和事务级只读兜底。"""
+    captured: list[list[str]] = []
+
+    def fake_compose(arguments: list[str], **_: Any) -> Any:
+        captured.append(arguments)
+
+        class Result:
+            returncode = 1 if "CREATE TABLE public.argus_readonly_probe" in arguments[-1] else 0
+            stdout = "" if returncode else "t|t|t\n"
+            stderr = (
+                "ERROR: cannot execute CREATE TABLE in a read-only transaction"
+                if returncode
+                else ""
+            )
+
+        return Result()
+
+    monkeypatch.setattr(harness, "compose", fake_compose)
+    harness.ensure_readonly_role()
+    harness.verify_readonly_role()
+
+    provision_sql = captured[0][-1]
+    assert "GRANT SELECT ON ALL TABLES" in provision_sql
+    assert "ALTER DEFAULT PRIVILEGES" in provision_sql
+    assert "default_transaction_read_only = on" in provision_sql
+    assert "NOSUPERUSER" in provision_sql
+    verification_sql = captured[1][-1]
+    assert "default_transaction_read_only" in verification_sql
+    for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"):
+        assert f"'{privilege}'" in verification_sql
+    assert "CREATE TABLE public.argus_readonly_probe" in captured[2][-1]
 
 
 def test_runtime_env_is_private_and_stable(harness: Any, tmp_path: Path) -> None:

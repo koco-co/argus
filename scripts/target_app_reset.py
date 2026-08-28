@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-from _target_app import compose, healthcheck
+from _target_app import compose, ensure_readonly_role, healthcheck
 from target_app_seed import seed
 
 
 def main() -> int:
     compose(["up", "-d", "postgres", "redis", "backend"])
+    ensure_readonly_role()
     seed()
     compose(["up", "-d", "--force-recreate", "storefront"])
     healthcheck(consecutive=2)

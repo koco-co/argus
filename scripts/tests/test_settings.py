@@ -128,10 +128,17 @@ def test_assemble_writes_gitignored_ci_file_without_printing_secrets(
     monkeypatch.setenv("ARGUS_BASE_URL", "http://localhost:9000")
     monkeypatch.setenv("ARGUS_AUTH_USERNAME", "ci-user")
     monkeypatch.setenv("ARGUS_AUTH_PASSWORD", "ci-secret")
+    monkeypatch.setenv(
+        "ARGUS_DB_DSN", "postgresql://argus_readonly:db-secret@localhost:15432/medusa"
+    )
 
     assert settings.main(["assemble", "--env", "ci", "--config-dir", str(config_dir)]) == 0
     output = capsys.readouterr().out
     target = config_dir / "env.ci.yaml"
     assert target.exists()
     assert "ci-secret" not in output
-    assert yaml.safe_load(target.read_text())["auth"]["password"] == "ci-secret"
+    source = target.read_text(encoding="utf-8")
+    assert "只读" in source and "SELECT" in source
+    assert yaml.safe_load(source)["auth"]["password"] == "ci-secret"
+    iteration = _iteration(tmp_path / "iterations" / "api-case", api=True)
+    assert settings.check_path(target, iteration) == []

@@ -194,10 +194,10 @@ def assemble(env_name: str, config_dir: Path) -> Path:
     seed = _read_yaml(target) if target.exists() else {}
     config = EnvConfig.model_validate(apply_environment_overrides(seed))
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        yaml.safe_dump(_plain_document(config), sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    body = yaml.safe_dump(_plain_document(config), sort_keys=False, allow_unicode=True)
+    if config.db is not None:
+        body = "# db.dsn 必须指向仅授予 SELECT 权限的只读角色。\n" + body
+    target.write_text(body, encoding="utf-8")
     target.chmod(0o600)
     return target
 

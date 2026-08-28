@@ -3,7 +3,14 @@
 
 from __future__ import annotations
 
-from _target_app import RUNTIME_ENV, compose, ensure_runtime_env, healthcheck, write_runtime_env
+from _target_app import (
+    RUNTIME_ENV,
+    compose,
+    ensure_readonly_role,
+    ensure_runtime_env,
+    healthcheck,
+    write_runtime_env,
+)
 
 
 def main() -> int:
@@ -24,6 +31,7 @@ def main() -> int:
             "db:migrate",
         ]
     )
+    ensure_readonly_role()
     if runtime["ARGUS_BOOTSTRAPPED"] != "true":
         # Medusa 2.19 的 db:migrate 已执行并登记 starter 的 initial-data-seed；
         # 再次显式执行会重复分配国家，破坏幂等启动。

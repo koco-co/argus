@@ -18,6 +18,9 @@ TARGET_DIR = REPO_ROOT / "target-app"
 LOCK_FILE = TARGET_DIR / "medusa.lock.yaml"
 COMPOSE_FILE = TARGET_DIR / "compose.yaml"
 RUNTIME_ENV = TARGET_DIR / "runtime.env"
+READONLY_DB_USER = "argus_readonly"
+READONLY_DB_PASSWORD = "argus_readonly_local_only"
+READONLY_DB_DSN = f"postgresql://{READONLY_DB_USER}:{READONLY_DB_PASSWORD}@127.0.0.1:15432/medusa"
 
 
 class HarnessError(RuntimeError):
@@ -121,6 +124,134 @@ def compose(
     )
 
 
+def ensure_readonly_role() -> None:
+    """幂等创建靶场只读角色，并同时施加权限与事务级写保护。"""
+    sql = f"""
+DO $argus$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{READONLY_DB_USER}') THEN
+    CREATE ROLE {READONLY_DB_USER} LOGIN PASSWORD '{READONLY_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE {READONLY_DB_USER} WITH LOGIN PASSWORD '{READONLY_DB_PASSWORD}';
+  END IF;
+END
+$argus$;
+ALTER ROLE {READONLY_DB_USER}
+  WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE {READONLY_DB_USER} SET default_transaction_read_only = on;
+GRANT CONNECT ON DATABASE medusa TO {READONLY_DB_USER};
+GRANT USAGE ON SCHEMA public TO {READONLY_DB_USER};
+REVOKE CREATE ON SCHEMA public FROM {READONLY_DB_USER};
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO {READONLY_DB_USER};
+ALTER DEFAULT PRIVILEGES FOR ROLE medusa IN SCHEMA public
+  GRANT SELECT ON TABLES TO {READONLY_DB_USER};
+""".strip()
+    compose(
+        [
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-U",
+            "medusa",
+            "-d",
+            "medusa",
+            "-c",
+            sql,
+        ]
+    )
+
+
+def verify_readonly_role() -> None:
+    """从只读角色自身视角验证 SELECT 能力，并真实证明写入被拒绝。"""
+    sql = """
+SELECT
+  current_setting('default_transaction_read_only') = 'on',
+  COALESCE(bool_and(has_table_privilege(
+    current_user, format('%I.%I', schemaname, tablename), 'SELECT'
+  )), false),
+  COALESCE(NOT bool_or(
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'INSERT') OR
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'UPDATE') OR
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'DELETE') OR
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'TRUNCATE') OR
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'REFERENCES') OR
+    has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'TRIGGER')
+  ), false)
+FROM pg_tables
+WHERE schemaname = 'public';
+""".strip()
+    result = compose(
+        [
+            "exec",
+            "-T",
+            "-e",
+            f"PGPASSWORD={READONLY_DB_PASSWORD}",
+            "postgres",
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-U",
+            READONLY_DB_USER,
+            "-d",
+            "medusa",
+            "-At",
+            "-F",
+            "|",
+            "-c",
+            sql,
+        ],
+        capture_output=True,
+    )
+    verdict = result.stdout.strip()
+    if verdict != "t|t|t":
+        raise HarnessError(f"数据库只读角色验证失败：{verdict or '无结果'}")
+
+    write_probe = compose(
+        [
+            "exec",
+            "-T",
+            "-e",
+            f"PGPASSWORD={READONLY_DB_PASSWORD}",
+            "postgres",
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-U",
+            READONLY_DB_USER,
+            "-d",
+            "medusa",
+            "-c",
+            "CREATE TABLE public.argus_readonly_probe (id integer);",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if write_probe.returncode == 0:
+        compose(
+            [
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-U",
+                "medusa",
+                "-d",
+                "medusa",
+                "-c",
+                "DROP TABLE IF EXISTS public.argus_readonly_probe;",
+            ]
+        )
+        raise HarnessError("数据库只读角色实际创建了表，已清理探针并拒绝继续")
+    diagnostic = f"{write_probe.stdout}\n{write_probe.stderr}".lower()
+    if "read-only transaction" not in diagnostic and "permission denied" not in diagnostic:
+        raise HarnessError("数据库写入探针失败原因不是只读保护")
+
+
 def wait_http(url: str, *, timeout: float = 180.0) -> None:
     """等待单个 URL 可用；超时包含最后一个错误供诊断。"""
     deadline = time.monotonic() + timeout
@@ -146,3 +277,4 @@ def healthcheck(*, consecutive: int = 2) -> None:
         wait_http("http://127.0.0.1:9000/app", timeout=60)
         wait_http("http://127.0.0.1:8000", timeout=120)
         time.sleep(1)
+    verify_readonly_role()

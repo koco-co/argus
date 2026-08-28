@@ -2,6 +2,8 @@
 
 ## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
 
+- 补齐数据库能力边界：靶场迁移后幂等创建 `argus_readonly`，仅授予全表 SELECT，并用 `default_transaction_read_only` 和实际建表拒绝探针双重验证；宿主机只通过 `127.0.0.1:15432` 访问。`settings.py assemble` 在注入数据库 DSN 时保留机械可识别的只读声明，真实 UI/API 本地配置检查均通过且文件权限为 `0600`。
+
 - 固定并容器化 Medusa 2.19.0 开源靶场，提供 build/up/seed/reset/healthcheck/canary/down 生命周期；Admin API 种子覆盖区域与货币、商品库存、配送、手工支付、客户、促销、publishable key，并以私有运行时文件保存凭据。
 - 两次 reset 的种子状态字节一致；实时金丝雀验证 EUR 10.00、ARGUS10 10% 与 EUR 9.00 的派生关系，故意破坏价格时按预期失败；完整 down 后未残留 Argus 容器、网络或卷，重新全新启动通过。
 - 新增 `settings.py` 的 CLI/TEST_ENV/local 优先级、空 YAML 防护、CI 环境变量注入、`check`/`assemble` 命令，以及 `record_approval(stage=environment)` 的强制前置检查；审批摘要继续只记录脱敏结构。

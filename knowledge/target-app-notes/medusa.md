@@ -18,6 +18,7 @@ tags: [medusa, dtc-starter, ui, api, seed]
 - Storefront 服务端渲染通过 Compose 内网 `http://backend:9000` 访问后端；浏览器端使用 `http://localhost:9000`。不得把 Compose 服务名写入浏览器侧测试配置。
 - Admin API 使用 `POST /auth/user/emailpass` 返回的 Bearer token。Store API 不复用管理员 token，而使用 `x-publishable-api-key`；该 key 只保存在 gitignored、权限为 `0600` 的 `target-app/runtime.env`。
 - 本地 PostgreSQL 明确配置 `ssl: false`。这是隔离 Compose 网络的开发边界，也规避 Medusa 对非 localhost 数据库主机误启 SSL 后使迁移等待的问题。
+- PostgreSQL 只在回环地址 `127.0.0.1:15432` 暴露给宿主机。迁移完成后，启动脚本幂等创建 `argus_readonly`：授予 public schema 全表 `SELECT`、撤销建表能力、禁止超级用户/建库/建角色/绕过 RLS，并设置 `default_transaction_read_only=on`。健康检查会从该角色自身视角核对全表可读、零 DML 权限，再真实执行一次建表探针并要求数据库拒绝；探针不会留下对象。
 
 ## 已验证路由与可见状态
 
@@ -72,6 +73,7 @@ make target-app-up
 
 make target-app-healthcheck
 => 靶应用健康检查通过：backend、admin、storefront 连续两次可用
+=> 同一检查内：只读角色权限结果为 true/true/true，真实 CREATE TABLE 探针被只读事务或权限边界拒绝
 
 make target-app-reset  # 连续执行两次并比较 seed-state.yaml
 => 两次均收敛；实体 ID 字节一致
