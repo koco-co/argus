@@ -6,7 +6,7 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 412 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 417 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 需求→测试点→功能用例→POM→两条 Chromium 用例→traceability 完整 | `iterations/test-fixture-ui-e2e/`；`automation/web/` |
@@ -23,14 +23,14 @@
 | Skill 黄金基线 | 四个生成 Skill 各有 1 份版本化冻结输入；10 项代表性 YAML/Python 产物通过 Schema、结构语义或 AST 语义比较，输入/YAML/AST 漂移反向测试均会失败 | `make skill-golden`；`scripts/tests/test_check_skill_golden.py` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 正式 UI 迭代启动提交 `6df174f` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 405 项框架测试与 10 条全栈/靶场测试；另有 static 强制失败、E2E 持续失败和 flaky 对抗证据 | Actions run `33168853788`、`33168853803`、`33167112164`、`33167112680`、`33167439010` |
+| GitHub Actions | 最新提交 `74897fe` 的 SHA 固定 `static-checks` 与 Compose-only `e2e` 均通过；远端实跑 417 项框架测试与 10 条全栈/靶场测试，通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行；另有 static 强制失败、E2E 持续失败和 flaky 对抗证据 | Actions run `33174100956`、`33174100952`、`33167112164`、`33167112680`、`33167439010` |
 
 ## 不可伪造的外部事实
 
 下列条目只能由其真实责任方或真实外部系统产生，agent 不得为追求“全绿”手写或降级：
 
 1. 正式 UI/API iteration 的 M1/M2/M8 approval 必须由用户针对具体工件明确接受，再由 `record_approval.py` 写入。
-2. `config/notify.yaml` 与真实 IM/邮件端点尚未提供；适配器、隔离重试和 CI `always()` 已验证，但“真实频道收到消息”未成立。
+2. `config/notify.yaml`、Actions Secrets 与真实 IM/邮件端点尚未提供；适配器、隔离重试、Secrets 环境变量装配和 CI `always()` 已验证，但“真实频道收到消息”未成立。
 3. PR #1 已转为 Ready，且受保护 `release` 仍要求至少一名非作者人工批准与最后推送后的批准；作者不能批准自己的 PR。
 4. `finalize_merge.py` 需要真实 PR 合并 SHA；合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
