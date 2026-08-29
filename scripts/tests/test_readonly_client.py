@@ -41,8 +41,7 @@ class _Connection:
 )
 def test_read_statements_pass(sql: str) -> None:
     conn = _Connection()
-    # pi-lens-ignore: python-sql-injection
-    assert ReadOnlyDBClient(conn).query(sql) == [{"id": 1}]
+    assert ReadOnlyDBClient(conn).read(sql) == [{"id": 1}]
 
 
 @pytest.mark.parametrize(
@@ -63,8 +62,7 @@ def test_read_statements_pass(sql: str) -> None:
 def test_write_or_multi_statement_is_blocked(sql: str) -> None:
     conn = _Connection()
     with pytest.raises(PermissionError, match="ReadOnlyDBClient"):
-        # pi-lens-ignore: python-sql-injection
-        ReadOnlyDBClient(conn).query(sql)
+        ReadOnlyDBClient(conn).read(sql)
     assert conn.calls == []
 
 

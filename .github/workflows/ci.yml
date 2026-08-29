@@ -43,6 +43,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --group dev
       - run: uv run pre-commit run --all-files
+      - run: uv run python scripts/validate_readme.py --strict
       - run: uv run pytest scripts/tests
       - shell: bash
         run: |

@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-29：补齐 `scripts/validate_readme.py --strict`，将 README 标题、UTF-8 编码、本地链接和仓库越界链接纳入可执行校验；新增 `make validate-readme` 并接入 `make lint`/static-checks，框架测试更新为 481 passed。
+
 - 2026-08-29：启动并完成 Argus `0.2.0` clean-break workspace 基础实现。新增 `packages/argus-core`（Pydantic 控制面模型、最新审批规则、workstream 状态机、POSIX 锁内原子 Store、promotion 事实和中文 CLI）、`packages/argus-plugin-sdk`（严格二选一 source envelope、凭据序列化隔离、SSRF/大小/超时边界、显式注册表、GitHub Issues/OpenAPI 参考连接器）和 `adapters/medusa`（Web/API 路由及非秘密配置）。新增静态 Schema、registry、0.2 架构/PRD/数据模型和 ADR-013；四个 workspace 包可独立构建，未实现 Agent/LLM Runtime、Skill 执行或 v1 迁移。新增 16 项核心/SDK/适配器回归后框架测试为 479 passed；未将 mock、fixture、零渠道日志或本地判断冒充真实外部通知、review、protected merge 或 SHA。
 
 - 2026-08-29：修复 Medusa 结算下单后的服务端重定向/流式渲染时序：`CheckoutPage.place_order()` 在点击下单后先等待确认路由，再等待既有精确成功标题；未改动冻结断言、需求或测试点。PR #9 已由 GitHub 真实合并到 `main`（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`），其 e2e run `33236374652` 通过并分类 `normal`；合并后 main 手工 run `33236596449` 为 `38 passed in 82.15s`、分类 `normal`，证据已上传且靶应用已清理。随后 PR #10 文档更新真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。

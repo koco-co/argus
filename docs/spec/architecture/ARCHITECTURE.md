@@ -135,6 +135,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── schemas/                     # ⭐ exemptions / iteration / traceability / run_summary schemas (DATA_MODEL §2.1,3,8,9)
 │   ├── validate_schema.py
 │   ├── validate_iteration.py        # ⭐ state-transition legality + staleness (hash chain) checks
+│   ├── validate_readme.py           # ⭐ strict README headings and local-link validation
 │   ├── render_md.py
 │   ├── export_xmind.py
 │   ├── export_xlsx.py

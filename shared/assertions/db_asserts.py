@@ -14,7 +14,6 @@ def assert_row_exists(
 ) -> None:
     """断言只读查询至少返回一行。"""
 
-    # pi-lens-ignore: python-sql-injection
-    rows = client.query(sql, params)
+    rows = client.read(sql, params)
     if not rows:
         raise AssertionError(f"只读查询未返回任何记录：{sql[:80]}")

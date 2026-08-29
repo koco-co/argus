@@ -5,7 +5,7 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint skill-golden \
+.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint skill-golden \
 	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
 	target-app-down
 
@@ -20,13 +20,12 @@ new-iteration:
 validate-iteration:
 	uv run python scripts/validate_schema.py iterations/$(ID)
 
+validate-readme:
+	uv run python scripts/validate_readme.py --strict
+
 export:
-	@if [ -f iterations/$(ID)/functional-cases.yaml ]; then \
-		uv run python scripts/export_xmind.py iterations/$(ID); \
-	fi
-	@if [ -f iterations/$(ID)/api/cases.yaml ]; then \
-		uv run python scripts/export_xlsx.py iterations/$(ID); \
-	fi
+	@if [ -f iterations/$(ID)/functional-cases.yaml ]; then uv run python scripts/export_xmind.py iterations/$(ID); fi
+	@if [ -f iterations/$(ID)/api/cases.yaml ]; then uv run python scripts/export_xlsx.py iterations/$(ID); fi
 	uv run python scripts/render_md.py iterations/$(ID)
 
 web-tests:
@@ -39,6 +38,7 @@ lint:
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run pyright
+	uv run python scripts/validate_readme.py --strict
 
 skill-golden:
 	@for manifest in .agents/skills/*/versions/baselines/*/manifest.yaml; do \

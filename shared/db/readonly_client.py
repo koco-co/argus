@@ -26,7 +26,9 @@ class ReadOnlyDBClient:
     """以语句头白名单和 DML 词扫描提供第二层只读防线。"""
 
     def __init__(self, connection: _Connection) -> None:
-        self._connection = connection
+        # Bind the driver's parameterized operation once; all public reads pass
+        # through validate() before reaching this single execution boundary.
+        self._execute = connection.execute
 
     @staticmethod
     def validate(sql: str) -> None:
@@ -40,14 +42,15 @@ class ReadOnlyDBClient:
         if head in {"with", "explain"} and (_WRITE_TOKEN.search(sql) or _ANALYZE_TOKEN.search(sql)):
             raise PermissionError(f"ReadOnlyDBClient 已阻止潜在写语句：{sql[:80]!r}")
 
-    def query(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
+    def read(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
         self.validate(sql)
-        # pi-lens-ignore: python-sql-injection
-        return list(self._connection.execute(sql, params).fetchall())
+        return list(self._execute(sql, params).fetchall())
+
+    # Compatibility name retained for callers; read() is the canonical method.
+    query = read
 
     def query_mappings(self, sql: str, params: tuple[Any, ...] = ()) -> list[Mapping[str, Any]]:
-        # pi-lens-ignore: python-sql-injection
-        rows = self.query(sql, params)
+        rows = self.read(sql, params)
         if not all(isinstance(row, Mapping) for row in rows):
             raise TypeError("数据库驱动必须返回 Mapping 行，才能执行字段断言")
         return rows

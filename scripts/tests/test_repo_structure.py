@@ -258,6 +258,7 @@ EXPECTED_FILES: set[str] = {
     "scripts/schemas/iteration.schema.json",
     "scripts/validate_schema.py",
     "scripts/validate_iteration.py",
+    "scripts/validate_readme.py",
     "scripts/check_db_readonly.py",
     "scripts/check_secrets.py",
     "scripts/check_skill_golden.py",
@@ -326,6 +327,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         # (validate_schema.py is real since 1.2).
         "validate_schema.py",
         "validate_iteration.py",
+        "validate_readme.py",
         "check_db_readonly.py",
         "check_secrets.py",
         "check_skill_golden.py",
@@ -423,6 +425,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_docs_schemas.py",
         "test_schema_validator.py",
         "test_validate_iteration.py",
+        "test_validate_readme.py",
         "test_render_md.py",
         "test_export_xmind.py",
         "test_export_xlsx.py",
