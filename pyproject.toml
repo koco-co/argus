@@ -28,7 +28,7 @@ mobile = [
     "appium-python-client>=6.0.0",
 ]
 perf = [
-    "locust>=2.29",
+    "locust>=2.46.4",
 ]
 
 [tool.pytest.ini_options]
