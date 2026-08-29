@@ -45,6 +45,21 @@ def _load_yaml(path: Path, *, label: str, report: Report) -> Any | None:
         return None
 
 
+def _confined_file(root: Path, relative: Path, *, label: str, report: Report) -> Path | None:
+    """解析基线/输出文件并拒绝经符号链接逃出所属根目录。"""
+    root_resolved = root.resolve()
+    candidate = root_resolved / relative
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        report.problems.append(f"{label} 不存在或无法解析：{relative.as_posix()}（{exc}）")
+        return None
+    if resolved != root_resolved and root_resolved not in resolved.parents:
+        report.problems.append(f"{label} 不得通过符号链接越出目录：{relative.as_posix()}")
+        return None
+    return resolved
+
+
 def _verify_inputs(baseline_dir: Path, entries: object, report: Report) -> None:
     if not isinstance(entries, list) or not entries:
         report.problems.append("manifest.inputs 必须至少包含一份冻结输入")
@@ -59,9 +74,15 @@ def _verify_inputs(baseline_dir: Path, entries: object, report: Report) -> None:
         expected_hash = entry.get("sha256")
         if relative is None:
             continue
-        path = baseline_dir / relative
-        if not path.is_file():
-            report.problems.append(f"冻结输入不存在：{relative.as_posix()}")
+        path = _confined_file(
+            baseline_dir,
+            relative,
+            label="冻结输入",
+            report=report,
+        )
+        if path is None or not path.is_file():
+            if path is not None:
+                report.problems.append(f"冻结输入不存在：{relative.as_posix()}")
             continue
         actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
         if not isinstance(expected_hash, str) or actual_hash != expected_hash:
@@ -80,7 +101,14 @@ def _validate_schema(
     )
     if schema_relative is None:
         return
-    schema_path = REPO_ROOT / schema_relative
+    schema_path = _confined_file(
+        REPO_ROOT,
+        schema_relative,
+        label="Schema",
+        report=report,
+    )
+    if schema_path is None:
+        return
     schema = _load_yaml(schema_path, label=f"Schema {schema_relative.as_posix()}", report=report)
     if schema is None:
         return
@@ -282,13 +310,25 @@ def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
             continue
         if relative is None:
             continue
-        expected_path = baseline_dir / "expected" / relative
-        actual_path = actual_root / relative
-        if not expected_path.is_file():
-            report.problems.append(f"黄金产物不存在：{relative.as_posix()}")
+        expected_path = _confined_file(
+            baseline_dir / "expected",
+            relative,
+            label="黄金产物",
+            report=report,
+        )
+        actual_path = _confined_file(
+            actual_root,
+            relative,
+            label="再生成产物",
+            report=report,
+        )
+        if expected_path is None or not expected_path.is_file():
+            if expected_path is not None:
+                report.problems.append(f"黄金产物不存在：{relative.as_posix()}")
             continue
-        if not actual_path.is_file():
-            report.problems.append(f"再生成产物不存在：{relative.as_posix()}")
+        if actual_path is None or not actual_path.is_file():
+            if actual_path is not None:
+                report.problems.append(f"再生成产物不存在：{relative.as_posix()}")
             continue
         if comparison == "yaml":
             _compare_yaml(

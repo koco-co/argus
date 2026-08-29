@@ -6,7 +6,9 @@ import re
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-_STATEMENT_VERBS = {"select", "with", "explain", "show", "describe", "table", "pragma"}
+# 项目只支持 PostgreSQL；不要把 SQLite 的 PRAGMA 或其他方言的
+# DESCRIBE 当成只读语句放行，真实能力边界仍由数据库只读角色提供。
+_STATEMENT_VERBS = {"select", "with", "explain", "show", "table"}
 _WRITE_TOKEN = re.compile(r"\b(?:insert|update|delete|merge|copy)\b", re.IGNORECASE)
 _ANALYZE_TOKEN = re.compile(r"\banalyze\b", re.IGNORECASE)
 _MULTI_STATEMENT = re.compile(r";\s*\S", re.DOTALL)
@@ -40,9 +42,11 @@ class ReadOnlyDBClient:
 
     def query(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
         self.validate(sql)
+        # pi-lens-ignore: python-sql-injection
         return list(self._connection.execute(sql, params).fetchall())
 
     def query_mappings(self, sql: str, params: tuple[Any, ...] = ()) -> list[Mapping[str, Any]]:
+        # pi-lens-ignore: python-sql-injection
         rows = self.query(sql, params)
         if not all(isinstance(row, Mapping) for row in rows):
             raise TypeError("数据库驱动必须返回 Mapping 行，才能执行字段断言")

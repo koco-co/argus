@@ -165,7 +165,7 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── target_app_up.py / target_app_seed.py / target_app_reset.py / target_app_healthcheck.py / target_app_canary.py / target_app_down.py   # ⭐ pinned harness (ADR-002; policy in TESTING_STRATEGY)
 │   └── tests/                       # ⭐ pytest suites + fixtures validating all scripts above
 │       └── fixtures/                # incl. a checked-in hand-written sample iteration
-├── .github/workflows/{ci.yml,regression.yml}
+├── .github/workflows/{ci.yml,regression.yml,trusted-notifications.yml}
 ├── pyproject.toml, uv.lock, .python-version
 ├── .pre-commit-config.yaml, Makefile, .gitignore
 └── docs/                            # development documentation set (see AGENT_BRIEF index)
@@ -242,6 +242,7 @@ class ReadOnlyDBClient:
 Design change vs v1.0: the denylist regex scanned the whole statement and false-blocked legitimate reads containing words like `'INSERT'` inside string literals; an allow-list on the statement's leading keyword fixes the common false positive without a SQL-parser dependency. Multi-statement strings (e.g. `"SELECT 1; DROP TABLE x"`) are rejected outright by refusing any `;` followed by non-whitespace. Known sharp edge (kept deliberately): the token scan over `WITH`/`EXPLAIN` statements is substring-based and therefore *over*-blocks reads whose literals merely mention write words — acceptable because the DB role is authoritative anyway, failing closed beats parsing SQL, and an implementation may refine it with a real tokenizer as long as every data-modifying-CTE fixture still fails (Roadmap 5.2). The connection object comes from a driver chosen per target app (Medusa ⇒ PostgreSQL, e.g. psycopg) — v1.0's `import httpx` comment was a placeholder error.
 
 **Layer 3 — static scans.**
+
 - Pre-commit: `check_db_readonly.py` scans `shared/db/**` for write verbs appearing as executable code identifiers; uses the unified denylist (`INSERT UPDATE DELETE MERGE REPLACE UPSERT CALL EXEC COPY GRANT ALTER DROP TRUNCATE CREATE`), implemented over AST tokens so string/comment literals don't trip it; explicit escape hatch only via reviewed `# db-write-ok: <reason>` (used solely by the checker's own unit tests).
 - CI additionally scans `automation/` + `shared/assertions/`: **any direct import of DB drivers** (`psycopg`, `pymysql`, `sqlite3`, …) fails, ensuring every query flows through the wrapper. Scope now matches everywhere (v1.0 said `shared/db/` in one place and whole-tree elsewhere).
 
@@ -280,7 +281,7 @@ Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only)
 
 **prod protection is layered** (`check_prod_scope.py` + conftest + DB role): when `TEST_ENV=prod`, root `automation/conftest.py` implements `pytest_collection_modifyitems` to deselect every item lacking `@pytest.mark.read_only`; on top of collection gating, `scripts/check_prod_scope.py` statically audits read-only-marked tests for write-shaped client/page calls (configurable method denylist) before a prod run is assembled. Honest scoping: the marker is classification metadata that generation self-reports, so these code layers are defense-in-depth *around* the real boundaries — the SELECT-only DB role and host-side network/tenant controls. Combined they catch misconfiguration; no single layer is trusted alone.
 
-**Approval provenance**: `scripts/record_approval.py` is the only regular writer of `approvals[]`; `scripts/record_delegation.py` is the only writer of the structured, time-bounded user grant and may perform a one-time binding migration for legacy delegated rows. Explicit user decisions retain `actor: user`. A delegated review must carry `action: delegated`, `actor: agent`, `delegation_id`, a non-empty note, and the current artifact digest; the validator recomputes the delegation basis hash and checks its scope, issuer, window, and approval timestamp. Delegated records are limited to repository artifacts and local execution; they never assert real notification delivery, non-author review, protected-branch merge, or a merge SHA.
+**Approval provenance**: `scripts/record_approval.py` is the only regular writer of `approvals[]`; `scripts/record_delegation.py` is the only writer of the structured, time-bounded user grant and may perform a one-time binding migration for legacy delegated rows. Explicit user decisions retain `actor: user`; M1 `requirements` acceptance is always explicit user-only and is excluded from delegation scopes. A delegated review for later repository stages must carry `action: delegated`, `actor: agent`, `delegation_id`, a non-empty note, and the current artifact digest; the validator recomputes the delegation basis hash and checks its scope, issuer, window, and approval timestamp. Delegated records are limited to repository artifacts and local execution; they never assert real notification delivery, non-author review, protected-branch merge, or a merge SHA.
 
 ### 7.2 Notification
 
@@ -295,10 +296,11 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 
 ## 8. CI Shape (summary; task details in Roadmap Phase 7)
 
-Two jobs, deliberately split because their prerequisites differ:
+Three workflow responsibilities are deliberately split because their trust and prerequisites differ:
 
-- **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, orphan-test closure, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app and runs on every PR.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci-auto` (sole summary writer on CI — scans eligible iterations, reads JUnit, writes `scope: full` with one attempt), uploads `reports/` 与各 iteration 的 run 证据（重型日志/trace 仅作为 artifact，规则见 ADR-012），and notifies under `always()`. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** executes the full suite against `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
+- **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, orphan-test closure, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app, runs on every PR, and has no notification Secret or write permission.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci-auto` (sole summary writer on CI — scans eligible iterations, reads JUnit, writes `scope: full` with one attempt), uploads `reports/` 与各 iteration 的 run 证据（重型日志/trace 仅作为 artifact，规则见 ADR-012），and uploads only an allowlisted notification classification. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** explicitly checks out and executes `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
+- **trusted-notifications**: is triggered by completed `static-checks`/`e2e` runs, checks out the repository default branch rather than `workflow_run.head_sha`, validates the small e2e classification against an allowlist, and only then reads notification Secrets. Its separate weekly job is the sole `issues: write` holder and passes the source e2e run id to the escalation script. Thus PR-controlled jobs can execute tests but cannot use notification credentials or issue-writing authority.
 - **Flake policy (CI-side, distinct from the in-test retry ban)**: a failed e2e job is re-run once automatically; a retry-pass marks the notification as `flaky-suspect` (single category, never counted green, never blocks merge on its own); the same nodeid appearing flaky-suspect repeatedly is recorded to `knowledge/patterns.md` via the M12 channel and triggers a repair-or-escalate decision. Full quarantine workflows stay post-v1 (Deferred).
 
 Workflow-hardening contract (GitHub's own guidance): third-party actions are pinned to **full commit SHAs** (`<sha> # vX.Y` comments; Dependabot keeps them current), top-level `permissions` default to none with per-job opt-in, every job sets `timeout-minutes`, and PR workflows share a concurrency group that cancels superseded runs.
@@ -307,10 +309,10 @@ CI trigger and notification contract:
 
 | PR context | static-checks | e2e | notification |
 | --- | --- | --- | --- |
-| Any PR | required | — | static-checks result under `always()` |
-| PR targeting `release` | required | required | static-checks and e2e under `always()` |
-| Other PR changing `automation/**` or `iterations/**` | required | required | static-checks and e2e under `always()` |
-| Other PR with no automation/iteration change | required | not run | static-checks under `always()` |
+| Any PR | required | — | trusted workflow receives completed result |
+| PR targeting `release` | required | required | trusted workflow receives both completed results |
+| Other PR changing `automation/**` or `iterations/**` | required | required | trusted workflow receives both completed results |
+| Other PR with no automation/iteration change | required | not run | trusted workflow receives static-checks result |
 
 ---
 
@@ -334,8 +336,8 @@ CI trigger and notification contract:
 CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
 
 ```yaml
-# .github/workflows/ci.yml — static checks, every PR, no target app needed
-# (regression.yml additionally carries `on: schedule:` — weekly full run against release HEAD)
+# .github/workflows/ci.yml — static checks, every PR, no target app or notification Secret
+# (regression.yml additionally carries `on: schedule:` — explicitly checks out release HEAD)
 permissions: {}                        # minimal by default; jobs opt in explicitly
 concurrency:
   group: ci-${{ github.ref }}
@@ -354,10 +356,6 @@ jobs:
                                                   # includes schema-block and patch-scope fixtures
       - run: uv run python scripts/check_coverage.py --tier from-iteration --changed-base "$ARGUS_BASE_SHA"
                                                   # PR 仅检查变更 iteration；自动化/共享门禁变化检查全部
-      - if: always()
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job static-checks
-
 # .github/workflows/regression.yml — e2e for release PRs or automation/iteration changes
 # Target-app provisioning is compose-only; target_app_up.py owns the full stack.
 # workflow_dispatch 可选择 normal/force_failure/force_flaky，验收失败通知与单次重跑分类。
@@ -383,6 +381,10 @@ jobs:
       - run: TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml
       - run: uv run python scripts/self_debug_helper.py record-ci-auto --junit reports/junit.xml --env ci
       # 首次失败只复跑一次；复跑转绿时 job 依据复跑结果放行，但通知分类保持 flaky-suspect
+      - if: always() && steps.regression.outputs.classification != ''
+        run: printf '%s\n' "$ARGUS_CLASSIFICATION" > reports/notification/classification
+        env:
+          ARGUS_CLASSIFICATION: ${{ steps.regression.outputs.classification }}
       - if: always()
         uses: actions/upload-artifact@<full-sha>   # v7（Node 24）
         with:
@@ -391,8 +393,8 @@ jobs:
             reports/
             iterations/*/runs/
       - if: always()
-        continue-on-error: true
-        run: uv run python scripts/notify.py --summary auto   # resolves newest iterations/<id>/runs/<run-id>/run-summary.yaml
-      - if: always()
         run: uv run python scripts/target_app_down.py
+
+# .github/workflows/trusted-notifications.yml — workflow_run, default-branch code only
+# notification Secret 仅在此处，weekly-escalation job 才声明 issues: write。
 ```

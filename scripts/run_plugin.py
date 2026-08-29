@@ -250,7 +250,12 @@ def persist_then_validate(envelope: Any, path: Path) -> list[str]:
     else:
         with path.open("xb") as stream:
             stream.write(encoded)
-    return validate_one(path, DEFAULT_REGISTRY)
+    failures = validate_one(path, DEFAULT_REGISTRY)
+    # Schema 已表达互斥变体；这里保留语义门禁，避免未来换用旧注册表或
+    # validator 实现时把缺少 content/error 的空信封误报为成功。
+    if isinstance(envelope, dict) and ("content" in envelope) == ("error" in envelope):
+        failures.append("来源信封必须且只能包含 content 或 error 其中之一")
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,7 +281,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.payload is not None:
             envelope = read_payload(args.payload)
         else:
-            assert entry is not None
+            if entry is None:
+                raise PluginError("插件抓取未解析出注册项")
             envelope = fetch_envelope(entry, args.source_ref)
         failures = persist_then_validate(envelope, path)
         if (

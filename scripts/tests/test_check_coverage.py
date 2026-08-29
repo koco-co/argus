@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import FIXTURES_DIR as FIXTURE_DIR
 from conftest import _load_script
@@ -190,6 +190,63 @@ def ui_iteration(tmp_path: Path) -> Path:
 def test_ui_fully_covered_passes(coverage: Any, ui_iteration: Path) -> None:
     assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 0
     assert coverage.main([str(ui_iteration), "--tier", "t-c"]) == 0
+
+
+def test_duplicate_test_point_ids_are_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    path = ui_iteration / "test_points.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("test_point_id: T0002", "test_point_id: T0001"),
+        encoding="utf-8",
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 1
+    assert "duplicate test point id: T0001" in capsys.readouterr().out
+
+
+def test_duplicate_functional_case_ids_are_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    _cases(
+        ui_iteration,
+        "2026-08-cov",
+        [("C0001", "checkout", ("T0001",)), ("C0001", "orders", ("T0002",))],
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "t-c"]) == 1
+    assert "duplicate functional case id: C0001" in capsys.readouterr().out
+
+
+def test_duplicate_api_case_ids_are_reported(coverage: Any, tmp_path: Path, capsys: Any) -> None:
+    root = tmp_path / "iterations" / "2026-08-cov"
+    _requirements(root, "2026-08-cov", ("R0001", "R0002"))
+    _api_cases(root, "2026-08-cov", {"A0001": ("R0001",), "A0002": ("R0002",)})
+    path = root / "api/cases.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("api_case_id: A0002", "api_case_id: A0001"),
+        encoding="utf-8",
+    )
+    assert coverage.main([str(root), "--tier", "r-a"]) == 1
+    assert "duplicate API case id: A0001" in capsys.readouterr().out
+
+
+def test_exemption_for_unknown_requirement_is_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    _write(
+        ui_iteration / "exemptions.yaml",
+        'schema_version: "1.0"\n'
+        "iteration_id: 2026-08-cov\n"
+        "status: accepted\n"
+        "generated_from:\n"
+        "  artifact: iterations/2026-08-cov/requirements.yaml\n"
+        f"  sha256: {SHA}\n"
+        "exemptions:\n"
+        "  - requirement_id: R9999\n"
+        "    kind: not_testable\n"
+        "    reason: No such requirement.\n",
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 1
+    assert "exemption cites unknown requirement R9999" in capsys.readouterr().out
 
 
 def test_ui_requirement_gap_fails_with_branch_message(

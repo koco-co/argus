@@ -4,7 +4,7 @@ Prerequisites, initialization steps, and every operational command the framework
 
 ## Prerequisites
 
-最近真实自检见 [2026-08-28 Step 0 证据](../status/STEP0_CHECK_2026-08-28.md)：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。真实 webhook 尚无验证证据；按用户最新要求，该缺项在 Phase 7 首个实际依赖它的 DoD 前列为非阻塞待办，不提前阻塞开发。本次自检不等于靶应用启动、生成测试、M8 配置、通知送达或最终验收通过，也不改变下表历史命令状态。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
+最近真实自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。真实 webhook 尚无验证证据；按用户最新要求，该缺项在 Phase 7 首个实际依赖它的 DoD 前列为非阻塞待办，不提前阻塞开发。本次自检不等于靶应用启动、生成测试、M8 配置、通知送达或最终验收通过，也不改变下表历史命令状态。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
 
 | Requirement | Version / note | Why |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Prerequisites, initialization steps, and every operational command the framework
 | Playwright browsers | **Chromium only** (v1 decision; Firefox/WebKit installs are not performed) | single validated browser matrix |
 | Network access to PyPI + GitHub Actions runners | build time only | dependency sync, CI |
 
-Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. `base_url` 是浏览器站点地址；组合 UI/API 执行时可用 `api_base_url` 指定独立后端地址。**CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys（包括 `ARGUS_BASE_URL` 与可选 `ARGUS_API_BASE_URL`）, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process。通知器同样不在 CI 落盘秘密：工作流把 `ARGUS_NOTIFY_DINGTALK_WEBHOOK`、`ARGUS_NOTIFY_FEISHU_WEBHOOK`、`ARGUS_NOTIFY_WECOM_WEBHOOK` 或完整的 `ARGUS_NOTIFY_EMAIL_SMTP_HOST` / `ARGUS_NOTIFY_EMAIL_SMTP_PORT` / `ARGUS_NOTIFY_EMAIL_USERNAME` / `ARGUS_NOTIFY_EMAIL_PASSWORD` / `ARGUS_NOTIFY_EMAIL_TO` 映射给 dispatcher；多个邮件收件人以逗号分隔，空值表示该渠道未启用。
+Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. `base_url` 是浏览器站点地址；组合 UI/API 执行时可用 `api_base_url` 指定独立后端地址。**CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys（包括 `ARGUS_BASE_URL` 与可选 `ARGUS_API_BASE_URL`）, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process。PR/定时测试工作流不接触通知秘密或 `issues: write`；仅可信 `trusted-notifications.yml`（固定 checkout 默认分支）将 `ARGUS_NOTIFY_DINGTALK_WEBHOOK`、`ARGUS_NOTIFY_FEISHU_WEBHOOK`、`ARGUS_NOTIFY_WECOM_WEBHOOK` 或完整的 `ARGUS_NOTIFY_EMAIL_SMTP_HOST` / `ARGUS_NOTIFY_EMAIL_SMTP_PORT` / `ARGUS_NOTIFY_EMAIL_USERNAME` / `ARGUS_NOTIFY_EMAIL_PASSWORD` / `ARGUS_NOTIFY_EMAIL_TO` 映射给 dispatcher；多个邮件收件人以逗号分隔，空值表示该渠道未启用。
 
 ## Planned Base Configuration (authored in Phase 0)
 
@@ -55,7 +55,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation；格式检查直接扫描工作树，包含尚未被 Git 跟踪的新 Python 文件 | 已运行 2026-08-28（ruff lint、ruff format check 与 pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-28（412 项；含批准主体、产物摘要完整性与写前门禁、正式 iteration 与永久夹具并存、Skill 黄金基线、未跟踪文件格式门禁、CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核（479 项；含批准主体、产物摘要完整性与写前门禁、正式 iteration 与永久夹具并存、Skill 黄金基线、未跟踪文件格式门禁、CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级，以及 0.2 core/SDK/adapter 契约） |
 | Skill 黄金基线 | root | `make skill-golden` | 四个生成 Skill 的冻结输入 SHA、YAML Schema/结构语义与 Python AST 语义全部匹配 | 已运行 2026-08-28（4 份 1.0.0 baseline、10 项代表性产物通过；输入漂移、YAML 语义漂移和 Python AST 漂移反向测试通过） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |

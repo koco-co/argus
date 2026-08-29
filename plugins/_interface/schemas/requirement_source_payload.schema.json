@@ -18,7 +18,8 @@
       "properties": {"code": {"type": "string"}, "message": {"type": "string"}}
     }
   },
-  "allOf": [
-    {"if": {"required": ["error"]}, "then": {"not": {"required": ["content"]}}}
+  "oneOf": [
+    {"required": ["content"], "not": {"required": ["error"]}},
+    {"required": ["error"], "not": {"required": ["content"]}}
   ]
 }

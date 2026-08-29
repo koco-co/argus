@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 
 from shared.assertions.db_asserts import assert_row_exists
 from shared.db.readonly_client import ReadOnlyDBClient
@@ -41,6 +41,7 @@ class _Connection:
 )
 def test_read_statements_pass(sql: str) -> None:
     conn = _Connection()
+    # pi-lens-ignore: python-sql-injection
     assert ReadOnlyDBClient(conn).query(sql) == [{"id": 1}]
 
 
@@ -55,11 +56,14 @@ def test_read_statements_pass(sql: str) -> None:
         "WITH x AS (DELETE FROM products RETURNING *) SELECT * FROM x",
         "EXPLAIN ANALYZE UPDATE products SET title='x'",
         "EXPLAIN (ANALYZE true) DELETE FROM products",
+        "PRAGMA table_info(products)",
+        "DESCRIBE products",
     ],
 )
 def test_write_or_multi_statement_is_blocked(sql: str) -> None:
     conn = _Connection()
     with pytest.raises(PermissionError, match="ReadOnlyDBClient"):
+        # pi-lens-ignore: python-sql-injection
         ReadOnlyDBClient(conn).query(sql)
     assert conn.calls == []
 

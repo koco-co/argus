@@ -17,9 +17,18 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no fcntl
+    fcntl = None
 
 import yaml
 from _registry_lib import binding_for_path, schema_errors
@@ -34,8 +43,8 @@ APPROVAL_STAGES = (
 )
 APPROVAL_ACTIONS = ("accepted", "rejected", "provided", "approved", "delegated")
 ACTORS = ("agent", "script", "user")
+# M1 是产品需求确认，不能由持续代理授权替代；授权从 M2 的产物审查开始。
 DELEGATION_SCOPES = (
-    "requirements",
     "exemptions",
     "test_points",
     "environment",
@@ -44,9 +53,56 @@ DELEGATION_SCOPES = (
     "lifecycle_reopen",
 )
 
+# 批准必须在对应阶段的当前状态中写入，避免把未来阶段的决定提前落盘。
+_APPROVAL_STATES: dict[str, frozenset[str]] = {
+    "requirements": frozenset({"requirements_clarifying"}),
+    # UI 在 test_points_review 产出豁免，API 在 requirements_accepted 后先完成映射。
+    "exemptions": frozenset({"requirements_accepted", "test_points_review"}),
+    "test_points": frozenset({"test_points_review"}),
+    "environment": frozenset({"env_pending"}),
+    "acceptance": frozenset({"acceptance_pending"}),
+    # Skill 优化发生在执行终态之后，不属于全局状态迁移门禁。
+    "skill_change": frozenset(
+        {
+            "execution_passed",
+            "execution_budget_exceeded",
+            "escalated",
+            "acceptance_pending",
+            "accepted",
+            "merged",
+        }
+    ),
+}
+_APPROVAL_ACTIONS: dict[str, frozenset[str]] = {
+    "requirements": frozenset({"accepted", "rejected"}),
+    "exemptions": frozenset({"accepted", "rejected", "delegated"}),
+    "test_points": frozenset({"accepted", "rejected", "delegated"}),
+    "environment": frozenset({"provided", "rejected", "delegated"}),
+    "acceptance": frozenset({"accepted", "rejected", "delegated"}),
+    "skill_change": frozenset({"approved", "rejected", "delegated"}),
+}
+
 
 class WriterError(Exception):
     """User-facing refusal to write."""
+
+
+@contextmanager
+def iteration_lock(iteration_yaml: Path) -> Iterator[None]:
+    """在跨进程稳定锁文件上串行化 iteration 的读改写事务。"""
+    lock_path = iteration_yaml.with_name(f".{iteration_yaml.name}.lock")
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError as exc:
+        raise WriterError(f"无法创建 iteration 锁：{lock_path}") from exc
+    with os.fdopen(descriptor, "a+", encoding="utf-8") as lock:
+        if fcntl is not None:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def _now() -> str:
@@ -152,7 +208,7 @@ def validate_document(
         )
 
 
-def write_iteration(
+def _write_iteration_unlocked(
     iteration_yaml: Path, document: dict[str, Any], *, check_lifecycle: bool = True
 ) -> None:
     if check_lifecycle:
@@ -165,12 +221,42 @@ def write_iteration(
         if errors:
             raise WriterError("iteration.yaml is invalid: " + "; ".join(errors))
     document["updated_at"] = _now()
-    iteration_yaml.write_text(
-        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    encoded = yaml.safe_dump(document, sort_keys=False, allow_unicode=True).encode("utf-8")
+    original_mode = iteration_yaml.stat().st_mode & 0o777 if iteration_yaml.exists() else 0o644
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{iteration_yaml.name}.", suffix=".tmp", dir=iteration_yaml.parent
     )
+    temporary_path = Path(temporary_name)
+    try:
+        os.chmod(temporary_path, original_mode)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, iteration_yaml)
+        try:
+            directory_descriptor = os.open(iteration_yaml.parent, os.O_RDONLY)
+        except OSError:
+            # 某些平台不允许打开目录；文件替换本身仍已完成。
+            return
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    except OSError as exc:
+        temporary_path.unlink(missing_ok=True)
+        raise WriterError(f"无法原子写入 {iteration_yaml}") from exc
 
 
-def record_event(
+def write_iteration(
+    iteration_yaml: Path, document: dict[str, Any], *, check_lifecycle: bool = True
+) -> None:
+    """对外保留的写入入口；校验和原子替换都在 iteration 锁内完成。"""
+    with iteration_lock(iteration_yaml):
+        _write_iteration_unlocked(iteration_yaml, document, check_lifecycle=check_lifecycle)
+
+
+def _record_event_unlocked(
     iteration_dir: Path,
     from_state: str,
     to_state: str,
@@ -180,6 +266,8 @@ def record_event(
     pr_number: int | None = None,
     mark_downstream_stale: bool = False,
     delegation_id: str | None = None,
+    *,
+    allow_merge: bool = False,
 ) -> dict[str, Any]:
     from validate_iteration import approval_gate_violations, legal_transition
 
@@ -190,6 +278,8 @@ def record_event(
         allow_terminal_acceptance_repair=mark_downstream_stale
         and to_state == "requirements_clarifying",
     )
+    if to_state == "merged" and not allow_merge:
+        raise WriterError("merged 只能由 finalize_merge.py 在合并事实核验后写入")
     if document["state"] != from_state:
         raise WriterError(
             f"stale transition request: iteration state is {document['state']!r}, "
@@ -255,11 +345,39 @@ def record_event(
         document["blocked_reason"] = reason
     if from_state == "blocked":
         document["blocked_reason"] = None
-    write_iteration(iteration_yaml, document)
+    _write_iteration_unlocked(iteration_yaml, document)
     return document
 
 
-def record_approval(
+def record_event(
+    iteration_dir: Path,
+    from_state: str,
+    to_state: str,
+    triggered_by: str,
+    reason: str | None = None,
+    merge_sha: str | None = None,
+    pr_number: int | None = None,
+    mark_downstream_stale: bool = False,
+    delegation_id: str | None = None,
+    *,
+    allow_merge: bool = False,
+) -> dict[str, Any]:
+    with iteration_lock(iteration_dir / "iteration.yaml"):
+        return _record_event_unlocked(
+            iteration_dir,
+            from_state,
+            to_state,
+            triggered_by,
+            reason,
+            merge_sha,
+            pr_number,
+            mark_downstream_stale,
+            delegation_id,
+            allow_merge=allow_merge,
+        )
+
+
+def _record_approval_unlocked(
     iteration_dir: Path,
     stage: str,
     action: str,
@@ -268,6 +386,18 @@ def record_approval(
     delegation_id: str | None = None,
 ) -> dict[str, Any]:
     iteration_yaml, document = load_iteration(iteration_dir)
+    if stage == "requirements" and action == "delegated":
+        raise WriterError("requirements acceptance cannot be delegated; it requires actor=user")
+    allowed_actions = _APPROVAL_ACTIONS.get(stage)
+    if allowed_actions is None or action not in allowed_actions:
+        raise WriterError(f"stage={stage} 不允许 action={action}")
+    allowed_states = _APPROVAL_STATES.get(stage)
+    if allowed_states is None or document.get("state") not in allowed_states:
+        expected = ", ".join(sorted(allowed_states or ()))
+        raise WriterError(
+            f"stage={stage} 只能在当前阶段写入；当前 state={document.get('state')!r}，"
+            f"允许状态：{expected}"
+        )
     if action == "delegated" and not (note or "").strip():
         raise WriterError("delegated approval requires a non-empty --note with authorization basis")
     if action == "delegated":
@@ -296,11 +426,25 @@ def record_approval(
     if delegation_id:
         approval["delegation_id"] = delegation_id
     document["approvals"].append(approval)
-    write_iteration(iteration_yaml, document)
+    _write_iteration_unlocked(iteration_yaml, document)
     return document
 
 
-def record_delegation(
+def record_approval(
+    iteration_dir: Path,
+    stage: str,
+    action: str,
+    artifact_sha256: str,
+    note: str | None = None,
+    delegation_id: str | None = None,
+) -> dict[str, Any]:
+    with iteration_lock(iteration_dir / "iteration.yaml"):
+        return _record_approval_unlocked(
+            iteration_dir, stage, action, artifact_sha256, note, delegation_id
+        )
+
+
+def _record_delegation_unlocked(
     iteration_dir: Path,
     delegation_id: str,
     basis: str,
@@ -345,11 +489,25 @@ def record_delegation(
     # 旧版 delegated 记录可能缺少 delegation_id，且历史终态后追加的批准
     # 会由下一步 reopen 规则拒绝；这里只做一次结构化迁移，最终生命周期
     # 仍必须由 validate_iteration.py 通过。
-    write_iteration(iteration_yaml, document, check_lifecycle=False)
+    _write_iteration_unlocked(iteration_yaml, document, check_lifecycle=False)
     return document
 
 
-def bind_delegated_approvals(
+def record_delegation(
+    iteration_dir: Path,
+    delegation_id: str,
+    basis: str,
+    scope: list[str],
+    granted_at: str,
+    expires_at: str,
+) -> dict[str, Any]:
+    with iteration_lock(iteration_dir / "iteration.yaml"):
+        return _record_delegation_unlocked(
+            iteration_dir, delegation_id, basis, scope, granted_at, expires_at
+        )
+
+
+def _bind_delegated_approvals_unlocked(
     iteration_dir: Path,
     delegation_id: str,
 ) -> dict[str, Any]:
@@ -370,8 +528,16 @@ def bind_delegated_approvals(
             approval["delegation_id"] = delegation_id
             changed = True
     if changed:
-        write_iteration(iteration_yaml, document)
+        _write_iteration_unlocked(iteration_yaml, document)
     return document
+
+
+def bind_delegated_approvals(
+    iteration_dir: Path,
+    delegation_id: str,
+) -> dict[str, Any]:
+    with iteration_lock(iteration_dir / "iteration.yaml"):
+        return _bind_delegated_approvals_unlocked(iteration_dir, delegation_id)
 
 
 def artifact_digest(path: Path) -> str:

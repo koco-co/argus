@@ -72,7 +72,8 @@ _TAIL = {
     "accepted": {"merged"},
     "merged": set(),
 }
-# 进入下列状态前必须具备显式用户决定，或用户持续授权下的 agent 审查记录：
+# 进入下列状态前必须具备对应阶段的最新决定；除 requirements 外，
+# 用户持续授权下的 agent 审查也可以满足门禁。M1 需求接受永远只认用户决定。
 # to_state -> ((approvals[].stage, approvals[].action), ...)
 _APPROVAL_GATES = {
     "requirements_accepted": (("requirements", "accepted"),),
@@ -162,7 +163,15 @@ def approval_gate_violations(
                 f"(stage={stage}, action={action}) recorded by record_approval.py"
             )
             continue
-        if latest.get("action") not in {action, "delegated"}:
+        if stage == "requirements":
+            if latest.get("action") != action or latest.get("actor") != "user":
+                violations.append(
+                    f"transition to {to_state} requires the latest approvals[] entry "
+                    f"for requirements to be action={action}, actor=user; got "
+                    f"action={latest.get('action')!r}, actor={latest.get('actor')!r}"
+                )
+                continue
+        elif latest.get("action") not in {action, "delegated"}:
             violations.append(
                 f"transition to {to_state} requires the latest approvals[] entry "
                 f"for stage={stage} to use action={action} or delegated, "
@@ -218,6 +227,10 @@ def lifecycle_violations(document: dict[str, Any]) -> list[str]:
         note = approval.get("note")
         if action == "delegated" and (not isinstance(note, str) or not note.strip()):
             violations.append(f"approvals[{index}]: delegated approval requires a non-empty note")
+        if action == "delegated" and approval.get("stage") == "requirements":
+            violations.append(
+                f"approvals[{index}]: requirements acceptance must be an explicit user decision"
+            )
         if action == "delegated" and actor != "agent":
             violations.append(f"approvals[{index}]: delegated approval must use actor=agent")
         if action != "delegated" and actor != "user":
@@ -307,15 +320,27 @@ def lifecycle_violations(document: dict[str, Any]) -> list[str]:
 
 
 def resolve_recorded(recorded: str, iterations_dir: Path) -> Path | None:
-    """解析仓库相对、迭代相对或当前证据目录相对的记录路径。"""
+    """解析记录路径，并将结果限制在仓库根目录内。"""
+    if not isinstance(recorded, str) or not recorded or Path(recorded).is_absolute():
+        return None
+
+    def within(base: Path, relative: str | Path = recorded) -> Path | None:
+        root = base.resolve()
+        candidate = (root / relative).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        return candidate if candidate.exists() else None
+
     for base in (REPO_ROOT, iterations_dir.parent, iterations_dir):
-        candidate = base / recorded
-        if candidate.exists():
+        candidate = within(base)
+        if candidate is not None:
             return candidate
     suffix = Path(*Path(recorded).parts[1:]) if recorded.startswith("iterations/") else None
     if suffix is not None:
-        candidate = iterations_dir.parent / suffix
-        if candidate.exists():
+        candidate = within(iterations_dir.parent, suffix)
+        if candidate is not None:
             return candidate
     return None
 
@@ -500,6 +525,7 @@ def apply_fixes(iteration_dir: Path, report: IterationReport) -> None:
                 entry["status"] = "stale"
                 changed = True
     if changed:
+        # pi-lens-ignore: python-path-traversal
         iteration_yaml.write_text(
             yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
         )

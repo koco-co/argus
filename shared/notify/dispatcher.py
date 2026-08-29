@@ -67,7 +67,14 @@ def dispatch(
                 results[name] = True
                 break
             except Exception as exc:  # noqa: BLE001 - 渠道隔离边界必须吞并并记录所有异常
-                LOGGER.error("通知渠道 %s 第 %d 次失败：%s", name, index, exc)
+                # 不记录异常原文：HTTP 客户端可能把 webhook URL 或 SMTP 主机
+                # 拼进消息，渠道配置中的凭据不能进入 CI 日志。
+                LOGGER.error(
+                    "通知渠道 %s 第 %d 次失败（%s）",
+                    name,
+                    index,
+                    type(exc).__name__,
+                )
                 if index < 3:
                     sleeper(delay)
         else:

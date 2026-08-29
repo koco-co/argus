@@ -7,7 +7,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
@@ -174,6 +174,23 @@ def test_modified_frozen_input_is_rejected(checker: Any, tmp_path: Path) -> None
     report = checker.verify_baseline(baseline, actual)
 
     assert any("冻结输入摘要不匹配" in problem for problem in report.problems)
+
+
+def test_symlinked_frozen_input_cannot_escape_baseline(checker: Any, tmp_path: Path) -> None:
+    baseline, actual = _baseline(tmp_path)
+    outside = tmp_path / "outside.yaml"
+    _write(outside, "value: outside\n")
+    link = baseline / "input/escape.yaml"
+    link.symlink_to(outside)
+    manifest_path = baseline / "manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    manifest["inputs"][0]["path"] = "input/escape.yaml"
+    manifest["inputs"][0]["sha256"] = hashlib.sha256(outside.read_bytes()).hexdigest()
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+
+    report = checker.verify_baseline(baseline, actual)
+
+    assert any("符号链接越出目录" in problem for problem in report.problems)
 
 
 def test_registered_repository_baselines_verify_their_snapshots(checker: Any) -> None:

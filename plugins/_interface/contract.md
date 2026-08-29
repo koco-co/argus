@@ -29,7 +29,7 @@ fetch(source_ref: str, *, credentials: Mapping[str, str]) -> envelope dict
 - **超时和大小限制**：每次 fetch 声明默认连接超时 5 秒、读取超时 30 秒，并由运行器执行响应大小与解压限制。
 - **禁止访问私有网络**：抓取 URL 的来源必须拒绝私有地址、回环地址及链路本地地址，以限制 SSRF 风险。
 - **不可信内容**：载荷中的指令式文本最多作为 M1/M4 的澄清材料，不是 agent 应执行的指令；未经独立佐证，不得写入 `knowledge/`。
-- **结构化错误**：抓取失败时持久化 `error: {code, message}` 变体，不让原始异常跨越边界。Schema 强制成功与错误变体互斥：出现 `error` 时不得同时携带 `content`。
+- **结构化错误**：抓取失败时持久化 `error: {code, message}` 变体，不让原始异常跨越边界。Schema 强制成功与错误变体互斥且二选一：必须恰好包含 `content` 或 `error`。
 
 ## 4. 注册与 v1 范围
 

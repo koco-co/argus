@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 from conftest import _load_script
 
 
@@ -38,9 +38,11 @@ def test_open_tracking_issue_is_reused(escalation: Any) -> None:
 
 
 def test_schedule_workflow_wires_issue_escalation() -> None:
-    workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/regression.yml").read_text(
-        encoding="utf-8"
-    )
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
+    regression = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
     assert "issues: write" in workflow
-    assert "github.event_name == 'schedule'" in workflow
-    assert "scripts/weekly_escalation.py --classification failed" in workflow
+    assert "github.event.workflow_run.event == 'schedule'" in workflow
+    assert "scripts/weekly_escalation.py" in workflow
+    assert "--classification failed" in workflow
+    assert "ref: ${{ github.event_name == 'schedule' && 'release' || github.sha }}" in regression

@@ -1,6 +1,6 @@
 # Static-checks CI (Roadmap 1.16; job shape per ARCHITECTURE §8).
-# e2e 位于 regression.yml；static-checks 与 e2e 都在 always() 路径调用通知器，
-# 通知失败不改变权威检查结论。
+# e2e 位于 regression.yml；可信通知由 trusted-notifications.yml 负责。
+# 本工作流执行 PR 控制代码，因此不接触通知 Secret 或写权限。
 #
 # Hardening contract (ARCHITECTURE §8): actions pinned to full commit SHAs,
 # minimal top-level permissions, explicit timeout-minutes, PR-scoped
@@ -33,18 +33,11 @@ jobs:
       contents: read
     env:
       ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
-      ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
-      ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
-      ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
-      ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
-      ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
-      ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
-      ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
@@ -65,12 +58,3 @@ jobs:
       - name: 强制失败验收探针
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
         run: exit 1
-      - if: ${{ success() }}
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job static-checks --status success
-      - if: ${{ failure() }}
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job static-checks --status failure
-      - if: ${{ cancelled() }}
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job static-checks --status cancelled

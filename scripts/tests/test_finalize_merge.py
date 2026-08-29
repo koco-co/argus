@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
@@ -98,11 +98,72 @@ def test_finalize_records_merge_metadata(
     path = _iteration(tmp_path)
     monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
     monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(finalizer, "verify_github_merge", lambda *args, **kwargs: {})
     finalizer.finalize(path, "b" * 40, 42)
     document = yaml.safe_load((path / "iteration.yaml").read_text())
     assert document["state"] == "merged"
     assert document["events"][-1]["merge_sha"] == "b" * 40
     assert document["events"][-1]["pr_number"] == 42
+
+
+class _GitHubResponse:
+    def __init__(self, payload: Any) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> Any:
+        return self.payload
+
+
+class _GitHubClient:
+    def __init__(self, payload: Any) -> None:
+        self.payload = payload
+        self.paths: list[str] = []
+
+    def get(self, path: str) -> _GitHubResponse:
+        self.paths.append(path)
+        return _GitHubResponse(self.payload)
+
+
+def test_verify_github_merge_requires_real_release_pr_fact(finalizer: Any) -> None:
+    client = _GitHubClient(
+        {
+            "merged": True,
+            "merged_at": "2026-08-29T10:00:00Z",
+            "merge_commit_sha": "b" * 40,
+            "base": {"ref": "release"},
+        }
+    )
+    payload = finalizer.verify_github_merge(
+        "b" * 40,
+        42,
+        repo="owner/repo",
+        token="test-token",
+        client=client,
+    )
+    assert payload["merged"] is True
+    assert client.paths == ["/repos/owner/repo/pulls/42"]
+
+
+def test_verify_github_merge_rejects_mismatched_fact(finalizer: Any) -> None:
+    client = _GitHubClient(
+        {
+            "merged": True,
+            "merged_at": "2026-08-29T10:00:00Z",
+            "merge_commit_sha": "c" * 40,
+            "base": {"ref": "release"},
+        }
+    )
+    with pytest.raises(finalizer.WriterError, match="merge_commit_sha"):
+        finalizer.verify_github_merge(
+            "b" * 40,
+            42,
+            repo="owner/repo",
+            token="test-token",
+            client=client,
+        )
 
 
 def test_finalize_rejects_nonaccepted_and_bad_sha(finalizer: Any, tmp_path: Path) -> None:

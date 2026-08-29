@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
@@ -410,7 +410,7 @@ def test_hand_edited_approval_rejected_by_writer(record_approval: Any, tmp_path:
 def test_record_approval_records_user_actor_and_artifact_hash(
     record_approval: Any, tmp_path: Path
 ) -> None:
-    iteration_dir = _scaffold(tmp_path, "2026-08-w7", "created")
+    iteration_dir = _scaffold(tmp_path, "2026-08-w7", "requirements_clarifying")
     artifact = tmp_path / "requirements.yaml"
     artifact.write_text("requirements file content\n", encoding="utf-8")
     assert (
@@ -434,6 +434,36 @@ def test_record_approval_records_user_actor_and_artifact_hash(
     assert approval["actor"] == "user"
     assert approval["artifact_sha256"] != ""
     assert len(approval["artifact_sha256"]) == 64
+
+
+def test_requirements_approval_cannot_be_delegated(
+    record_approval: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """M1 的产品取舍不能被持续授权或 agent 记录替代。"""
+    iteration_dir = _scaffold(tmp_path, "2026-08-requirements-delegated", "requirements_clarifying")
+    artifact = tmp_path / "requirements.yaml"
+    artifact.write_text("requirements file content\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "requirements",
+                "--action",
+                "delegated",
+                "--artifact",
+                str(artifact),
+                "--note",
+                "即使有持续授权，M1 仍需用户接受。",
+                "--delegation-id",
+                "delegation-not-allowed",
+            ]
+        )
+        == 1
+    )
+    assert "cannot be delegated" in capsys.readouterr().err
+    assert yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"] == []
 
 
 def test_delegated_approval_requires_note_and_records_agent(
@@ -553,6 +583,32 @@ def test_expired_delegation_rejects_new_approval(
     )
     assert "iteration.delegation has expired" in capsys.readouterr().err
     assert (iteration_dir / "iteration.yaml").read_text(encoding="utf-8") == before
+
+
+def test_approval_stage_cannot_be_recorded_before_its_lifecycle_state(
+    record_approval: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """未来阶段的批准不能在 iteration 创建阶段预先污染审计链。"""
+    iteration_dir = _scaffold(tmp_path, "2026-08-early-approval", "created")
+    artifact = tmp_path / "exemptions.yaml"
+    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "exemptions",
+                "--action",
+                "accepted",
+                "--artifact",
+                str(artifact),
+            ]
+        )
+        == 1
+    )
+    assert "只能在当前阶段写入" in capsys.readouterr().err
+    assert yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"] == []
 
 
 def test_record_approval_supports_exemptions_stage(record_approval: Any, tmp_path: Path) -> None:

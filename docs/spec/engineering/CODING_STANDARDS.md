@@ -124,9 +124,9 @@ description: >
 ## Stop-and-confirm points
 (explicit user acceptance between stages; every acceptance calls
 scripts/record_approval.py, which appends {stage, action, actor, timestamp,
-artifact_sha256} to approvals[]. Explicit decisions use actor=user; a
-standing user delegation reviewed by the agent uses action=delegated,
-actor=agent and requires a non-empty audit note.)
+artifact_sha256} to approvals[]. M1 requirements acceptance is always an
+explicit user decision; later stages may use a standing user delegation reviewed
+by the agent with action=delegated, actor=agent and a non-empty audit note.)
 ## Stages
 (each stage declares its own precondition, output schema and confirmation:
  stage=m1 clarify+accept · stage=m2 test points/exemptions + accept ·

@@ -30,6 +30,7 @@ a recording plugin) - real collection, no shell, no string commands.
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 import re
 import subprocess
@@ -77,18 +78,44 @@ def _load_required(iteration_dir: Path, name: str, report: Report) -> Any:
 
 
 def load_exemptions(iteration_dir: Path) -> dict[str, str]:
-    """requirement_id -> kind, for ACCEPTED exemptions with non-empty reasons."""
+    """返回已接受且带理由的 ``requirement_id -> kind`` 映射。"""
     path = iteration_dir / "exemptions.yaml"
     if not path.exists():
         return {}
     document = _load(path)
-    if document.get("status") != "accepted":
+    if not isinstance(document, dict) or document.get("status") != "accepted":
         return {}  # draft/review exemptions are not yet honored
     honored: dict[str, str] = {}
     for entry in document.get("exemptions", []):
-        if entry.get("reason", "").strip():
+        if (
+            isinstance(entry, dict)
+            and isinstance(entry.get("requirement_id"), str)
+            and isinstance(entry.get("kind"), str)
+            and isinstance(entry.get("reason"), str)
+            and entry["reason"].strip()
+        ):
             honored[entry["requirement_id"]] = entry["kind"]
     return honored
+
+
+def load_exemption_document(iteration_dir: Path, report: Report) -> dict[str, Any] | None:
+    """读取豁免，供完整性检查同时检查未接受的条目。"""
+    path = iteration_dir / "exemptions.yaml"
+    if not path.exists():
+        return None
+    try:
+        document = _load(path)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        report.fail(f"无法读取 exemptions.yaml：{exc}")
+        return None
+    if not isinstance(document, dict):
+        report.fail("exemptions.yaml 顶层必须是映射")
+        return None
+    entries = document.get("exemptions", [])
+    if not isinstance(entries, list):
+        report.fail("exemptions.yaml 的 exemptions 必须是列表")
+        document["exemptions"] = []
+    return document
 
 
 # ------------------------------------------------------- referential integrity
@@ -107,18 +134,19 @@ def check_referential_integrity(
     api_cases: dict | None,
     traceability: dict | None,
     report: Report,
+    exemptions: dict | None = None,
 ) -> None:
     requirement_ids: set[str] = set()
     if requirements is not None:
-        requirement_ids = {r["requirement_id"] for r in requirements["requirements"]}
-        report.fail(
-            *_duplicates([r["requirement_id"] for r in requirements["requirements"]], "requirement")
-        )
+        requirement_values = [r["requirement_id"] for r in requirements["requirements"]]
+        requirement_ids = set(requirement_values)
+        report.fail(*_duplicates(requirement_values, "requirement"))
 
     point_ids: set[str] = set()
     if test_points is not None:
-        point_ids = {p["test_point_id"] for p in test_points["test_points"]}
-        report.fail(*_duplicates(sorted(point_ids), "test point"))
+        point_values = [p["test_point_id"] for p in test_points["test_points"]]
+        point_ids = set(point_values)
+        report.fail(*_duplicates(point_values, "test point"))
         for point in test_points["test_points"]:
             for dangling in set(point["requirement_ids"]) - requirement_ids:
                 report.fail(
@@ -127,16 +155,29 @@ def check_referential_integrity(
 
     case_ids: set[str] = set()
     if cases is not None:
-        case_ids = {c["case_id"] for c in cases["cases"]}
-        report.fail(*_duplicates(sorted(case_ids), "functional case"))
+        case_values = [c["case_id"] for c in cases["cases"]]
+        case_ids = set(case_values)
+        report.fail(*_duplicates(case_values, "functional case"))
         for case in cases["cases"]:
             for dangling in set(case["test_point_ids"]) - point_ids:
                 report.fail(f"case {case['case_id']} cites unknown test point {dangling}")
 
     api_ids: set[str] = set()
     if api_cases is not None:
-        api_ids = {c["api_case_id"] for c in api_cases["cases"]}
-        report.fail(*_duplicates(sorted(api_ids), "API case"))
+        api_values = [c["api_case_id"] for c in api_cases["cases"]]
+        api_ids = set(api_values)
+        report.fail(*_duplicates(api_values, "API case"))
+
+    if exemptions is not None:
+        exemption_ids = [
+            entry["requirement_id"]
+            for entry in exemptions.get("exemptions", [])
+            if isinstance(entry, dict) and isinstance(entry.get("requirement_id"), str)
+        ]
+        report.fail(*_duplicates(exemption_ids, "exemption requirement"))
+        for exemption_id in exemption_ids:
+            if exemption_id not in requirement_ids:
+                report.fail(f"exemption cites unknown requirement {exemption_id}")
 
     if traceability is not None:
         rows = traceability["links"]
@@ -176,7 +217,7 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     if not root.is_dir():
         return frozenset()
 
-    import pytest
+    pytest = importlib.import_module("pytest")
 
     class _Recorder:
         nodeids: list[str] = []
@@ -564,9 +605,28 @@ def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> in
     cases = _load_required(iteration_dir, "functional-cases.yaml", report)
     api_cases = _load_required(iteration_dir, "api/cases.yaml", report)
     traceability = _load_required(iteration_dir, "traceability.yaml", report)
-    exemptions = load_exemptions(iteration_dir)
+    exemption_document = load_exemption_document(iteration_dir, report)
+    exemptions: dict[str, str] = {}
+    if exemption_document is not None and exemption_document.get("status") == "accepted":
+        for entry in exemption_document.get("exemptions", []):
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("requirement_id"), str)
+                and isinstance(entry.get("kind"), str)
+                and isinstance(entry.get("reason"), str)
+                and entry["reason"].strip()
+            ):
+                exemptions[entry["requirement_id"]] = entry["kind"]
 
-    check_referential_integrity(requirements, test_points, cases, api_cases, traceability, report)
+    check_referential_integrity(
+        requirements,
+        test_points,
+        cases,
+        api_cases,
+        traceability,
+        report,
+        exemption_document,
+    )
 
     if tier_arg == "from-iteration":
         tiers = tiers_for_state(branches, state)

@@ -139,7 +139,11 @@ def next_version(exports_dir: Path) -> int:
         for existing in exports_dir.glob(f"{PROJECT}_v*_Cases.xmind"):
             match = FILENAME_PATTERN.match(existing.name)
             if match:
-                highest = max(highest, int(match.group(1)))
+                try:
+                    version = int(match.group(1))
+                except ValueError:
+                    continue
+                highest = max(highest, version)
     return highest + 1
 
 
@@ -161,33 +165,42 @@ def load_tree_sources(iteration_dir: Path) -> dict[str, Any]:
 
 
 def verify_structure(xmind_path: Path) -> dict[str, Any]:
-    """Re-open the written file and assert the zip→content.json layout plus
-    the iteration→module→R→T→C→step hierarchy. Returns the parsed sheet."""
-    with zipfile.ZipFile(xmind_path) as archive:
-        names = set(archive.namelist())
-        assert {"content.json", "metadata.json", "manifest.json"} <= names
-        sheet = json.loads(archive.read("content.json"))[0]
-    root = sheet["rootTopic"]
+    """重新打开文件并显式校验 ZIP 与 iteration→module→R→T→C→step 层级。"""
+    try:
+        with zipfile.ZipFile(xmind_path) as archive:
+            names = set(archive.namelist())
+            if not {"content.json", "metadata.json", "manifest.json"} <= names:
+                raise RegistryError("XMind 导出缺少必需的 ZIP 成员")
+            sheet = json.loads(archive.read("content.json"))[0]
+        root = sheet["rootTopic"]
 
-    def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
-        return node.get("children", {}).get("attached", [])
+        def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
+            return node.get("children", {}).get("attached", [])
 
-    modules = children_of(root)
-    assert modules, "no module level under the iteration root"
-    for module_node in modules:
-        requirements = children_of(module_node)
-        assert requirements, f"module {module_node['title']} has no requirement level"
-        for requirement_node in requirements:
-            assert re.match(r"^req-R[0-9]{4}$", requirement_node["id"])
-            points = children_of(requirement_node)
-            assert points, f"requirement {requirement_node['id']} has no test point level"
-            for point_node in points:
-                cases = children_of(point_node)
-                assert cases, f"test point {point_node['id']} has no case level"
-                for case_node in cases:
-                    steps = children_of(case_node)
-                    assert steps, f"case {case_node['id']} has no step level"
-    return sheet
+        modules = children_of(root)
+        if not modules:
+            raise RegistryError("XMind 导出缺少 module 层")
+        for module_node in modules:
+            requirements = children_of(module_node)
+            if not requirements:
+                raise RegistryError(f"module {module_node['title']} 缺少 requirement 层")
+            for requirement_node in requirements:
+                if not re.match(r"^req-R[0-9]{4}$", requirement_node["id"]):
+                    raise RegistryError(f"requirement 节点 ID 非法：{requirement_node.get('id')!r}")
+                points = children_of(requirement_node)
+                if not points:
+                    raise RegistryError(f"requirement {requirement_node['id']} 缺少 test point 层")
+                for point_node in points:
+                    cases = children_of(point_node)
+                    if not cases:
+                        raise RegistryError(f"test point {point_node['id']} 缺少 case 层")
+                    for case_node in cases:
+                        steps = children_of(case_node)
+                        if not steps:
+                            raise RegistryError(f"case {case_node['id']} 缺少 step 层")
+        return sheet
+    except (KeyError, IndexError, TypeError, ValueError, zipfile.BadZipFile) as exc:
+        raise RegistryError(f"XMind 导出结构无法解析：{exc}") from exc
 
 
 def export(iteration_dir: Path) -> Path:

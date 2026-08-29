@@ -48,7 +48,9 @@ def main(argv: list[str] | None = None) -> int:
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         message = render_summary(document, args.classification)
     else:
-        message = f"Argus CI job\n任务: {args.job}\n状态: {args.classification or args.status}"
+        message = f"Argus CI job\n任务: {args.job}\n状态: {args.status}"
+        if args.classification:
+            message += f"\n分类: {args.classification}"
     results = dispatch(message, build_notifiers(config))
     failed = [name for name, passed in results.items() if not passed]
     print(f"notify: 成功 {sum(results.values())}，失败 {len(failed)}")

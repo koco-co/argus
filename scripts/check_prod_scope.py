@@ -21,6 +21,7 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
 from _registry_lib import REPO_ROOT
 
 _DEFAULT_VERBS = {
@@ -58,19 +59,17 @@ def load_denylist(path: Path | None) -> set[str]:
         return verbs
     text = path.read_text(encoding="utf-8")
     try:
-        import yaml
-
         document = yaml.safe_load(text)
-        if isinstance(document, list):
-            verbs.update(str(item).lower() for item in document)
-            return verbs
-        if isinstance(document, dict):
-            for value in document.values():
-                if isinstance(value, list):
-                    verbs.update(str(item).lower() for item in value)
-            return verbs
     except yaml.YAMLError:
-        pass
+        document = None
+    if isinstance(document, list):
+        verbs.update(str(item).lower() for item in document)
+        return verbs
+    if isinstance(document, dict):
+        for value in document.values():
+            if isinstance(value, list):
+                verbs.update(str(item).lower() for item in value)
+        return verbs
     verbs.update(token.lower() for token in re.split(r"[\s,]+", text) if token)
     return verbs
 

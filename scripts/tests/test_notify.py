@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 
+from shared.notify import webhook as webhook_module
 from shared.notify.base import Notifier
 from shared.notify.dispatcher import dispatch, load_config, newest_summary, render_summary
 from shared.notify.email import EmailNotifier
@@ -92,11 +94,10 @@ def test_partial_email_environment_is_rejected(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("workflow_name", ["ci.yml", "regression.yml"])
-def test_workflow_maps_notification_secrets_to_environment(workflow_name: str) -> None:
-    """工作流必须显式把 Actions Secrets 映射给通知器。"""
+def test_only_trusted_workflow_maps_notification_secrets_to_environment() -> None:
+    """通知 Secret 只能进入默认分支代码运行的可信工作流。"""
     root = Path(__file__).resolve().parents[2]
-    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+    trusted = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
     for name in (
         "ARGUS_NOTIFY_DINGTALK_WEBHOOK",
         "ARGUS_NOTIFY_FEISHU_WEBHOOK",
@@ -107,32 +108,33 @@ def test_workflow_maps_notification_secrets_to_environment(workflow_name: str) -
         "ARGUS_NOTIFY_EMAIL_PASSWORD",
         "ARGUS_NOTIFY_EMAIL_TO",
     ):
-        assert f"{name}: ${{{{ secrets.{name} }}}}" in workflow
+        assert f"{name}: ${{{{ secrets.{name} }}}}" in trusted
+    for workflow_name in ("ci.yml", "regression.yml"):
+        workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+        assert "secrets.ARGUS_NOTIFY_" not in workflow
+        assert "issues: write" not in workflow
+        assert "persist-credentials: false" in workflow
 
 
 def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> None:
-    """环境启动失败且没有 JUnit 时，必须发送 job 状态而非旧 iteration 摘要。"""
+    """e2e 只上传受限分类；可信工作流不回退到旧 iteration 摘要。"""
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
+    trusted = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
     assert "hashFiles('reports/junit.xml') != ''" in workflow
-    assert "hashFiles('reports/junit.xml') == ''" in workflow
-    assert "scripts/notify.py --job e2e" in workflow
+    assert "scripts/notify.py --summary auto" not in workflow
+    assert "保存受限通知分类" in workflow
+    assert '--job "$ARGUS_WORKFLOW_NAME"' in trusted
+    assert '--status "$ARGUS_WORKFLOW_STATUS"' in trusted
 
 
-@pytest.mark.parametrize("workflow_name", ["ci.yml", "regression.yml"])
-def test_workflow_derives_nonempty_job_status(workflow_name: str) -> None:
-    """GitHub runner 未提供 job.status 时，通知状态也不得为空。"""
+def test_trusted_workflow_derives_nonempty_workflow_status() -> None:
+    """可信通知使用 completed workflow_run 结论，并为异常事件提供 unknown。"""
     root = Path(__file__).resolve().parents[2]
-    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
+    assert "github.event.workflow_run.conclusion || 'unknown'" in workflow
+    assert "github.event.workflow_run.name" in workflow
     assert "job.status" not in workflow
-    assert "failure()" in workflow
-    assert "cancelled()" in workflow
-    assert "--status success" in workflow
-    assert "--status failure" in workflow
-    assert "--status cancelled" in workflow
-    for line in workflow.splitlines():
-        if "failure()" in line or "cancelled()" in line:
-            assert line.strip().startswith("- if:"), line
 
 
 def test_notify_job_rejects_empty_status() -> None:
@@ -203,6 +205,22 @@ def test_failing_channel_does_not_block_sibling_and_retries_three_times() -> Non
     assert sleeps == [1.0, 2.0, 1.0]
 
 
+def test_dispatch_does_not_log_channel_exception_text(caplog: pytest.LogCaptureFixture) -> None:
+    """渠道异常中即使带 URL，也不能把 webhook 凭据写入日志。"""
+
+    class _LeakingFailure(Notifier):
+        def send(self, message: str) -> None:
+            del message
+            raise RuntimeError("https://notify.invalid/hook?token=do-not-log")
+
+    with caplog.at_level(logging.ERROR):
+        result = dispatch("Argus 结果", {"leaking": _LeakingFailure()}, sleeper=lambda _: None)
+
+    assert result == {"leaking": False}
+    assert "do-not-log" not in caplog.text
+    assert "RuntimeError" in caplog.text
+
+
 def test_newest_summary_uses_run_evidence_tree(tmp_path: Path) -> None:
     first = tmp_path / "one/runs/run-1/run-summary.yaml"
     second = tmp_path / "two/runs/run-2/run-summary.yaml"
@@ -266,6 +284,17 @@ def test_webhook_adapters_render_channel_specific_payloads() -> None:
         assert client.calls == [("https://notify.invalid", expected)]
 
 
+def test_webhook_http_error_does_not_expose_url(caplog: pytest.LogCaptureFixture) -> None:
+    request = webhook_module.httpx.Request("POST", "https://notify.invalid/hook?token=do-not-log")
+    response = webhook_module.httpx.Response(403, request=request)
+    client = _WebhookClient({})
+    client.post = lambda url, *, json: response  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="403"):
+        WebhookNotifier("dingtalk", request.url, client=cast(Any, client)).send("Argus 结果")
+    assert "do-not-log" not in caplog.text
+
+
 def test_webhook_business_error_is_not_treated_as_delivery() -> None:
     client = _WebhookClient({"errcode": 40035})
     with pytest.raises(RuntimeError, match="40035"):
@@ -284,8 +313,13 @@ def test_email_adapter_logs_in_and_sends_message(monkeypatch: pytest.MonkeyPatch
         def __enter__(self) -> _SMTP:
             return self
 
-        def __exit__(self, *_: Any) -> None:
-            return None
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            exc_traceback: Any,
+        ) -> None:
+            del exc_type, exc_value, exc_traceback
 
         def login(self, username: str, password: str) -> None:
             calls.append(("login", (username, password)))

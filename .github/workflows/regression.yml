@@ -34,12 +34,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'schedule' && 'release' || github.sha }}
+          persist-credentials: false
       - id: scope
         shell: bash
+        env:
+          ARGUS_EVENT_NAME: ${{ github.event_name }}
+          ARGUS_BASE_REF: ${{ github.base_ref }}
+          ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ARGUS_HEAD_SHA: ${{ github.sha }}
         run: |
-          if [[ "${{ github.event_name }}" != "pull_request" ]] || [[ "${{ github.base_ref }}" == "release" ]]; then
+          if [[ "$ARGUS_EVENT_NAME" != "pull_request" ]] || [[ "$ARGUS_BASE_REF" == "release" ]]; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -Eq '^(automation|iterations)/'; then
+          elif git diff --name-only "$ARGUS_BASE_SHA" "$ARGUS_HEAD_SHA" | grep -Eq '^(automation|iterations)/'; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
@@ -52,21 +59,15 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      issues: write
     env:
       ARGUS_BASE_URL: http://localhost:8000
       ARGUS_API_BASE_URL: http://localhost:9000
       ARGUS_CI_ACCEPTANCE_SCENARIO: ${{ inputs.acceptance_scenario || 'normal' }}
-      ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
-      ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
-      ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
-      ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
-      ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
-      ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
-      ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
-      ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'release' || github.sha }}
+          persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
@@ -97,6 +98,13 @@ jobs:
           exit "$second"
       - if: "${{ always() && hashFiles('reports/junit.xml') != '' }}"
         run: uv run python scripts/self_debug_helper.py record-ci-auto --junit reports/junit.xml --env ci
+      - name: 保存受限通知分类
+        if: ${{ always() && steps.regression.outputs.classification != '' }}
+        env:
+          ARGUS_CLASSIFICATION: ${{ steps.regression.outputs.classification }}
+        run: |
+          mkdir -p reports/notification
+          printf '%s\n' "$ARGUS_CLASSIFICATION" > reports/notification/classification
       - if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -105,22 +113,5 @@ jobs:
             reports/
             iterations/*/runs/
           retention-days: 14
-      - if: "${{ always() && hashFiles('reports/junit.xml') != '' }}"
-        continue-on-error: true
-        run: uv run python scripts/notify.py --summary auto --classification "${{ steps.regression.outputs.classification }}"
-      - if: "${{ hashFiles('reports/junit.xml') == '' && success() }}"
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job e2e --status success
-      - if: "${{ hashFiles('reports/junit.xml') == '' && failure() }}"
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job e2e --status failure
-      - if: "${{ hashFiles('reports/junit.xml') == '' && cancelled() }}"
-        continue-on-error: true
-        run: uv run python scripts/notify.py --job e2e --status cancelled
-      - if: ${{ always() && github.event_name == 'schedule' && steps.regression.outputs.classification == 'failed' }}
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run python scripts/weekly_escalation.py --classification failed
       - if: ${{ always() }}
         run: uv run python scripts/target_app_down.py
