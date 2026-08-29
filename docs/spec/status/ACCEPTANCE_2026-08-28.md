@@ -26,7 +26,7 @@
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
 | GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 与 head `59618d5ca8296093fdde0c8745efa29133fecf6b` 的 `static-checks`、Compose-only `e2e` 均通过；修复前 main 手工 e2e 首轮 1 条 C0005 失败、自动唯一重试 38/38 通过，按工作流规则标记 `flaky-suspect`；PR #9 的 POM 时序修复 e2e 通过且分类 `normal`；合并后 main 手工 e2e 再次为 38/38、分类 `normal`；通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 原 head Actions run `33203109968`、`33203109999`；修复前 main e2e run `33234802753`（job `99053798298`）；PR #9 e2e run `33236374652`；修复后 main e2e run `33236596449`（job `99058554054`）；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
-| main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`，PR #9 的 POM 时序修复也已由 GitHub 真实合并（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`）；随后 PR #10 文档更新已真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`；`release` 未被上述操作改写 | `gh pr view 1`、`gh pr view 9`、`gh pr view 10`；`git ls-remote origin refs/heads/main refs/heads/release` |
+| main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`；PR #9 的 POM 时序修复也已由 GitHub 真实合并（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`）；随后 PR #10、PR #11 文档更新继续真实合并（merge SHA 分别为 `aec57829a3fecd57b77d59c1ca73a175346c6215`、`dd5dacf62d92c528afedaab6f021cbbb9a535d45`）；`release` 未被上述操作改写 | `gh pr view 1`、`gh pr view 9`、`gh pr view 10`、`gh pr view 11`；`git ls-remote origin refs/heads/main refs/heads/release` |
 
 ## 不可伪造的外部事实
 
@@ -34,7 +34,7 @@
 
 1. 正式 UI/API iteration 的上游与终态记录已按当前任务授权完成：UI 记录用户 `accepted`，API 的 exemptions/environment/acceptance 记录 `delegated`；API 的结构化 delegation 绑定用户 basis 摘要、scope 和有效期，且旧终态已经 reopen 后由 fresh run 重建；所有批准记录由 `record_approval.py` 写入并绑定当前摘要。该代理授权不改变外部事实门禁。
 2. `config/notify.yaml` 不存在，Actions Secrets/Variables 当前为空；适配器、隔离重试、Secrets 环境变量装配和 CI `always()` 已验证，但“真实频道收到消息”未成立。
-3. PR #1 已于 2026-08-29 真实合并到 `main`，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；随后 PR #9 的 Medusa 订单确认时序 POM 修复也已真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10 文档更新再度真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。受保护 `release` 仍停在 `c51649fe0e05db9c71077eec33773d114ceaf5d2`，其合并仍要求至少一名非作者人工批准与最后推送后的批准。
+3. PR #1 已于 2026-08-29 真实合并到 `main`，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；随后 PR #9 的 Medusa 订单确认时序 POM 修复也已真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10、PR #11 文档更新继续真实合并，merge SHA 分别为 `aec57829a3fecd57b77d59c1ca73a175346c6215`、`dd5dacf62d92c528afedaab6f021cbbb9a535d45`。受保护 `release` 仍停在 `c51649fe0e05db9c71077eec33773d114ceaf5d2`，其合并仍要求至少一名非作者人工批准与最后推送后的批准。
 4. `finalize_merge.py` 的 v1 收口目标是受保护 `release`；必须使用该真实合并事实对应的 SHA，合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
 

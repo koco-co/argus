@@ -2,6 +2,7 @@
 
 - 2026-08-29：修复 Medusa 结算下单后的服务端重定向/流式渲染时序：`CheckoutPage.place_order()` 在点击下单后先等待确认路由，再等待既有精确成功标题；未改动冻结断言、需求或测试点。PR #9 已由 GitHub 真实合并到 `main`（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`），其 e2e run `33236374652` 通过并分类 `normal`；合并后 main 手工 run `33236596449` 为 `38 passed in 82.15s`、分类 `normal`，证据已上传且靶应用已清理。随后 PR #10 文档更新真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。
 - 2026-08-29：修复前 main 手工 run `33234802753` 的 C0005 首轮时序失败及唯一重试通过（`flaky-suspect`）继续保留为历史事实；本次以 POM 等待修复后的独立运行证明该失败模式已消除，但无通知 Secret 时仍只记录零渠道，不能冒充真实外部送达。
+- 2026-08-29：PR #11 的 Phase 9 证据逐项复核文档已由 GitHub 真实合并到 `main`，merge SHA 为 `dd5dacf62d92c528afedaab6f021cbbb9a535d45`；此前 PR #10 的文档 merge SHA 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。文档只记录不可变的 PR 合并事实，不使用会被后续文档 PR 改写的“当前 HEAD”表述。
 - 2026-08-29：`main` 合并后再次执行真实 Compose-only 回归。手工 Actions run `33234802753` 首轮 C0005 在订单确认标题等待处失败，唯一重试 38/38 通过并按工作流规则标记 `flaky-suspect`；随后本地 fresh reset 后独立重放 C0005 三次均通过，完整 Web/API/fixture/靶场套件为 38/38（125.82 秒）。未修改冻结断言或伪装该次 CI 为稳定全绿。
 - 2026-08-29：按用户明确要求将 PR #1 的目标从 `release` 改为 `main` 并真实合并；GitHub 返回 merge SHA `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`，合并后 `main` 的 static-checks run `33234492727` 成功。受保护 `release` 保持原 SHA 与审批门禁，未把 `main` 合并冒充 release 收口。
 - 2026-08-29：提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 GitHub `static-checks`（run `33202248757`）与 Compose-only `e2e`（run `33202248717`）均通过，e2e 日志为 38 passed，通知步骤实际执行但因无 Secret 保持零渠道。PR 仍等待非作者审批，受保护 `release` 合并与真实通知送达继续保持未验收。
