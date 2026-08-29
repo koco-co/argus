@@ -1,6 +1,6 @@
-<div align="center">
+# Argus
 
-# 𝓐𝓻𝓰𝓾𝓼
+<div align="center">
 
 <p align="center">从需求事实到可追溯自动化 · 𝑭𝒓𝒐𝒎 𝑹𝒆𝒒𝒖𝒊𝒓𝒆𝒎𝒆𝒏𝒕𝒔 𝒕𝒐 𝑻𝒓𝒂𝒄𝒆𝒂𝒃𝒍𝒆 𝑨𝒖𝒕𝒐𝒎𝒂𝒕𝒊𝒐𝒏</p>
 
@@ -98,6 +98,25 @@ ARGUS_RUN_ID=readme-smoke TEST_ENV=local \
 make target-app-down
 ```
 
+<a id="v2"></a>
+
+<h2 align="center">𝟎.𝟐.𝟎 · Clean-break Monorepo</h2>
+
+<p>0.2.0 将控制面、来源 SDK 和目标项目适配器拆为独立 workspace 包：<code>argus-core</code>、<code>argus-plugin-sdk</code>、<code>argus-medusa</code>。它们不执行 Skill 文本、不调用模型，也不提供 Agent Runtime；v1 的 <code>iterations/</code> 资产不被迁移或隐式读取。</p>
+
+```bash
+# v2 控制面：写入 .argus/iterations，不碰 v1 iterations/
+uv run argus iteration create checkout-v2 --surface web --surface api \
+  --workstream-id checkout-web --workstream-id checkout-api
+uv run argus iteration status checkout-v2
+
+# 三个 workspace 包均可独立构建
+uv lock --check
+uv build --all-packages
+```
+
+<p>来源连接器通过 <code>PluginRegistry.register()</code> 显式启用；GitHub Issues/OpenAPI 输入是不可信 source envelope，真实凭据不会写入 envelope。详细边界见 <a href="docs/spec/architecture/ARCHITECTURE_0_2.md"><code>ARCHITECTURE_0_2.md</code></a>。</p>
+
 <a id="iteration"></a>
 
 <h2 align="center">𝑰𝒕𝒆𝒓𝒂𝒕𝒊𝒐𝒏 · 创建迭代</h2>
@@ -142,7 +161,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑬𝒗𝒊𝒅𝒆𝒏𝒄𝒆 · 验证证据</h2>
 
-<p>2026-08-29 的当前检出已实际完成 430 项框架测试、fresh reset 后正式 <b>Medusa</b> UI 10/10 与 API 22/22、靶场/<b>CI</b> 基础设施探针、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查；main 手工 Compose-only e2e 在 POM 时序修复前首轮有 1 条 C0005 失败并按规则标记 <code>flaky-suspect</code>，修复合并后 PR e2e 与 main 手工复核均为 38/38、<code>normal</code>。PR #1 与 PR #9 已真实合并到 <code>main</code>，PR #9 代码合并 SHA 为 <code>88f2b6a</code>；PR #10、PR #11 的文档更新也已由 GitHub 真实合并（分别为 <code>aec5782</code>、<code>dd5dacf</code>）。受保护 <code>release</code> 的独立门禁状态仍见验收矩阵。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
+<p>2026-08-29 的当前检出已实际完成 479 项框架测试、fresh reset 后正式 <b>Medusa</b> UI 10/10 与 API 22/22、靶场/<b>CI</b> 基础设施探针、真实 <b>PostgreSQL</b> 只读角色的读权限与写拒绝验证、`1440×900` 与 `390×844` 视觉检查；main 手工 Compose-only e2e 在 POM 时序修复前首轮有 1 条 C0005 失败并按规则标记 <code>flaky-suspect</code>，修复合并后 PR e2e 与 main 手工复核均为 38/38、<code>normal</code>。PR #1 与 PR #9 已真实合并到 <code>main</code>，PR #9 代码合并 SHA 为 <code>88f2b6a</code>；PR #10、PR #11 的文档更新也已由 GitHub 真实合并（分别为 <code>aec5782</code>、<code>dd5dacf</code>）。受保护 <code>release</code> 的独立门禁状态仍见验收矩阵。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
 
 - [验收证据矩阵](docs/spec/status/ACCEPTANCE_2026-08-28.md)
 - [Medusa 真实路由与种子事实](knowledge/target-app-notes/medusa.md)
@@ -154,9 +173,9 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑩𝒐𝒖𝒏𝒅𝒂𝒓𝒊𝒆𝒔 · 边界与许可证</h2>
 
-- 第一版不实现移动端、小程序、性能生成、真实需求/<b>API</b> 来源连接器、混合 <b>UI+API</b> 迭代或 <b>Jenkins</b> 验收入口。
+- v1 第一版不实现移动端、小程序、性能生成、真实生产需求/<b>API</b> 来源连接器、混合 <b>UI+API</b> 迭代或 <b>Jenkins</b> 验收入口；0.2.0 仅提供 SDK 内的受限 GitHub Issues/OpenAPI 参考连接器。
 - 测试 <b>fixture</b> 的通过不等同于正式迭代的用户批准、真实外部通知或受保护分支合并。
 - 自动防伪是结构冻结、分类器、种子金丝雀、`patch-scope` 与 `trace` 的组合，不能替代最终人工 `diff` 评审。
-- 本仓库当前尚未声明开源许可证；在复制、修改或分发前，请由仓库所有者补充并确认授权条款。
+- 本仓库采用 [Apache License 2.0](LICENSE)。
 
 <p>权威操作规则见 `AGENTS.md`；需求、数据模型与架构契约位于 `docs/spec/`。</p>

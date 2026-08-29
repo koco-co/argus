@@ -1,0 +1,6 @@
+# Argus 0.2 控制面 Schema 注册表；路径绑定不依赖文件名猜测。
+schema_version: "2.0"
+bindings:
+  - artifact: iteration
+    path_pattern: ".argus/iterations/*/iteration.yaml"
+    schema: "argus_core/schemas/iteration.schema.json"

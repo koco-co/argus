@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -76,9 +76,33 @@ IGNORED_NAMES = {
     ".git",
     ".mimosa",
     ".vscode",
+    "build",
+    "dist",
+    "argus.egg-info",
+    "argus-core.egg-info",
+    "argus_plugin_sdk.egg-info",
+    "argus-medusa.egg-info",
+    "argus_core.egg-info",
+    "argus_medusa.egg-info",
 }
 
 EXPECTED_DIRS: set[str] = {
+    # Argus 0.2 clean-break workspace packages and reference adapter.
+    "packages",
+    "packages/argus-core",
+    "packages/argus-core/src",
+    "packages/argus-core/src/argus_core",
+    "packages/argus-core/src/argus_core/schemas",
+    "packages/argus-plugin-sdk",
+    "packages/argus-plugin-sdk/src",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/schemas",
+    "adapters",
+    "adapters/medusa",
+    "adapters/medusa/src",
+    "adapters/medusa/src/argus_medusa",
+    "templates",
+    "templates/project",
     # skills layer: six skills, each with schemas/examples/versions (ADR-007)
     *(
         f".agents/skills/{skill}/{sub}"
@@ -177,8 +201,40 @@ KEEPER_DIRS: set[str] = {
 
 EXPECTED_FILES: set[str] = {
     "AGENTS.md",
+    "packages/argus-core/README.md",
+    "packages/argus-core/LICENSE",
+    "packages/argus-core/pyproject.toml",
+    "packages/argus-core/src/argus_core/__init__.py",
+    "packages/argus-core/src/argus_core/__main__.py",
+    "packages/argus-core/src/argus_core/approvals.py",
+    "packages/argus-core/src/argus_core/cli.py",
+    "packages/argus-core/src/argus_core/models.py",
+    "packages/argus-core/src/argus_core/promotion.py",
+    "packages/argus-core/src/argus_core/schema.py",
+    "packages/argus-core/src/argus_core/state.py",
+    "packages/argus-core/src/argus_core/store.py",
+    "packages/argus-core/src/argus_core/schemas/iteration.schema.json",
+    "packages/argus-core/src/argus_core/schemas/registry.yaml",
+    "packages/argus-plugin-sdk/README.md",
+    "packages/argus-plugin-sdk/LICENSE",
+    "packages/argus-plugin-sdk/pyproject.toml",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/__init__.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/connectors.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/contracts.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/github.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/registry.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/security.py",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/schemas/source_envelope.schema.json",
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/schemas/registry.yaml",
+    "adapters/medusa/README.md",
+    "adapters/medusa/LICENSE",
+    "adapters/medusa/pyproject.toml",
+    "adapters/medusa/src/argus_medusa/__init__.py",
+    "adapters/medusa/src/argus_medusa/adapter.py",
+    "templates/project/README.md",
     "CLAUDE.md",
     "README.md",
+    "LICENSE",
     "pyproject.toml",
     "uv.lock",
     ".python-version",
@@ -209,6 +265,7 @@ EXPECTED_FILES: set[str] = {
     "scripts/notify.py",
     ".github/workflows/ci.yml",
     ".github/workflows/regression.yml",
+    ".github/workflows/trusted-notifications.yml",
     ".github/dependabot.yml",
     "target-app/Dockerfile",
     "target-app/compose.yaml",
@@ -307,6 +364,43 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "schemas",
         "tests",
     },
+    "packages": {"argus-core", "argus-plugin-sdk"},
+    "packages/argus-core": {"README.md", "LICENSE", "pyproject.toml", "src"},
+    "packages/argus-core/src": {"argus_core"},
+    "packages/argus-core/src/argus_core": {
+        "__init__.py",
+        "__main__.py",
+        "approvals.py",
+        "cli.py",
+        "models.py",
+        "promotion.py",
+        "schema.py",
+        "state.py",
+        "store.py",
+        "schemas",
+    },
+    "packages/argus-core/src/argus_core/schemas": {"iteration.schema.json", "registry.yaml"},
+    "packages/argus-plugin-sdk": {"README.md", "LICENSE", "pyproject.toml", "src"},
+    "packages/argus-plugin-sdk/src": {"argus_plugin_sdk"},
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk": {
+        "__init__.py",
+        "connectors.py",
+        "contracts.py",
+        "github.py",
+        "registry.py",
+        "security.py",
+        "schemas",
+    },
+    "packages/argus-plugin-sdk/src/argus_plugin_sdk/schemas": {
+        "source_envelope.schema.json",
+        "registry.yaml",
+    },
+    "adapters": {"medusa"},
+    "adapters/medusa": {"README.md", "LICENSE", "pyproject.toml", "src"},
+    "adapters/medusa/src": {"argus_medusa"},
+    "adapters/medusa/src/argus_medusa": {"__init__.py", "adapter.py"},
+    "templates": {"project"},
+    "templates/project": {"README.md"},
     "scripts/tests": {
         "conftest.py",
         "fixtures",
@@ -321,6 +415,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "test_notify.py",
         "test_finalize_merge.py",
         "test_weekly_escalation.py",
+        "test_v2_monorepo.py",
         "test_knowledge.py",
         "test_new_iteration.py",
         "test_repo_structure.py",
@@ -427,6 +522,17 @@ def test_governed_roots_have_no_undeclared_children(root: str) -> None:
     declared = GOVERNED_CHILDREN[root]
     undeclared = sorted(actual - declared)
     assert undeclared == [], f"undeclared entries under {root}: {undeclared}"
+
+
+def test_workspace_licenses_match_root() -> None:
+    """独立构建的 workspace 包必须携带与根目录一致的 Apache-2.0 文本。"""
+    root_license = (REPO_ROOT / "LICENSE").read_bytes()
+    package_licenses = (
+        REPO_ROOT / "packages/argus-core/LICENSE",
+        REPO_ROOT / "packages/argus-plugin-sdk/LICENSE",
+        REPO_ROOT / "adapters/medusa/LICENSE",
+    )
+    assert all(path.read_bytes() == root_license for path in package_licenses)
 
 
 def test_unimplemented_automation_leaf_dirs_are_empty_beyond_keepers() -> None:

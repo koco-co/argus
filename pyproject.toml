@@ -1,8 +1,14 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "argus"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI-driven automation testing framework: requirement -> test design -> generated web/API automation with self-debug"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "pytest>=9.1.1",
@@ -16,7 +22,25 @@ dependencies = [
     "jsonschema>=4.23",
     "rfc3339-validator>=0.1.4",
     "openpyxl>=3.1",
+    "argus-core==0.2.0",
+    "argus-plugin-sdk==0.2.0",
+    "argus-medusa==0.2.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shared", "shared.*"]
+
+[project.scripts]
+argus = "argus_core.cli:main"
+
+[tool.uv.sources]
+argus-core = { workspace = true }
+argus-plugin-sdk = { workspace = true }
+argus-medusa = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/argus-core", "packages/argus-plugin-sdk", "adapters/medusa"]
 
 [dependency-groups]
 dev = [
@@ -57,5 +81,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pyright]
 typeCheckingMode = "basic"
-include = ["scripts", "shared", "automation", "plugins"]
+include = ["scripts", "shared", "automation", "plugins", "packages", "adapters"]
 exclude = ["**/__pycache__", ".venv"]

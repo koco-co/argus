@@ -6,13 +6,13 @@
 
 用户最新指令要求持续实现全部剩余需求，只有成功使用框架完成真实开源靶项目的完整 Web/API 自动化代码验收，才能结束 Goal。已重新创建并读取确认原生 Goal 为 active；本页下方较早记录中的“等待 2.1 签收、不得进入 2.2”不再作为本次开发会话的暂停安排。此覆盖不等于伪造产品迭代的审批记录，也不删除框架应具备的确认、唯一写入者和验收审计能力。
 
-当前实现已覆盖六个项目级 Skill、契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。两类来源连接器仍是 v1 明确排除的 post-v1 插件边界；运行器已经实现信封校验、失败隔离和安全拒绝。
+当前实现已覆盖六个项目级 Skill、v1 契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。clean-break `0.2.0` workspace 现已加入 `argus-core` 控制面、`argus-plugin-sdk` 来源契约/参考连接器和 `argus-medusa` 目标适配器；三者均可独立构建，且明确不实现 Agent/LLM Runtime。v1 资产仍由旧脚本维护，0.2 不读取或迁移 v1 iteration。
 
-本轮最终机器验证：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**，POM 时序修复后的受影响 C0005 与完整套件也已通过。main 合并后复核同套件为 **38 passed in 125.82s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 及后续文档提交已推送；PR #1 已按用户指令改为 `main` 基线并由 GitHub 于 2026-08-29 真实合并，PR #9 的 Medusa 订单确认时序 POM 修复随后也已真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10 文档更新已真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。PR #9 e2e run `33236374652` 与合并后 main 手工 e2e run `33236596449` 均为 38/38、分类 `normal`；后者耗时 82.15 秒，证据已上传并完成靶应用清理。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收；受保护 `release` 仍未合并，不能据此执行 release 收口。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
+历史基线机器验证（不代表本轮修改后的新验收）：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**，POM 时序修复后的受影响 C0005 与完整套件也已通过。main 合并后复核同套件为 **38 passed in 125.82s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 及后续文档提交已推送；PR #1 已按用户指令改为 `main` 基线并由 GitHub 于 2026-08-29 真实合并，PR #9 的 Medusa 订单确认时序 POM 修复随后也已真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10 文档更新已真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。PR #9 e2e run `33236374652` 与合并后 main 手工 e2e run `33236596449` 均为 38/38、分类 `normal`；后者耗时 82.15 秒，证据已上传并完成靶应用清理。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收；受保护 `release` 仍未合并，不能据此执行 release 收口。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
 
 ## 当前状态
 
-AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）当前已完成所有不依赖外部责任方的 v1 实现与机器验收。针对本任务，用户已明确授予持续代理决策权：对仓库内正式 iteration 工件，agent 在完成 Schema、覆盖、来源和真实行为审查后可通过唯一写入器记录 `action: delegated`，不再反复请求同类确认。该记录如实标明 `actor: agent` 和授权说明，不冒充用户亲自接受。真实通知送达、非作者 PR 批准、受保护分支合并及合并后真实 SHA 仍只能由对应外部事实完成；测试 fixture 只证明框架能力，不冒充这些事实。
+AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v1）当前已完成所有不依赖外部责任方的 v1 实现与机器验收。针对本任务，用户已明确授予持续代理决策权：除 M1 requirements 接受外，对仓库内正式 iteration 工件，agent 在完成 Schema、覆盖、来源和真实行为审查后可通过唯一写入器记录 `action: delegated`，不再反复请求同类确认。M1 requirements 只能由用户明确接受。该记录如实标明 `actor: agent` 和授权说明，不冒充用户亲自接受。真实通知送达、非作者 PR 批准、受保护分支合并及合并后真实 SHA 仍只能由对应外部事实完成；测试 fixture 只证明框架能力，不冒充这些事实。
 
 2026-08-29 复核：Docker/Compose、uv、Python 3.12、项目 Playwright Chromium 和 GitHub 远程读取均可用；`config/notify.yaml` 仍不存在，`gh secret list` 与 `gh variable list` 均无通知配置，因此没有真实通知证据。历史自检记录可用 `git show 2b61331:docs/spec/status/STEP0_CHECK_2026-08-28.md` 复核；该临时文件的当前工作区删除状态予以保留。本轮没有把适配器单测或零渠道日志标记为真实送达。API iteration 已通过合法 delegated reopen 重建状态链，旧 run 仅作历史记录，不作为本轮终态摘要。
 
@@ -34,9 +34,9 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 - Phase 2 已完成：插件契约由用户明确签收；来源信封 Schema、运行器、失败变体、目录说明和 AGENTS 引用均已有代码、测试与提交证据。真实连接器仍按 PRD §8 保留到 post-v1。
 - 已完成：六个项目级 Skill、确定性辅助脚本、Medusa 靶场、Web/API 生成、M9 四类证明、移动端视觉证据、双 CI 门禁、周回归连续失败升级、通知隔离重试与合并收口实现。
 - 外部待办：提供 `config/notify.yaml` 或 CI Secret 后执行真实频道送达；适配器和 CI `always()` 调用已验证，但 9.2/9.3 的外部送达不豁免。
-- 已处理的内部门禁：正式 UI/API iteration 的需求、测试点、豁免和环境，在持续授权下由 agent 逐项审查并通过 `record_approval.py` 以 `delegated` 落账；API 额外持久化 `delegation` 的 basis 摘要、scope 和有效期，旧终态经 `reopen_iteration.py` 重开后重新执行并接受；不得把 fixture 或本次总目标确认冒充为工件批准。
+- 已处理的内部门禁：正式 UI/API iteration 的 requirements 均由用户明确接受；除 M1 外的测试点、豁免和环境可在持续授权范围内由 agent 逐项审查，并通过 `record_approval.py` 以 `delegated` 落账；API 额外持久化 `delegation` 的 basis 摘要、scope 和有效期，旧终态经 `reopen_iteration.py` 重开后重新执行并接受；不得把 fixture 或本次总目标确认冒充为工件批准。
 - PR #1 已按用户指令真实合并至 `main`（merge SHA：`f7fb82a5196aa665f47cdf22928b5bd7c2887f07`），PR #9 的 POM 时序修复也已合并（代码 merge SHA：`88f2b6abce9dfa5ded57db3191609f891fd3eed4`），PR #10、PR #11 文档更新已合并（merge SHA：`aec57829a3fecd57b77d59c1ca73a175346c6215`、`dd5dacf62d92c528afedaab6f021cbbb9a535d45`）；受保护 `release` 仍待非作者批准后合并，再用对应真实 SHA 执行 `finalize_merge.py`。当前仓库只有作者本人可审查，无法自批。
-- 本次持续授权只覆盖仓库内可审计的需求/测试设计、环境和终态接受流程；这些记录仍须在对应产物生成后由唯一写入者脚本落账。通知送达、非作者审查、受保护 `release` 合并和 `release` 收口 SHA 不在代理授权范围内。
+- 本次持续授权只覆盖仓库内可审计的 M2+ 测试设计、环境和终态接受流程；M1 requirements 接受仍需用户决定，这些记录仍须在对应产物生成后由唯一写入者脚本落账。通知送达、非作者审查、受保护 `release` 合并和 `release` 收口 SHA 不在代理授权范围内。
 
 ## 文档索引
 
@@ -47,7 +47,10 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 | 路线 ROADMAP | [product/ROADMAP.md](./product/ROADMAP.md) | 已建立 |
 | 术语 GLOSSARY | [product/GLOSSARY.md](./product/GLOSSARY.md) | 已建立 |
 | 架构 ARCHITECTURE | [architecture/ARCHITECTURE.md](./architecture/ARCHITECTURE.md) | 已建立 |
-| 数据 DATA_MODEL | [architecture/DATA_MODEL.md](./architecture/DATA_MODEL.md) | 已建立（Schema 唯一权威） |
+| 数据 DATA_MODEL | [architecture/DATA_MODEL.md](./architecture/DATA_MODEL.md) | 已建立（v1 Schema 唯一权威） |
+| 0.2 产品 PRD | [product/PRD_0_2.md](./product/PRD_0_2.md) | clean-break 基线 |
+| 0.2 架构 | [architecture/ARCHITECTURE_0_2.md](./architecture/ARCHITECTURE_0_2.md) | workspace/core/SDK/adapter 契约 |
+| 0.2 数据模型 | [architecture/DATA_MODEL_0_2.md](./architecture/DATA_MODEL_0_2.md) | Pydantic + 静态 Schema |
 | 决策 ADR | [architecture/adr/](./architecture/adr/) （adr-001…012） | 已建立 |
 | 编码 CODING_STANDARDS | [engineering/CODING_STANDARDS.md](./engineering/CODING_STANDARDS.md) | 已建立 |
 | 测试 TESTING_STRATEGY | [engineering/TESTING_STRATEGY.md](./engineering/TESTING_STRATEGY.md) | 已建立（含靶应用 harness/种子策略） |
@@ -55,4 +58,4 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 | 变更 CHANGELOG | [status/CHANGELOG.md](./status/CHANGELOG.md) | 已建立 |
 | 风险 RISKS_AND_KNOWN_ISSUES | [status/RISKS_AND_KNOWN_ISSUES.md](./status/RISKS_AND_KNOWN_ISSUES.md) | 已建立 |
 
-配套阅读顺序建议：PRD → GLOSSARY → ARCHITECTURE → DATA_MODEL → ROADMAP；工程实现前必读 engineering 三篇与相关 ADR。
+配套阅读顺序建议：目标为 v1 时阅读 PRD → GLOSSARY → ARCHITECTURE → DATA_MODEL → ROADMAP；目标为 0.2 workspace 时追加阅读 `PRD_0_2.md`、`ARCHITECTURE_0_2.md`、`DATA_MODEL_0_2.md` 和 ADR-013。工程实现前必读 engineering 三篇与相关 ADR。

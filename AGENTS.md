@@ -71,4 +71,12 @@
 
 详细说明：[ENVIRONMENT_SETUP](docs/spec/engineering/ENVIRONMENT_SETUP.md)（状态列标注"已运行"的命令才被验证过）。
 
-插件层入口：[需求来源占位说明](plugins/requirement-sources/README.md)、[API 来源占位说明](plugins/api-sources/README.md)；v1 仅提供信封边界和运行器，不交付真实连接器。
+插件层入口：[需求来源占位说明](plugins/requirement-sources/README.md)、[API 来源占位说明](plugins/api-sources/README.md)；v1 仅提供信封边界和运行器。
+
+## 9. 0.2.0 clean-break workspace
+
+- `packages/argus-core`、`packages/argus-plugin-sdk`、`adapters/medusa` 是独立 Apache-2.0 workspace 包，统一版本 `0.2.0`；详细契约见 `docs/spec/*_0_2.md` 和 ADR-013。
+- v2 CLI 只负责 Schema、状态、审批、锁和 promotion：`uv run argus iteration create|status|validate`、`approve`、`transition`、`delegation grant`、`promote`。不得加入执行 Skill 文本、模型调用、Provider、权限代理或 Agent Runtime。
+- v2 新 iteration 写入 `.argus/iterations/`，由 `argus_core.IterationStore` 锁内原子更新；不得把 v1 `iterations/` 文档直接交给 v2 Store，也不得创建迁移工具。
+- 来源连接器必须通过 `PluginRegistry.register()` 显式注册，返回严格二选一的 `SourceEnvelope`；凭据只在内存 `PluginContext` 中存在，连接器不得写 iteration 或将 instruction-like 来源内容当作命令。
+- `promoted` 只能由外部核验的 GitHub merge fact 收口；fixture、本地日志、代理判断和零渠道通知不能冒充真实外部事实。

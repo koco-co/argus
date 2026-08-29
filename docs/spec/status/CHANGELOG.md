@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-29：启动并完成 Argus `0.2.0` clean-break workspace 基础实现。新增 `packages/argus-core`（Pydantic 控制面模型、最新审批规则、workstream 状态机、POSIX 锁内原子 Store、promotion 事实和中文 CLI）、`packages/argus-plugin-sdk`（严格二选一 source envelope、凭据序列化隔离、SSRF/大小/超时边界、显式注册表、GitHub Issues/OpenAPI 参考连接器）和 `adapters/medusa`（Web/API 路由及非秘密配置）。新增静态 Schema、registry、0.2 架构/PRD/数据模型和 ADR-013；四个 workspace 包可独立构建，未实现 Agent/LLM Runtime、Skill 执行或 v1 迁移。新增 16 项核心/SDK/适配器回归后框架测试为 479 passed；未将 mock、fixture、零渠道日志或本地判断冒充真实外部通知、review、protected merge 或 SHA。
+
 - 2026-08-29：修复 Medusa 结算下单后的服务端重定向/流式渲染时序：`CheckoutPage.place_order()` 在点击下单后先等待确认路由，再等待既有精确成功标题；未改动冻结断言、需求或测试点。PR #9 已由 GitHub 真实合并到 `main`（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`），其 e2e run `33236374652` 通过并分类 `normal`；合并后 main 手工 run `33236596449` 为 `38 passed in 82.15s`、分类 `normal`，证据已上传且靶应用已清理。随后 PR #10 文档更新真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。
 - 2026-08-29：修复前 main 手工 run `33234802753` 的 C0005 首轮时序失败及唯一重试通过（`flaky-suspect`）继续保留为历史事实；本次以 POM 等待修复后的独立运行证明该失败模式已消除，但无通知 Secret 时仍只记录零渠道，不能冒充真实外部送达。
 - 2026-08-29：PR #11 的 Phase 9 证据逐项复核文档已由 GitHub 真实合并到 `main`，merge SHA 为 `dd5dacf62d92c528afedaab6f021cbbb9a535d45`；此前 PR #10 的文档 merge SHA 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。文档只记录不可变的 PR 合并事实，不使用会被后续文档 PR 改写的“当前 HEAD”表述。
@@ -64,7 +66,7 @@
 
 ## 2026-08-28 — 按用户要求调整 Goal 的阻塞判断与汇总时机
 
-- 用户明确要求“不阻塞主流程的，在任务结束后通知”，并要求中文注释/备注。保存完整 [Goal 修订提示词](./GOAL_PROMPT.md)，同步 AGENT_BRIEF 和环境自检入口；旧自检结果保留为历史证据。
+- 用户明确要求“不阻塞主流程的，在任务结束后通知”，并要求中文注释/备注。Goal 修订提示词属于会话材料，未作为仓库文件保留；同步 AGENT_BRIEF 和环境自检入口，旧自检结果保留为历史证据。
 - 裁决：最新用户执行指令覆盖旧 Goal 的“任意缺项即停”。结合 ROADMAP 5.5 明确 Phase 7 前执行终态在会话内呈现，webhook 归为后续阶段待办；到 Phase 7 首个真实通知 DoD 时仍须真实配置和验证。未修改 PRD/ROADMAP 的 DoD、任务顺序、人工签收或最终验收标准，未将 mock 当成真实验收。
 - 当前应用 Goal 工具没有目标正文编辑参数，Computer Use 操作 Codex 界面被安全策略禁止；原生 Goal 正文尚未替换。没有手改应用内部存储、重建目标或伪报目标完成；仓库中的修订文本和当前用户补充指令可供后续接续。
 
@@ -72,13 +74,12 @@
 
 - Resumed from ROADMAP + AGENT_BRIEF and the current checkout, not a fresh scaffold. ROADMAP records 0.1–0.8 and Phase 1 complete, with 0.9 deferred to 7.5. Existing commit `c0212c2` contains the 2.1 contract draft; human sign-off remains pending. Corrected the stale “Phase 2 not started” / “local hooks are stubs” descriptions in AGENT_BRIEF without changing any task checkbox or approval/event artifact.
 - Current user instruction requires real dependencies and forbids mock substitution for acceptance. It supersedes the historical notification fallback recorded below; that history remains intact but is not current authorization to lower M11/7.2 or final acceptance. No PRD, DATA_MODEL, architecture, or DoD contract was changed.
-- Live checks confirmed Docker/Compose, uv/Python 3.12, actual project Chromium startup, GitHub repository/admin access, enabled Actions, and the successful Phase 1 static-checks run. A real webhook is unavailable in the checked local/repository configuration, so Step 0 is blocked and implementation stops. Commands, safe outputs, scope limits, and user actions are recorded in [STEP0_CHECK_2026-08-28](./STEP0_CHECK_2026-08-28.md).
+- Live checks confirmed Docker/Compose, uv/Python 3.12, actual project Chromium startup, GitHub repository/admin access, enabled Actions, and the successful Phase 1 static-checks run. A real webhook is unavailable in the checked local/repository configuration, so Step 0 is blocked and implementation stops. Commands, safe outputs, scope limits, and user actions were recorded in a session artifact that is not part of the repository.
 
 ## 2026-08-28 — Phase 1 task 1.1 implemented; spec defect fixed (rfc3339-validator)
 
 - **1.1** All DATA_MODEL schemas authored at their owning placements (requirements/test_points/functional_cases under `.agents/skills/functional-test-design/schemas/`; api_spec/api_cases under `.agents/skills/api-test-design/schemas/`; exemptions/traceability/run_summary under `scripts/schemas/`; two source payloads under `plugins/_interface/schemas/`). Every `generated_from` definition incorporates the documented optional `inputs[]` sibling (DATA_MODEL intro). Fixture pairs committed under `scripts/tests/fixtures/schemas/` covering the DoD list (missing required, bad enum/pattern, unresolved-ambiguity at `accepted`, missing `generated_from` at terminal states, invalid expectation kind, API case without `requirement_ids`, vacuous-conditional regressions, combinator preservation + `$ref` patterns, mutual-exclusion payloads, malformed `date-time`); `test_docs_schemas.py` extracts and parses every fenced JSON Schema block in DATA_MODEL (count pinned at 10).
 - **Spec defect fix (minimal revision, recorded)**: ENVIRONMENT_SETUP's closed core-dependency list could not satisfy DATA_MODEL's mandate "validators run with a FormatChecker enabled so `format: date-time` rejects malformed strings" — jsonschema's date-time checker is a silent no-op without `rfc3339-validator`. Added `rfc3339-validator>=0.1.4` to core deps (additive; proven necessary by the failing malformed-date-time fixture). Update of the dependency list in ENVIRONMENT_SETUP follows below with the next doc touch.
-
 
 ## 2026-08-28 — Phase 0 closed; owner decisions recorded
 
@@ -88,12 +89,12 @@
 - **Push policy**: one push per completed Phase (owner decision); Phase 0 pushed at close.
 - Phase 0 → Phase 1 transition: ROADMAP 0.6 checkbox flipped; Phase 1 (1.1–1.18) starts next per the one-task-at-a-time discipline.
 
-
 ## 2026-08-27 — Phase 0 infrastructure implemented & accepted (docs v1.6 → +code)
 
 First product code in the repo. ROADMAP Phase 0 executed task-by-task per its own discipline; every claimed DoD was mechanically verified in the same session. Scope decision delegated to the session by the owner's instruction ("自己设定一个goal，明确目标边界"): build directly in this repo (the `<target-app>-automation` alternative remains available post-hoc — the ARCHITECTURE §2 tree is relative).
 
 Implemented (Roadmap tasks):
+
 - **0.1** `uv python pin 3.12` → `.python-version`; fresh `uv sync` exits 0 on CPython 3.12.12.
 - **0.2** `pyproject.toml`: core deps exactly per spec; `[dependency-groups]` dev(ruff/pyright/pre-commit) + optional mobile/perf; pytest markers `module/case_id/iteration` with `--strict-markers`; ruff `E,F,I,UP,B,SIM` ll=100; pyright basic. Verified: ruff+pyright clean; `appium-python-client`/`locust` not installed by default; `uv.lock` committed; `pytest --collect-only scripts/tests` green with all plugins loading. `docs/` excluded from ruff so formatter churn never touches the spec baseline (caught live during setup).
 - **0.3** `.pre-commit-config.yaml`: remote ruff hooks (format check-only — no hook mutates tracked files) + four local hooks at their prescribed entries. Interpretation recorded: the local validator scripts exist as explicit **stubs naming their implementing task (1.2/1.3/1.9/1.13)** so hooks are no-op-clean on the skeleton while the file paths stay final; `check-secrets` scoped to `^iterations/.+/` (keeper files excluded). Verified: `pre-commit install` + `run --all-files` green.
@@ -107,12 +108,12 @@ Not done / deferred: **0.9** branch protection — `release` first materializes 
 
 Acceptance evidence: fresh `git clone` → `make setup` → `make new-iteration ID=2026-08-acceptance-check BRANCH=ui` → `make lint` all green with zero manual steps (the Phase 0 exit condition); `uv run pytest scripts/tests` 43 passed; ruff/pyright clean; `pre-commit run --all-files` green. Environment note (host-specific, not a repo defect): the machine's system proxy breaks TLS to github.com/pypi/CDN intermittently — PyPI and the Playwright CDN need direct connections (`NO_PROXY=pypi.org,files.pythonhosted.org` / cleared proxy env for `playwright install`); recorded here because ENVIRONMENT_SETUP's statuses above were verified under that workaround.
 
-
 ## 2026-08-27 — v1.5 baseline review adoption (v1.5 → v1.6)
 
 Input: external review of the v1.5 tree (20 findings: P0×2 / P1×6 / P2×9 / P3×3). Adjudication table presented and confirmed before editing. Disposition: 10 adopted, 6 lightweight/partial, 4 rejected with recorded rationale.
 
 Adopted:
+
 - **Session-recovery protocol** (P0-1): `self_debug_helper.py` checkpoints resumable state (`attempt_number`, `patched_files[]`, `verification_pending`) into `runs/<run_id>/state.json` at attempt boundaries; a fresh session must consume it — pending verification runs before any new patch decision, budget resumes from the checkpoint. Recovery fixture added to Roadmap 5.3.
 - **CI secrets injection rule** (P0-2): secrets travel only via workflow `env:` mapping — never shell args or inline `echo` (the v1.4 skeleton's `echo > env.ci.yaml` replaced with in-process `settings.py assemble --env ci`); `settings.py` gains env-var overrides so most jobs need no secrets file at all.
 - Optimizer candidate registry `knowledge/optimization-candidates.yaml` (M12-maintained feed; 8.2 reads candidates from it, threshold counted by the registry).
@@ -138,6 +139,7 @@ Input: external GPT review of the v1.2 `spec.zip` snapshot (48 findings, P0×14 
 Already satisfied by ≤v1.3 (no change needed): API-led R→A lineage (#3), Hybrid explicitly forbidden in v1 rather than branch-sub-stated (#4), API status/env-enum/tier-count consistency (#14), GitHub Actions as sole CI authority with Jenkins post-v1 (#33), Performance removed from product title (#44), optimizer self-apply guardrails (#35 core concern), Postgres component retention / typed expectations groundwork (#7/#17 partials).
 
 Adopted as documentation-contract changes:
+
 - Schema fixes (DATA_MODEL §5–§10): `out_of_scope` conditional now carries explicit `required` (absent property can no longer vacuously demand a reason); unusable Draft-07 `maxContains` removed, exactly-one-module-tag demoted to semantic enforcement; source-payload envelope gains `schema_version` plus mutually-exclusive success/error variants; run-summary gains terminal-state conditionals (timing/env/scope/attempts required when terminal, escalation required when escalated); `input_sha256` gets hash pattern; schema_fragment preserves `format`; documented dialect rules (defaults are annotations, FormatChecker always on) and `generated_from.inputs[]` extension.
 - Per-run evidence layout: `iterations/<id>/runs/<run_id>/` with append-only summary/allure/logs ([ADR-010](../architecture/adr/adr-010-per-run-evidence-directories.md)); global `reports/` demoted to display scratch; CI archives/uploads run dirs.
 - Merge lifecycle truthfulness: PR requires `accepted`; `merged` is finalized post-merge onto release with real merge SHA/event via `scripts/finalize_merge.py` ([ADR-011](../architecture/adr/adr-011-post-merge-finalization.md)).

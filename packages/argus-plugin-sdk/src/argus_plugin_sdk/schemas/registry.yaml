@@ -1,0 +1,5 @@
+# Argus 0.2 SDK Schema 注册表。
+schema_version: "2.0"
+bindings:
+  - artifact: source_envelope
+    schema: "argus_plugin_sdk/schemas/source_envelope.schema.json"

@@ -18,6 +18,10 @@ automation/api/har/**
 !automation/api/har/**/
 !automation/api/har/**/.gitkeep
 
+# --- writer lock files (process-local coordination; never an iteration artifact) ---
+iterations/**/.iteration.yaml.lock
+.argus/iterations/**/.iteration.yaml.lock
+
 # --- per-run heavy evidence (ADR-012): run-summary.yaml + patch files stay
 # tracked; allure-results/, logs/, traces/ never enter git (keeper-free) ---
 iterations/*/runs/*/allure-results/**
@@ -46,6 +50,11 @@ iterations/*/00-raw/**/*.bin
 iterations/*/00-raw/**/*.xlsx
 iterations/*/00-raw/**/*.docx
 iterations/*/00-raw/**/*.pptx
+
+# --- package build outputs ---
+build/
+dist/
+*.egg-info/
 
 # --- python toolchain ---
 .venv/

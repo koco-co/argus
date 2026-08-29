@@ -1,0 +1,454 @@
+{
+  "$defs": {
+    "Actor": {
+      "enum": [
+        "user",
+        "agent",
+        "script"
+      ],
+      "title": "Actor",
+      "type": "string"
+    },
+    "Approval": {
+      "additionalProperties": false,
+      "description": "一条确认事实；固定矩阵在 ``validate_matrix`` 中执行。",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "workstream_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Workstream Id",
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/$defs/ApprovalStage"
+        },
+        "action": {
+          "$ref": "#/$defs/ApprovalAction"
+        },
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "artifact": {
+          "minLength": 1,
+          "title": "Artifact",
+          "type": "string"
+        },
+        "artifact_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "recorded_at": {
+          "format": "date-time",
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "delegation_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delegation Id"
+        }
+      },
+      "required": [
+        "id",
+        "workstream_id",
+        "stage",
+        "action",
+        "actor",
+        "artifact",
+        "artifact_sha256",
+        "recorded_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "ApprovalAction": {
+      "enum": [
+        "accepted",
+        "rejected",
+        "provided",
+        "approved",
+        "delegated"
+      ],
+      "title": "ApprovalAction",
+      "type": "string"
+    },
+    "ApprovalStage": {
+      "enum": [
+        "requirements",
+        "design",
+        "mapping",
+        "cases",
+        "environment",
+        "execution",
+        "promotion",
+        "skill_change"
+      ],
+      "title": "ApprovalStage",
+      "type": "string"
+    },
+    "DelegationGrant": {
+      "additionalProperties": false,
+      "description": "结构化的用户授权；M1 和 promotion 永远不在 scope 中。",
+      "properties": {
+        "id": {
+          "pattern": "^delegation-[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "granted_by": {
+          "const": "user",
+          "default": "user",
+          "title": "Granted By",
+          "type": "string"
+        },
+        "basis": {
+          "minLength": 1,
+          "title": "Basis",
+          "type": "string"
+        },
+        "basis_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Basis Sha256",
+          "type": "string"
+        },
+        "scope": {
+          "items": {
+            "$ref": "#/$defs/ApprovalStage"
+          },
+          "minItems": 1,
+          "title": "Scope",
+          "type": "array"
+        },
+        "granted_at": {
+          "format": "date-time",
+          "title": "Granted At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "basis",
+        "basis_sha256",
+        "scope",
+        "granted_at",
+        "expires_at"
+      ],
+      "title": "DelegationGrant",
+      "type": "object"
+    },
+    "IterationStatus": {
+      "enum": [
+        "created",
+        "active",
+        "accepted",
+        "promoted",
+        "blocked"
+      ],
+      "title": "IterationStatus",
+      "type": "string"
+    },
+    "LifecycleEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "workstream_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Workstream Id",
+          "type": "string"
+        },
+        "from_status": {
+          "$ref": "#/$defs/WorkstreamStatus"
+        },
+        "to_status": {
+          "$ref": "#/$defs/WorkstreamStatus"
+        },
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "recorded_at": {
+          "format": "date-time",
+          "title": "Recorded At",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "id",
+        "workstream_id",
+        "from_status",
+        "to_status",
+        "actor",
+        "recorded_at"
+      ],
+      "title": "LifecycleEvent",
+      "type": "object"
+    },
+    "MergeFact": {
+      "additionalProperties": false,
+      "description": "由外部 GitHub 事实核验得到的单个 workstream promotion 载荷。",
+      "properties": {
+        "workstream_id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Workstream Id",
+          "type": "string"
+        },
+        "provider": {
+          "const": "github",
+          "default": "github",
+          "title": "Provider",
+          "type": "string"
+        },
+        "repository": {
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "pull_request": {
+          "exclusiveMinimum": 0,
+          "title": "Pull Request",
+          "type": "integer"
+        },
+        "base_ref": {
+          "const": "release",
+          "default": "release",
+          "title": "Base Ref",
+          "type": "string"
+        },
+        "merged": {
+          "const": true,
+          "default": true,
+          "title": "Merged",
+          "type": "boolean"
+        },
+        "merge_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Merge Sha",
+          "type": "string"
+        },
+        "merged_at": {
+          "format": "date-time",
+          "title": "Merged At",
+          "type": "string"
+        },
+        "source_url": {
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "verified_at": {
+          "format": "date-time",
+          "title": "Verified At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workstream_id",
+        "repository",
+        "pull_request",
+        "merge_sha",
+        "merged_at",
+        "source_url",
+        "verified_at"
+      ],
+      "title": "MergeFact",
+      "type": "object"
+    },
+    "Surface": {
+      "description": "项目测试面；v2 明确把 web 与 api 作为独立 workstream。",
+      "enum": [
+        "web",
+        "api"
+      ],
+      "title": "Surface",
+      "type": "string"
+    },
+    "Workstream": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "surface": {
+          "$ref": "#/$defs/Surface"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkstreamStatus",
+          "default": "created"
+        },
+        "revision": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "surface"
+      ],
+      "title": "Workstream",
+      "type": "object"
+    },
+    "WorkstreamStatus": {
+      "enum": [
+        "created",
+        "requirements_accepted",
+        "design_pending",
+        "mapping_pending",
+        "spec_pending",
+        "cases_pending",
+        "automation_pending",
+        "ready",
+        "executing",
+        "passed",
+        "budget_exceeded",
+        "escalated",
+        "blocked",
+        "promoted"
+      ],
+      "title": "WorkstreamStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "iteration_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+      "title": "Iteration Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/IterationStatus",
+      "default": "created"
+    },
+    "revision": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "workstreams": {
+      "items": {
+        "$ref": "#/$defs/Workstream"
+      },
+      "minItems": 1,
+      "title": "Workstreams",
+      "type": "array"
+    },
+    "approvals": {
+      "items": {
+        "$ref": "#/$defs/Approval"
+      },
+      "title": "Approvals",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/LifecycleEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "delegation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DelegationGrant"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "promotions": {
+      "items": {
+        "$ref": "#/$defs/MergeFact"
+      },
+      "title": "Promotions",
+      "type": "array"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "iteration_id",
+    "created_at",
+    "updated_at",
+    "workstreams"
+  ],
+  "title": "IterationDocument",
+  "type": "object"
+}
