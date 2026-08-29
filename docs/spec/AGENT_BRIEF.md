@@ -18,6 +18,8 @@ AI 驱动的自动化测试框架（"argus"；性能/load 测试保留至 post-v
 
 本轮新增外部事实：PR #1 已按用户指令将目标改为 `main` 并由 GitHub 于 2026-08-29 真实合并，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；PR #9 的 POM 时序修复随后真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10、PR #11 文档更新再度真实合并，merge SHA 分别为 `aec57829a3fecd57b77d59c1ca73a175346c6215`、`dd5dacf62d92c528afedaab6f021cbbb9a535d45`。PR #9 e2e run `33236374652` 以及合并后 main 手工 e2e run `33236596449` 均为 38/38、分类 `normal`；后一 run 耗时 82.15 秒。该事实不替代受保护 `release` 的审批、合并和 `finalize_merge.py` 收口门禁。
 
+2026-08-29 后续会话：5 个 Dependabot PR（#2 pyyaml 6.0.3、#4 appium 6.0、#5 locust 2.46.4、#3 ruff 0.16.4、#6 pytest 9.1.1）已全部真实合入 `main`（merge SHA `e6dc6fa`…`26429e4`）。pytest 大版本在合并前完成三层真实验证（框架 430 passed、真实 Medusa Web 10/10 181.24s、API 22/22 3.57s），最终组合状态另经 `make lint` 全绿、框架 430 passed、真实 Web/API 复跑通过与 push CI static-checks success（run `33240115395`）确认。main 快照已以准备性 PR #13 送往受保护 `release`（携带两个 accepted iteration），双必需检查 static-checks（run `33240276683`）与 e2e（run `33240276680`）均 success；其批准与合并按 AGENTS.md 属非作者人工门禁，不落 agent 授权。真实通知送达（7.2）与 `release` 收口 SHA（7.6）两项外部待办状态不变。
+
 规范文档仍以 v1.6 基线为权威。本轮用户明确禁止以 mock/本地单测替代真实依赖验收，覆盖历史“通知降级”许可；历史记录保留但不再作为当前验收依据。本仓库直接施工、采用 Emoji Conventional Commit 并持续推送；人工确认记录仍只针对具体工件生效，不从总目标推断或补记。
 
 最新用户执行要求：不影响当前任务/DoD 的问题先记台账，任务结束时统一汇总；只有当前依赖缺失、明确人工确认点或安全/授权边界才暂停，不反复检查未变化的非阻塞项。新增或修改的代码注释、文档备注使用中文。本轮通过 `get_goal` 核实原生 Goal 已包含修订规则且处于 active；其中复制进去的“正文尚未替换”前言是过时说明，不影响新版规则生效。临时提示词文件的工作区删除状态予以保留，不重建。
