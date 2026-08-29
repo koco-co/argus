@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -421,6 +422,68 @@ def tiers_for_state(branches: dict, state: str) -> list[str]:
     return [tier for tier in complete if position >= order.index(unlocks[tier])]
 
 
+# ---------------------------------------------------------- PR 变更范围选择
+
+
+def _all_iteration_dirs(iterations_dir: Path) -> list[Path]:
+    return [
+        child for child in sorted(iterations_dir.iterdir()) if (child / "iteration.yaml").is_file()
+    ]
+
+
+def select_changed_iteration_dirs(iterations_dir: Path, changed_paths: list[str]) -> list[Path]:
+    """把 PR 变更映射到必须执行覆盖门禁的 iteration。
+
+    iteration 自身变化只检查对应目录；自动化、共享代码或覆盖门禁变化可能
+    破坏任何既有 nodeid/链路，因此保守检查全部 iteration。
+    """
+    shared_impacts = (
+        "automation/",
+        "shared/",
+        "scripts/check_coverage.py",
+        "scripts/check_api_coverage.py",
+        "scripts/check_orphan_tests.py",
+    )
+    if any(path.startswith(shared_impacts) for path in changed_paths):
+        return _all_iteration_dirs(iterations_dir)
+
+    iteration_ids = {
+        parts[1]
+        for path in changed_paths
+        if (parts := Path(path).parts) and len(parts) >= 3 and parts[0] == "iterations"
+    }
+    selected: list[Path] = []
+    for iteration_id in sorted(iteration_ids):
+        candidate = iterations_dir / iteration_id
+        if not (candidate / "iteration.yaml").is_file():
+            raise CoverageError(f"变更的 iteration 已不存在或缺少 iteration.yaml：{iteration_id}")
+        selected.append(candidate)
+    return selected
+
+
+def changed_paths_since(base_ref: str, repo_root: Path = REPO_ROOT) -> list[str]:
+    """读取 base 到当前 HEAD 的文件变化；Git 错误必须显式阻断。"""
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{base_ref}^{{commit}}"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if verify.returncode != 0:
+        raise CoverageError(f"无法解析覆盖比较基线 {base_ref}：{verify.stderr.strip()}")
+    diff = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_ref}...HEAD", "--"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff.returncode != 0:
+        raise CoverageError(f"无法读取 PR 变更范围：{diff.stderr.strip()}")
+    return [line for line in diff.stdout.splitlines() if line]
+
+
 # ------------------------------------------------------------------------ CLI
 
 
@@ -444,8 +507,14 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO_ROOT / "automation",
         help="automation tree for nodeid collection (tests override)",
     )
+    parser.add_argument(
+        "--changed-base",
+        help="只检查相对该 Git 基线受影响的 iteration；自动化/共享门禁变化检查全部",
+    )
     args = parser.parse_args(argv)
 
+    if args.changed_base and args.iteration is not None:
+        parser.error("--changed-base 不能与显式 iteration 路径同时使用")
     if args.iteration is None:
         args.iteration = REPO_ROOT / "iterations"
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
@@ -453,11 +522,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: iteration directory {iteration_dir} not found", file=sys.stderr)
         return 1
 
-    # Without an explicit iteration, evaluate every iteration directory
-    # (the CI shape in ARCHITECTURE §8 calls the checker without an id).
-    iteration_dirs = [
-        child for child in sorted(iteration_dir.iterdir()) if (child / "iteration.yaml").is_file()
-    ] or [iteration_dir]
+    if args.changed_base:
+        try:
+            iteration_dirs = select_changed_iteration_dirs(
+                iteration_dir,
+                changed_paths_since(args.changed_base),
+            )
+        except CoverageError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if not iteration_dirs:
+            print("check_coverage: 当前变更不影响 iteration 覆盖链")
+            return 0
+    else:
+        # 无显式 iteration 时评估全部；release push/定时任务使用此路径。
+        iteration_dirs = _all_iteration_dirs(iteration_dir) or [iteration_dir]
 
     overall = 0
     for single_dir in iteration_dirs:

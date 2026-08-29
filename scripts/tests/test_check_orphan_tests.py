@@ -32,6 +32,27 @@ def _test_body() -> str:
     )
 
 
+def test_extract_markers_supports_module_level_pytestmark(checker: Any, tmp_path: Path) -> None:
+    """生成器使用模块级 pytestmark 时，反向闭包仍须识别归属。"""
+    path = tmp_path / "automation/web/tests/checkout/test_generated.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "import pytest\n"
+        "pytestmark = [\n"
+        '    pytest.mark.module("checkout"),\n'
+        '    pytest.mark.case_id("C0001"),\n'
+        '    pytest.mark.iteration("2026-08-orphan"),\n'
+        "]\n"
+        "def test_generated():\n    pass\n",
+        encoding="utf-8",
+    )
+    assert checker.extract_markers(path, "test_generated") == {
+        "module": "checkout",
+        "case_id": "C0001",
+        "iteration": "2026-08-orphan",
+    }
+
+
 def _iteration_dir(tmp_path: Path, with_traceability: bool) -> Path:
     root = tmp_path / "iterations" / "2026-08-orphan"
     (root / "api").mkdir(parents=True, exist_ok=True)
@@ -103,6 +124,26 @@ def test_properly_referenced_test_passes(checker: Any, tmp_path: Path) -> None:
         )
         == 0
     )
+
+
+def test_api_case_resolves_with_api_case_id_key(checker: Any, tmp_path: Path) -> None:
+    """API 分支使用 api_case_id，反向闭包不得按 UI 的 case_id 取值。"""
+    iteration = tmp_path / "iterations" / "2026-08-api-orphan"
+    (iteration / "api").mkdir(parents=True)
+    (iteration / "api/cases.yaml").write_text(
+        yaml.safe_dump({"cases": [{"api_case_id": "A0001"}]}, sort_keys=False),
+        encoding="utf-8",
+    )
+    (iteration / "traceability.yaml").write_text(
+        yaml.safe_dump(
+            {"links": [{"requirement_id": "R0001", "api_case_id": "A0001"}]},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    report = checker.Report()
+    checker.resolves("A0001", iteration, report, "automation/api/tests/test_case.py::test_a")
+    assert report.problems == []
 
 
 def test_orphan_test_without_traceability_fails_naming_nodeid(checker: Any, tmp_path: Path) -> None:

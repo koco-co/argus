@@ -1,0 +1,11 @@
+schema_version: "1.0"
+iteration_id: test-fixture-api-e2e
+links:
+  - requirement_id: R0001
+    api_case_id: A0001
+    automation_test_ids:
+      - automation/api/tests/checkout/test_test-fixture-api-e2e_a0001_apply_discount.py::test_apply_valid_promotion
+  - requirement_id: R0001
+    api_case_id: A0002
+    automation_test_ids:
+      - automation/api/tests/checkout/test_test-fixture-api-e2e_a0002_reject_payload.py::test_reject_invalid_promotion_payload

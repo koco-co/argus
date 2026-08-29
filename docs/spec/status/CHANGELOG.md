@@ -1,5 +1,48 @@
 # Changelog
 
+- 2026-08-29：提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 GitHub `static-checks`（run `33202248757`）与 Compose-only `e2e`（run `33202248717`）均通过，e2e 日志为 38 passed，通知步骤实际执行但因无 Secret 保持零渠道。PR 仍等待非作者审批，受保护 `release` 合并与真实通知送达继续保持未验收。
+- 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报同步当前 430 项框架测试和 38 条全栈回归证据。
+
+- 2026-08-29：针对审计复核重建 API iteration 的真实验收链。新增结构化、限时用户 delegation（basis_sha256、scope、有效期和 delegation_id 语义校验），禁止终态后追加 acceptance 记录，并要求 agent reopen 具备 lifecycle_reopen scope；API 来源信封改为严格 Schema 并补充有效/无效夹具。Medusa 真实负向响应统一按已探测的 400/404 声明，A0018 缺少 provider 改为 400，整个 setup 链副作用改为 creates；fresh reset 后新 run `run-20260828T182611Z-api3` 为 22/22，通过新的 endpoint/status/模型/孤儿闭包门禁。
+
+- 2026-08-29：fresh reset 后重新执行正式 UI checkout，10/10 Chromium 用例通过并归档为 `run-20260828T183412Z-ui03`；此前的 locator/timing 证据保留为历史 attempt，不被新 run 覆盖。
+
+- 2026-08-29：完成正式 Medusa API checkout 迭代的 M4–M9 机器验收。固定 2.19.0 Store API 来源与 live probe，保留 10 个 endpoint 的参数、组件 `$ref` 及真实错误响应；生成 20 个带 `requirement_ids`、可回放变量和副作用声明的 API case、XLSX v4、R→A→nodeid traceability，以及增量 `FullStoreClient`/Pydantic 模型/pytest 用例。fresh reset 后真实 API 回归为 22/22 通过；`validate_iteration`、`check_api_coverage`、模型/marker/layering/orphan 门禁和黄金基线均通过。正式 iteration 的 delegated 审查由唯一批准写入器留痕；真实通知、非作者 PR 批准和受保护合并仍未伪造或宣称完成。
+
+- 2026-08-29：将六个项目 Skill 升级到 1.1.0，并把原 1.0.0 入口保存到各自 `versions/1.0.0.md`；批准契约新增带非空审查说明的 `action: delegated, actor: agent`，仅覆盖当前任务中可审计的仓库产物和本地执行。新增 Medusa 来源 schema registry 绑定，并让 API 模型检查器支持间接继承的 Pydantic 基类；同时拒绝空白 delegated note、允许视觉运行时报告目录；框架回归后续补充治理夹具后为 427 passed。
+
+- 2026-08-28：修复共享 POM 增量生成与 Skill 黄金基线的冲突。`python_ast_compatible` 保持冻结样例中的既有类、函数和方法 AST 不变，同时允许新 iteration 复用同一路由对象并新增 import/方法；旧方法被删除或改写仍会失败，禁止用覆盖 expected 快照掩盖漂移。
+
+- 2026-08-28：补齐 CI 通知 Secrets 的环境变量装配契约。`shared/notify/dispatcher.py` 现在可在不生成携密文件的前提下从 Actions Secrets 映射装配钉钉、飞书、企业微信或邮件渠道；不完整邮件配置会明确失败，空值仍保持零渠道兼容。两条工作流、示例配置与回归测试同步覆盖。
+
+- 2026-08-28：补齐 Roadmap 8.2 的可执行黄金基线基础设施。四个生成 Skill 各保存一份 1.0.0 冻结输入与代表性期望；`check_skill_golden.py` 校验输入 SHA-256、YAML Schema/解析后结构语义和 Python AST 语义，明确允许排版/注释变化而拒绝行为漂移。M13 的候选阈值、具体 proposal 展示与用户批准门禁保持未完成、未伪造。
+- 2026-08-28：真实 CI 发现 `pre-commit --all-files` 不枚举尚未跟踪的新文件，本地曾因此漏过新脚本的格式检查；`make lint` 现直接执行 `ruff format --check .`，并由回归测试固定该入口，避免生成后提交前的同类假绿。
+
+- 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；`record_event.py` 在持久化前复用同一门禁，三个唯一写入器还会拒绝 Schema 合法但生命周期链断裂的文件；reopen 的 stale 传播与事件改为一次写入，失败不再留下半写状态。新增批准主体、摘要不匹配、后续拒绝、产物缺失、无批准事件写入、断链写入与 reopen 字节不变回归，永久测试夹具通过唯一批准写入器校正。
+- 正式 UI iteration 首次接入提交钩子时发现永久 `test-fixture-*` 会反向把真实非终态 iteration 误报为兄弟冲突；单迭代规则现对夹具双向豁免，新增“真实 iteration + 永久夹具同批校验”回归。框架全量回归增至 405 项。
+
+## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
+
+- 补齐数据库能力边界：靶场迁移后幂等创建 `argus_readonly`，仅授予全表 SELECT，并用 `default_transaction_read_only` 和实际建表拒绝探针双重验证；宿主机只通过 `127.0.0.1:15432` 访问。`settings.py assemble` 在注入数据库 DSN 时保留机械可识别的只读声明，真实 UI/API 本地配置检查均通过且文件权限为 `0600`。
+- 根据 Actions 原始日志修复两个脚本路径入口：`notify.py` 与 `record_approval.py` 现在能在 `python scripts/<name>.py` 形态导入仓库根包；通知配置缺失时明确记录零渠道而非 traceback。CLI 子进程回归覆盖两种入口，并验证飞书、钉钉、企业微信与 SMTP 的渠道信封和业务错误；真实外部频道送达仍保持未验收。
+- 修复 CI 通知事实源：本轮没有 JUnit 时不再选择历史 iteration 摘要，改发当前 job 状态；鉴于 GitHub runner 实测把 `job.status` 展开为空，工作流改用 `failure()`/`cancelled()` 推导非空状态，CLI 同时拒绝空状态，防止“通知步骤通过但消息状态为空”的假阳性。
+- 为组合 UI/API 执行增加可选 `api_base_url` 与 `ARGUS_API_BASE_URL`，生成 API 夹具不再硬编码 Medusa 后端地址；配置校验、CI 注入和文档示例同步覆盖。
+- 完成 Roadmap 7.4 的 PR 上下文覆盖路由：`--changed-base` 只选择变更 iteration，自动化、共享代码或覆盖工具变化会检查全部历史链，删除 iteration 不得静默跳过；CI 完整拉取历史并传入 base SHA。框架全量回归增至 396 项。
+- 为 Roadmap 7.1 增加只在 `workflow_dispatch` 暴露的对抗验收场景：static-checks 可强制进入失败通知分支，e2e 可稳定持续失败或仅首轮失败；常规 PR/定时运行始终为 normal。本地已证明退出序列 `1` 与 `1→0`，框架全量回归增至 398 项，远端调度证据将在提交后执行。
+
+- 固定并容器化 Medusa 2.19.0 开源靶场，提供 build/up/seed/reset/healthcheck/canary/down 生命周期；Admin API 种子覆盖区域与货币、商品库存、配送、手工支付、客户、促销、publishable key，并以私有运行时文件保存凭据。
+- 两次 reset 的种子状态字节一致；实时金丝雀验证 EUR 10.00、ARGUS10 10% 与 EUR 9.00 的派生关系，故意破坏价格时按预期失败；完整 down 后未残留 Argus 容器、网络或卷，重新全新启动通过。
+- 新增 `settings.py` 的 CLI/TEST_ENV/local 优先级、空 YAML 防护、CI 环境变量注入、`check`/`assemble` 命令，以及 `record_approval(stage=environment)` 的强制前置检查；审批摘要继续只记录脱敏结构。
+- 根 conftest 在 PROD 环境机械剔除非 `read_only` 用例，并以每个 xdist worker 独立 HTTP 会话和命名空间隔离状态；真实 harness 模块连续三轮 `pytest -n 2` 通过，PROD dry collect 显示 4/5 收集、1 项非只读探针被剔除。
+- 新增运行时 `ReadOnlyDBClient`：语句头白名单、多语句阻断、WITH/EXPLAIN 的 DML/ANALYZE 扫描和共享数据库断言。框架全量测试增至 331 项通过，Ruff、Pyright、DB/marker/orphan 静态门禁通过；这些证据不替代后续生成迭代与最终 UI/API E2E 验收。
+- 新增 M9 故障分类器与唯一证据记录器：run 目录不可覆盖、attempt 连续编号、预算计算、diff 引用解析、终态 Schema 校验、恢复检查点强制先验验证组合、patch-scope 调用及 AST import closure 受影响模块选择均已机械测试；升级类证据不能被细分为可修复类。
+- 新增钉钉、飞书、企业微信与 SMTP 通知适配器及统一 dispatcher；每个渠道独立按 1/2/4 秒退避重试，失败只记录不阻断兄弟渠道或测试终态；`notify.py --summary auto` 从 append-only run 证据树解析最新摘要，并支持 `flaky-suspect` 分类。
+- `self_debug_helper.py record-ci` 将 JUnit 绿/红结果写成唯一一条 `scope=full` attempt；报告归档拒绝覆盖既有 run 证据。真实外部渠道送达仍须在 7.2 DoD 单独验收，未用 mock 代替。
+- 新增 SHA 固定、最小权限、并发取消和超时约束的 `regression.yml`：release PR、自动化/迭代变更、手工与每周调度进入 Compose-only E2E；失败只自动复跑一次，重跑转绿标记 `flaky-suspect`；报告与通知使用 `always()`，靶场始终清理。Dependabot 每月更新 Actions/Python 依赖。
+- 新增 `finalize_merge.py`，只允许从 `accepted` 写入带 40 位真实 merge SHA 与正 PR number 的 `merged` 事件，并可仅在 `release` 分支创建 Emoji Conventional Commit；实际合并验收仍留在 7.6/9.2/9.3，未预写虚假 merge 事实。
+- 用本轮真实构建证据初始化 M12 知识：Medusa 容器 PostgreSQL SSL、SSR 内外 URL 分离、Skill 根目录命令路径和种子 oracle 反事实金丝雀；每条均含 tags/date/source，专项测试防止空来源和重复标题。
+- 在 GitHub 创建 `release` 并启用 strict `static-checks`/`e2e`、至少一名人工批准、last-push approval、管理员约束、线性历史及禁止强推/删除；真实直接推送返回 GH006 并被拒绝，证据记录于 `BRANCH_PROTECTION_2026-08-28.md`。
+
 ## 2026-08-28 — 完整交付 Goal 与 Phase 2 运行器实现
 
 - 按用户最新指令重设原生 Goal：持续实现全部剩余 v1 需求，以真实开源靶项目的完整 Web/API 自动化验收作为成功终点，不再沿用旧 Goal 在 2.1 处停止的开发安排。没有补造签收、审批或执行证据。

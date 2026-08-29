@@ -1,0 +1,40 @@
+---
+name: skill-self-optimizer
+description: 基于 Argus 多 iteration 的真实重复失败证据，提出、确认、应用、验证并版本化项目 Skill 改进。仅在同一 failure pattern 影响至少两个 iteration 或累计至少三次时使用；不得凭单次失败或主观偏好改 Skill。
+metadata:
+  version: "1.1.0"
+---
+
+# Outcome
+
+把量化、可追溯的重复缺陷转化为经用户确认或持续授权下 agent 审查、可回滚且能重新生成旧 iteration 产物的 Skill 版本改进。
+
+## Routing
+
+- 候选只来自 `knowledge/optimization-candidates.yaml`，达到“至少两个 distinct iterations 或至少三次 occurrence”才进入流程。
+- 未达阈值时只更新候选证据，不提出 Skill 修改。
+- Schema/机器契约变化不是普通 Skill 优化；需要 schema version、迁移说明和 ADR。
+
+## Steps
+
+1. Identify：校验候选的 skill_name、failure_pattern、occurrence_count、affected_iterations 与 evidence_refs，拒绝无法解析的证据。
+2. Summarize：概括共同根因、当前 Skill 行为与受影响场景，排除产品缺陷、环境问题和一次性噪声。
+3. Propose：把最小 SKILL.md diff 固化到当前 iteration 的 `runs/<run_id>/skill-optimization/proposal.patch`，并在同一目录保存 `golden-verification.txt`、`baseline-diff.yaml` 与 `rollback.md`；逐项引用重复实例，同时列出触发、流程、权限、兼容和验收影响。在隔离目录读取对应 Skill 的 `versions/baselines/<version>/manifest.yaml` 与 `input/`，用 proposed diff 重生成到独立 actual root，再执行 `uv run python scripts/check_skill_golden.py --baseline <baseline-dir> --actual-root <isolated-actual-root>`；把命令输出和全部 golden baseline（黄金基线）Schema/语义差异附到提案，禁止覆盖 `expected/` 消除差异。没有这些持久化证据不得进入 Confirm。
+4. Confirm：在写项目规范源前完成完整 diff、证据与真实黄金基线差异的审查；使用 `scripts/record_approval.py ... --stage skill_change --action approved` 记录用户批准，当前任务已有持续授权且 agent 审查通过时用 `--action delegated --note ...`，再继续。
+5. Apply：先将旧 `SKILL.md` 保存到 `versions/<previous-version>.md`，并将回滚命令/目标记录到本次 `rollback.md`，再按 SemVer 更新 frontmatter；只应用已批准 diff。
+6. Verify：批准并应用后，在新的隔离目录再次用 1-2 个 frozen input 重新生成，重复运行第 3 步的完整校验命令；YAML 按解析后的结构比较，Python 按去除位置与注释后的 AST 比较，并执行清单声明的 JSON Schema。新版本还必须能重新生成旧 iteration 的合法产物。
+7. Commit：内容、文案、静态、场景和 golden regression 通过后，创建单一逻辑提交；不得混入无关文件。
+8. Push：只推送当前 iteration/工作分支，报告远端结果；不得直接推受保护 release。
+9. Resume：恢复触发优化前的主任务，并按 M12 记录已证实的改进结果与回滚路径。
+
+## Guardrails
+
+- 不从模型记忆计数，不伪造 affected iteration、evidence ref、用户批准或 golden 结果。
+- 未经用户看到并确认 diff，或在持续授权下未经 agent 完整审查，不修改 Skill；一次 delegated 只覆盖绑定的当前 diff，不授权后续不同 diff。
+- MAJOR 只用于输入/输出 Schema 变化，MINOR 用于向后兼容规则/阶段变化，PATCH 用于文档修正。
+- verification 失败立即回滚到 versions snapshot，不以更新 baseline 掩盖回归。
+- `manifest.yaml` 中每份冻结输入都必须携带当前 SHA-256；校验器报告输入摘要漂移、缺失产物或不安全相对路径时，不得进入 Confirm。
+
+## Delivery
+
+报告候选阈值、证据、批准 diff、版本变化、golden regression、旧 iteration 再生成结果、commit/push 结果与明确回滚文件。

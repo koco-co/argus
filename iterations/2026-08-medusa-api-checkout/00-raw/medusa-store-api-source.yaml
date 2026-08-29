@@ -1,0 +1,161 @@
+schema_version: "1.0"
+source_type: source_code_and_live_probe
+service_name: Medusa Store API
+package:
+  name: "@medusajs/medusa"
+  version: "2.19.0"
+  repository: https://github.com/medusajs/dtc-starter.git
+  commit: cb603dfda0a82e8bb5e81622f295e0ff90ac6913
+  container_path: /server/node_modules/.pnpm/@medusajs+medusa@2.19.0_*/node_modules/@medusajs/medusa/dist/api/store
+captured_at: "2026-08-28T16:56:56Z"
+authentication:
+  header: x-publishable-api-key
+  value: supplied by target-app/runtime.env and never persisted here
+base_url: http://127.0.0.1:9000
+routes:
+  - operation_id: listStoreProducts
+    method: GET
+    path: /store/products
+    source_path: products/route.js
+    request:
+      query: [handle, region_id, fields]
+    response:
+      success_status: 200
+      envelope: products, count, offset, limit
+      product_fields: [id, handle, variants]
+      variant_fields: [id, title, sku, calculated_price]
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: createStoreCart
+    method: POST
+    path: /store/carts
+    source_path: carts/route.js
+    request:
+      body: [region_id]
+    response:
+      success_status: 200
+      envelope: cart
+      cart_fields: [id, region_id, currency_code, items, subtotal, discount_total, total]
+      invalid_status: 404
+      invalid_envelope: [type, message]
+  - operation_id: addStoreCartLineItem
+    method: POST
+    path: /store/carts/{id}/line-items
+    source_path: carts/[id]/line-items/route.js
+    request:
+      path: [id]
+      body: [variant_id, quantity]
+    response:
+      success_status: 200
+      envelope: cart
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: applyStoreCartPromotions
+    method: POST
+    path: /store/carts/{id}/promotions
+    source_path: carts/[id]/promotions/route.js
+    request:
+      path: [id]
+      body: [promo_codes]
+    response:
+      success_status: 200
+      envelope: cart
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: updateStoreCart
+    method: POST
+    path: /store/carts/{id}
+    source_path: carts/[id]/route.js
+    request:
+      path: [id]
+      body: [email, shipping_address, billing_address]
+    response:
+      success_status: 200
+      envelope: cart
+      cart_fields: [id, email, shipping_address, billing_address, items, subtotal, discount_total, total]
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: listStoreShippingOptions
+    method: GET
+    path: /store/shipping-options
+    source_path: shipping-options/route.js
+    request:
+      query: [cart_id]
+    response:
+      success_status: 200
+      envelope: shipping_options
+      option_fields: [id, name, amount, price_type, provider_id]
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: addStoreCartShippingMethod
+    method: POST
+    path: /store/carts/{id}/shipping-methods
+    source_path: carts/[id]/shipping-methods/route.js
+    request:
+      path: [id]
+      body: [option_id, data]
+    response:
+      success_status: 200
+      envelope: cart
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: createStorePaymentCollection
+    method: POST
+    path: /store/payment-collections
+    source_path: payment-collections/route.js
+    request:
+      body: [cart_id]
+    response:
+      success_status: 200
+      envelope: payment_collection
+      collection_fields: [id, amount, currency_code, payment_sessions]
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: initializeStorePaymentSession
+    method: POST
+    path: /store/payment-collections/{id}/payment-sessions
+    source_path: payment-collections/[id]/payment-sessions/route.js
+    request:
+      path: [id]
+      body: [provider_id, data]
+    response:
+      success_status: 200
+      envelope: payment_collection
+      session_fields: [provider_id, status, amount, currency_code]
+      invalid_status: 400
+      invalid_envelope: [type, message]
+  - operation_id: completeStoreCart
+    method: POST
+    path: /store/carts/{id}/complete
+    source_path: carts/[id]/complete/route.js
+    request:
+      path: [id]
+    response:
+      success_status: 200
+      envelope: type, order
+      order_fields: [id, status, email, items, shipping_methods, payment_collections, subtotal, discount_total, total]
+      order_item_fields: [variant_id, variant_sku, variant_title, quantity, unit_price, total]
+      order_shipping_fields: [shipping_option_id, name, amount]
+      order_payment_fields: [id, status, amount, currency_code]
+observed_live_probe:
+  probe_date: "2026-08-28"
+  product_selector: handle=t-shirt
+  variant_selector: sku=SHIRT-S-BLACK
+  variant_title: S / Black
+  currency_code: eur
+  unit_amount: 10
+  promotion_code: ARGUS10
+  promotion_percentage: 10
+  invalid_promotion_status: 400
+  invalid_promotion_type: invalid_data
+  missing_payment_provider_status: 400
+  missing_payment_provider_type: invalid_data
+  shipping_selector: name=Standard Shipping
+  payment_provider: pp_system_default
+  complete_type: order
+  completed_order_variant_sku: SHIRT-S-BLACK
+  completed_order_payment_status: authorized
+notes:
+  - route.js 与对应 d.ts 在锁定的 Medusa 2.19.0 容器中读取；未把 node_modules 源码复制进仓库。
+  - live probe 使用真实本地靶场和运行时种子；ID、密钥和游客个人资料均不写入此来源信封。
+  - 本文件是 M4 来源证据，不是自动化代码或测试预言机；金额断言仍从运行时响应和 seed registry 推导。

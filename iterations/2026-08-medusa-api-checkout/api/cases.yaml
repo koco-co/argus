@@ -1,0 +1,388 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-api-checkout
+status: exported
+generated_from:
+  artifact: iterations/2026-08-medusa-api-checkout/api/spec.normalized.yaml
+  sha256: f029d7df92980d914a25c0c2f338e447df3c1cf1198b6cb846da6e8adfa4cb9c
+cases:
+  - api_case_id: A0001
+    requirement_ids: [R0001]
+    operation_id: listStoreProducts
+    endpoint: /store/products
+    method: GET
+    title: 查询 T-Shirt 商品与黑色 S 码变体
+    case_type: happy_path
+    side_effect: none
+    module: checkout
+    request:
+      query:
+        handle: t-shirt
+        region_id: "${region_id}"
+      variables:
+        - name: region_id
+          source: seed
+          expression: $.region_europe
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/ProductListResponse"}
+      body_includes: {product_handle: t-shirt, variant_sku: SHIRT-S-BLACK}
+  - api_case_id: A0002
+    requirement_ids: [R0001]
+    operation_id: listStoreProducts
+    endpoint: /store/products
+    method: GET
+    title: 无效地区查询返回结构化错误
+    case_type: negative
+    side_effect: none
+    module: checkout
+    request:
+      query: {handle: t-shirt, region_id: reg_missing_for_argus}
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0003
+    requirement_ids: [R0001]
+    operation_id: createStoreCart
+    endpoint: /store/carts
+    method: POST
+    title: 按运行时地区创建游客购物车
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      body: {region_id: "${region_id}"}
+      variables:
+        - name: region_id
+          source: seed
+          expression: $.region_europe
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/CartResponse"}
+  - api_case_id: A0004
+    requirement_ids: [R0001]
+    operation_id: createStoreCart
+    endpoint: /store/carts
+    method: POST
+    title: 无效地区时拒绝创建购物车
+    case_type: negative
+    side_effect: none
+    module: checkout
+    request: {body: {region_id: reg_missing_for_argus}}
+    expected_response:
+      status_code: 404
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0005
+    requirement_ids: [R0001]
+    operation_id: addStoreCartLineItem
+    endpoint: /store/carts/{id}/line-items
+    method: POST
+    title: 加入运行时解析的黑色 S 码变体
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {variant_id: "${variant_id}", quantity: 1}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+        - name: variant_id
+          source: prev_response
+          expression: $.products[0].variants[sku=SHIRT-S-BLACK].id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/CartResponse"}
+  - api_case_id: A0006
+    requirement_ids: [R0001]
+    operation_id: addStoreCartLineItem
+    endpoint: /store/carts/{id}/line-items
+    method: POST
+    title: 缺少变体 ID 时拒绝加购
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {quantity: 1}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0007
+    requirement_ids: [R0002]
+    operation_id: applyStoreCartPromotions
+    endpoint: /store/carts/{id}/promotions
+    method: POST
+    title: 应用 ARGUS10 并返回折后购物车
+    case_type: happy_path
+    side_effect: updates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {promo_codes: ["${promotion_code}"]}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+        - name: promotion_code
+          source: seed
+          expression: $.discount_argus10.value
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/CartResponse"}
+  - api_case_id: A0008
+    requirement_ids: [R0004]
+    operation_id: applyStoreCartPromotions
+    endpoint: /store/carts/{id}/promotions
+    method: POST
+    title: 非法促销码返回结构化 400 错误
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {promo_codes: [NOT-A-REAL-CODE]}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0009
+    requirement_ids: [R0003]
+    operation_id: updateStoreCart
+    endpoint: /store/carts/{id}
+    method: POST
+    title: 写入游客邮箱和德国配送地址
+    case_type: happy_path
+    side_effect: updates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body:
+        email: argus-api@example.invalid
+        shipping_address:
+          first_name: Argus
+          last_name: API
+          address_1: Teststrasse 1
+          city: Berlin
+          postal_code: "10115"
+          country_code: de
+          phone: "+4900000000"
+        billing_address:
+          first_name: Argus
+          last_name: API
+          address_1: Teststrasse 1
+          city: Berlin
+          postal_code: "10115"
+          country_code: de
+          phone: "+4900000000"
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/CartResponse"}
+  - api_case_id: A0010
+    requirement_ids: [R0003]
+    operation_id: updateStoreCart
+    endpoint: /store/carts/{id}
+    method: POST
+    title: 非法邮箱时拒绝更新购物车
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {email: not-an-email}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0011
+    requirement_ids: [R0003]
+    operation_id: listStoreShippingOptions
+    endpoint: /store/shipping-options
+    method: GET
+    title: 查询购物车可用配送方式
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      query: {cart_id: "${cart_id}"}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/ShippingOptionListResponse"}
+      body_includes: {shipping_option_name: Standard Shipping}
+  - api_case_id: A0012
+    requirement_ids: [R0003]
+    operation_id: listStoreShippingOptions
+    endpoint: /store/shipping-options
+    method: GET
+    title: 缺少购物车 ID 时拒绝查询配送方式
+    case_type: negative
+    side_effect: none
+    module: checkout
+    request: {query: {}}
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0013
+    requirement_ids: [R0003]
+    operation_id: addStoreCartShippingMethod
+    endpoint: /store/carts/{id}/shipping-methods
+    method: POST
+    title: 选择 Standard Shipping
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {option_id: "${shipping_option_id}", data: {}}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+        - name: shipping_option_id
+          source: prev_response
+          expression: $.shipping_options[name=Standard Shipping].id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/CartResponse"}
+  - api_case_id: A0014
+    requirement_ids: [R0003]
+    operation_id: addStoreCartShippingMethod
+    endpoint: /store/carts/{id}/shipping-methods
+    method: POST
+    title: 无效配送选项时拒绝更新购物车
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      body: {option_id: so_missing_for_argus, data: {}}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0015
+    requirement_ids: [R0003]
+    operation_id: createStorePaymentCollection
+    endpoint: /store/payment-collections
+    method: POST
+    title: 为购物车创建支付集合
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      body: {cart_id: "${cart_id}"}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+  - api_case_id: A0016
+    requirement_ids: [R0003]
+    operation_id: createStorePaymentCollection
+    endpoint: /store/payment-collections
+    method: POST
+    title: 缺少购物车 ID 时拒绝创建支付集合
+    case_type: negative
+    side_effect: none
+    module: checkout
+    request: {body: {}}
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0017
+    requirement_ids: [R0003]
+    operation_id: initializeStorePaymentSession
+    endpoint: /store/payment-collections/{id}/payment-sessions
+    method: POST
+    title: 初始化隔离测试用 Manual Payment
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${payment_collection_id}"}
+      body: {provider_id: "${payment_provider_id}", data: {}}
+      variables:
+        - name: payment_collection_id
+          source: prev_response
+          expression: $.payment_collection.id
+        - name: payment_provider_id
+          source: seed
+          expression: $.payment_manual.value
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+  - api_case_id: A0018
+    requirement_ids: [R0003]
+    operation_id: initializeStorePaymentSession
+    endpoint: /store/payment-collections/{id}/payment-sessions
+    method: POST
+    title: 缺少支付提供者时返回结构化 400 错误
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${payment_collection_id}"}
+      body: {data: {}}
+      variables:
+        - name: payment_collection_id
+          source: prev_response
+          expression: $.payment_collection.id
+    expected_response:
+      status_code: 400
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - api_case_id: A0019
+    requirement_ids: [R0003]
+    operation_id: completeStoreCart
+    endpoint: /store/carts/{id}/complete
+    method: POST
+    title: 完成购物车并创建真实订单
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: {id: "${cart_id}"}
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 200
+      body_schema: {$ref: "#/components/schemas/OrderResponse"}
+      body_includes: {type: order}
+  - api_case_id: A0020
+    requirement_ids: [R0003]
+    operation_id: completeStoreCart
+    endpoint: /store/carts/{id}/complete
+    method: POST
+    title: 不存在的购物车不能完成订单
+    case_type: negative
+    side_effect: none
+    module: checkout
+    request:
+      path_params: {id: cart_missing_for_argus}
+    expected_response:
+      status_code: 404
+      body_schema: {$ref: "#/components/schemas/ErrorResponse"}

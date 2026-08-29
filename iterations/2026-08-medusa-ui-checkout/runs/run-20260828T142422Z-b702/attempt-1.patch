@@ -1,0 +1,17 @@
+diff --git a/automation/web/pages/checkout/cart_page.py b/automation/web/pages/checkout/cart_page.py
+--- a/automation/web/pages/checkout/cart_page.py
++++ b/automation/web/pages/checkout/cart_page.py
+@@
+-        return self.page.get_by_text("S / Black", exact=True)
++        return self.page.get_by_text("Variant: S / Black", exact=True)
+diff --git a/automation/web/pages/checkout/checkout_page.py b/automation/web/pages/checkout/checkout_page.py
+--- a/automation/web/pages/checkout/checkout_page.py
++++ b/automation/web/pages/checkout/checkout_page.py
+@@
+     def choose_standard_shipping(self) -> None:
++        self.page.wait_for_url(re.compile(r"[?&]step=delivery(?:&|$)"))
+         self.page.get_by_text(re.compile(r"Standard Shipping"), exact=False).first.click()
+@@
+-        return self.page.get_by_text(re.compile(r"required|invalid", re.IGNORECASE)).first
++        # HTML 原生必填提示气泡不进入 DOM 文本树，以 :invalid 锁定真实校验状态。
++        return self.page.locator("input:invalid").first

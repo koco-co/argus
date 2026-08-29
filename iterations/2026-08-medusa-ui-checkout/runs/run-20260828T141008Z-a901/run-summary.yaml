@@ -1,0 +1,21 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-ui-checkout
+run_id: run-20260828T141008Z-a901
+started_at: '2026-08-28T14:10:19Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: escalated
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: fail
+  failure_class: product_behavior_mismatch
+  summary: 10 条 checkout 模块用例中 2 条通过、8 条正式用例失败；商品页未选变体时仅展示禁用 Select variant，而已冻结断言要求
+    Add to cart 可见。机械分类为升级类，未应用任何 patch。
+escalation:
+  reason_class: product_behavior_mismatch
+  explanation: 真实商品页要求先选择尺码和颜色，未选择前显示禁用 Select variant；正式 C0001/C0007/C0008 的冻结断言却在选择前要求
+    Add to cart 可见。按 M9 分类器属于不可自动降级的产品行为差异，禁止修改测试断言或期望。
+finished_at: '2026-08-28T14:15:30Z'

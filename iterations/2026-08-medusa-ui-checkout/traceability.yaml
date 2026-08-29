@@ -1,0 +1,43 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-ui-checkout
+links:
+  - requirement_id: R0001
+    test_point_id: T0001
+    functional_case_id: C0001
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt
+  - requirement_id: R0001
+    test_point_id: T0002
+    functional_case_id: C0002
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line
+  - requirement_id: R0002
+    test_point_id: T0003
+    functional_case_id: C0003
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount
+  - requirement_id: R0002
+    test_point_id: T0004
+    functional_case_id: C0004
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount
+  - requirement_id: R0003
+    test_point_id: T0005
+    functional_case_id: C0005
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order
+  - requirement_id: R0003
+    test_point_id: T0006
+    functional_case_id: C0006
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address
+  - requirement_id: R0004
+    test_point_id: T0007
+    functional_case_id: C0007
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop
+  - requirement_id: R0004
+    test_point_id: T0008
+    functional_case_id: C0008
+    automation_test_ids:
+      - automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile

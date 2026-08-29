@@ -173,3 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_layering: {len(targets)} file(s) clean, {len(report.warnings)} warning(s)")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

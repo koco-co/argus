@@ -1,6 +1,11 @@
 # config/notify.example.yaml — committed placeholder shape (ARCHITECTURE §7.2).
 # Copy to config/notify.yaml (gitignored) and fill real webhook/SMTP values.
 # A failing channel is logged and never blocks others nor the run.
+# CI 不写入该文件，而是由同名 Actions Secrets 注入以下环境变量：
+# ARGUS_NOTIFY_DINGTALK_WEBHOOK / ARGUS_NOTIFY_FEISHU_WEBHOOK /
+# ARGUS_NOTIFY_WECOM_WEBHOOK / ARGUS_NOTIFY_EMAIL_SMTP_HOST /
+# ARGUS_NOTIFY_EMAIL_SMTP_PORT / ARGUS_NOTIFY_EMAIL_USERNAME /
+# ARGUS_NOTIFY_EMAIL_PASSWORD / ARGUS_NOTIFY_EMAIL_TO（多个收件人用逗号分隔）。
 #
 # channels:
 #   dingtalk:

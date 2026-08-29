@@ -1,8 +1,7 @@
-"""Roadmap 1.8 acceptance tests for scripts/check_api_coverage.py.
+"""scripts/check_api_coverage.py 的 Roadmap 1.8 验收测试。
 
-DoD: endpoint missing negative/edge fails with the operation_id listed;
-out_of_scope+reason passes; missing reason fails; every API case has
-requirement_ids[]; every non-exempt requirement is covered.
+DoD：缺少 negative/edge 的 endpoint 必须列出 operation_id 并失败；带理由的 out_of_scope
+通过；缺少理由失败；每个 API case 都有 requirement_ids[]；所有未豁免需求均被覆盖。
 """
 
 from __future__ import annotations
@@ -154,7 +153,7 @@ def test_out_of_scope_without_reason_fails(checker: Any) -> None:
 
 
 def test_out_of_scope_omitted_entirely_is_legal(checker: Any) -> None:
-    """Vacuous-conditional rule: no flag at all never demands a reason."""
+    """条件规则：完全不声明标记时不要求理由。"""
     report = checker.Report()
     spec = _spec([_endpoint("listThings")])
     cases = _cases(
@@ -185,12 +184,35 @@ def test_uncovered_requirement_fails_unless_not_testable_exempt(checker: Any) ->
     checker.check(spec, cases, requirements, {}, report)
     assert any("R0003 is not cited by any API case" in p for p in report.problems)
 
-    # manual_only does NOT remove the R->A demand (DATA_MODEL §2.1)
+    # manual_only 不会移除 R→A 要求（DATA_MODEL §2.1）。
     report = checker.Report()
     checker.check(spec, cases, requirements, {"R0003": "manual_only"}, report)
     assert any("R0003 is not cited" in p for p in report.problems)
 
-    # accepted not_testable removes it
+    # accepted 的 not_testable 会移除该要求。
     report = checker.Report()
     checker.check(spec, cases, requirements, {"R0003": "not_testable"}, report)
     assert report.problems == []
+
+
+def test_expected_status_must_be_declared_and_backend_5xx_is_not_an_oracle(checker: Any) -> None:
+    """case 不得把未声明的后端 5xx 当成通过条件。"""
+    spec, cases, requirements = _covered_everything()
+    cases["cases"][1]["expected_response"] = {"status_code": 500}
+    report = checker.Report()
+    checker.check(spec, cases, requirements, {}, report)
+    assert any("backend_5xx is escalation-only" in problem for problem in report.problems)
+    assert any("does not declare that response" in problem for problem in report.problems)
+
+
+def test_prev_response_case_must_declare_setup_side_effect(checker: Any) -> None:
+    """依赖前置响应的重放链必须声明其创建或更新副作用。"""
+    spec, cases, requirements = _covered_everything()
+    cases["cases"][0]["request"]["variables"] = [
+        {"name": "cart_id", "source": "prev_response", "expression": "$.cart.id"}
+    ]
+    report = checker.Report()
+    checker.check(spec, cases, requirements, {}, report)
+    assert any(
+        "uses prev_response but declares side_effect=none" in problem for problem in report.problems
+    )

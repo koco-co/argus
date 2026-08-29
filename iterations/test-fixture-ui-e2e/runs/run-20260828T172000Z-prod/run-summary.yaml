@@ -1,0 +1,19 @@
+schema_version: '1.0'
+iteration_id: test-fixture-ui-e2e
+run_id: run-20260828T172000Z-prod
+started_at: '2026-08-28T08:57:44Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: escalated
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: fail
+  failure_class: product_behavior_mismatch
+  summary: 真实页面显示种子派生总额 €9.00，与故意注入的 €8.00 预期冲突；禁止修改断言或种子。
+escalation:
+  reason_class: product_behavior_mismatch
+  explanation: Playwright trace 证明元素存在且真实总额为 €9.00，属于产品/需求差异，冻结范围零改动。
+finished_at: '2026-08-28T08:58:14Z'

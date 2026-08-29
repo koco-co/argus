@@ -5,8 +5,9 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint \
-	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-down
+.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint skill-golden \
+	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
+	target-app-down
 
 setup:
 	uv sync
@@ -20,8 +21,12 @@ validate-iteration:
 	uv run python scripts/validate_schema.py iterations/$(ID)
 
 export:
-	uv run python scripts/export_xmind.py iterations/$(ID)
-	uv run python scripts/export_xlsx.py iterations/$(ID)
+	@if [ -f iterations/$(ID)/functional-cases.yaml ]; then \
+		uv run python scripts/export_xmind.py iterations/$(ID); \
+	fi
+	@if [ -f iterations/$(ID)/api/cases.yaml ]; then \
+		uv run python scripts/export_xlsx.py iterations/$(ID); \
+	fi
 	uv run python scripts/render_md.py iterations/$(ID)
 
 web-tests:
@@ -32,7 +37,14 @@ api-tests:
 
 lint:
 	uv run ruff check .
+	uv run ruff format --check .
 	uv run pyright
+
+skill-golden:
+	@for manifest in .agents/skills/*/versions/baselines/*/manifest.yaml; do \
+		baseline=$$(dirname "$$manifest"); \
+		uv run python scripts/check_skill_golden.py --baseline "$$baseline" --actual-root . || exit 1; \
+	done
 
 target-app-up:
 	uv run python scripts/target_app_up.py
@@ -45,6 +57,9 @@ target-app-reset:
 
 target-app-healthcheck:
 	uv run python scripts/target_app_healthcheck.py
+
+target-app-canary:
+	uv run python scripts/target_app_canary.py
 
 target-app-down:
 	uv run python scripts/target_app_down.py

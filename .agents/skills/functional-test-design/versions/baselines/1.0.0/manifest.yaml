@@ -1,0 +1,13 @@
+schema_version: "1.0"
+skill_name: functional-test-design
+skill_version: "1.0.0"
+sample_id: medusa-ui-discount
+inputs:
+  - path: input/iterations/test-fixture-ui-e2e/requirements.yaml
+    sha256: 4d097a5d260abe4a7f51fc961d1f6040dbfa3a7a3680b3fc0ddae3a09e54227b
+  - path: input/iterations/test-fixture-ui-e2e/test_points.yaml
+    sha256: 52d441d23f272fe56d02a780b5affacc63a116bf3d8751419ab542b77ea5b5af
+artifacts:
+  - path: iterations/test-fixture-ui-e2e/functional-cases.yaml
+    comparison: yaml
+    schema: .agents/skills/functional-test-design/schemas/functional_cases.schema.json

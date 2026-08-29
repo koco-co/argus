@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info: {title: Medusa Store API, version: "2.19.0"}
+paths:
+  /store/carts/{id}/promotions:
+    post:
+      operationId: applyCartPromotions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ApplyPromotionsRequest"}
+      responses:
+        "200":
+          description: 促销应用成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CartResponse"}
+        "400":
+          description: 请求字段非法
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+components:
+  schemas:
+    ApplyPromotionsRequest:
+      type: object
+      required: [promo_codes]
+      properties:
+        promo_codes: {type: array, items: {type: string}}
+    Cart:
+      type: object
+      required: [id, total, subtotal]
+      properties:
+        id: {type: string}
+        total: {type: number}
+        subtotal: {type: number}
+        discount_total: {type: number}
+    CartResponse:
+      type: object
+      required: [cart]
+      properties:
+        cart: {$ref: "#/components/schemas/Cart"}
+    ErrorResponse:
+      type: object
+      required: [type, message]
+      properties:
+        type: {type: string}
+        message: {type: string}

@@ -1,0 +1,222 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-api-checkout
+state: accepted
+blocked_reason: null
+branches:
+  ui: false
+  api: true
+artifacts:
+  requirements:
+    status: accepted
+    input_sha256: ba1d6be1f2c6dc4e4ecd59eb3518815abf74ddfecbd27dd8c1c2e2701df7fa63
+  exemptions:
+    status: accepted
+    input_sha256: 3e0c273c1072c67003397967ed41e99261b92e9cdcddae6c072aaafa19391164
+  test_points:
+    status: not_started
+    input_sha256: null
+  functional_cases:
+    status: not_started
+    input_sha256: null
+  api_spec:
+    status: spec_valid
+    input_sha256: 30acdcc118408fea519e0e2605007ea8491d47fdd21648b0d6aefa28a3eff2a0
+  api_cases:
+    status: exported
+    input_sha256: f029d7df92980d914a25c0c2f338e447df3c1cf1198b6cb846da6e8adfa4cb9c
+  web_automation:
+    status: not_started
+    input_sha256: null
+  api_automation:
+    status: generated
+    input_sha256: fbf6b1151121c8c2ad7f290140ac15540688d5fed319ec95ec25fb7a0ca99c09
+  execution:
+    status: passed
+    input_sha256: 15e5ccef70ddbcc942942fe363d698c55420e098ae572e6e37d8397b3d36f9b7
+approvals:
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T16:11:52Z'
+  artifact_sha256: 3e0c273c1072c67003397967ed41e99261b92e9cdcddae6c072aaafa19391164
+  note: 用户于 2026-08-29 明确回复：接受该 API requirements.yaml
+- stage: exemptions
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-28T16:53:22Z'
+  artifact_sha256: 1ae0b50367087c63deeb34f8694625dc2dae6335dbe7491ec06de5588a16257b
+  note: 依据用户在当前任务中的持续授权；agent 已审查每项 accepted requirement 的 API 可测性，当前无需 not_testable
+    或 manual_only 豁免。
+  delegation_id: delegation-argus-v1
+- stage: environment
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-28T17:24:25Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 依据用户已明确批准使用当前 local 环境配置执行 M9；agent 已复核 settings.py check 通过，靶应用为本地真实 Medusa
+    Compose。
+  delegation_id: delegation-argus-v1
+- stage: acceptance
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-28T17:26:09Z'
+  artifact_sha256: be5cb174006b76012b6b79ff9c829ddbfe5572ba3739b55aa3f5feaa08c40b07
+  note: 依据用户对本任务授予的持续代理决策权；agent 已审阅真实 run-summary、JUnit 与 20 个 API case 的断言，22/22
+    通过后记录终态验收。
+  delegation_id: delegation-argus-v1
+- stage: acceptance
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-28T17:38:23Z'
+  artifact_sha256: 0100ba856c0752f522b9b5c30b731bec3104ba5d44e2fd8f404d88ccf0d35d5c
+  note: 依据用户对本任务授予的持续代理决策权；在最终 FullStoreClient/Api 模型代码上重新 fresh reset，审阅 JUnit 与
+    22/22 真实通过结果，以 run-20260828T173726Z-api2 作为最新 API 验收证据。
+  delegation_id: delegation-argus-v1
+- stage: acceptance
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-28T18:26:35Z'
+  artifact_sha256: 15e5ccef70ddbcc942942fe363d698c55420e098ae572e6e37d8397b3d36f9b7
+  note: 依据用户在当前任务中的持续授权；已 fresh reset 真实 Medusa，审阅 run-20260828T182611Z-api3 的 JUnit
+    与 22/22 通过结果（含 A0018 缺少 provider 的 400 断言），接受当前 API 自动化证据。
+  delegation_id: delegation-argus-v1
+events:
+- from_state: created
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T16:01:13Z'
+  triggered_by: agent
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T16:11:52Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: requirements_mapped
+  timestamp: '2026-08-28T16:53:22Z'
+  triggered_by: agent
+- from_state: requirements_mapped
+  to_state: spec_normalizing
+  timestamp: '2026-08-28T16:59:27Z'
+  triggered_by: agent
+- from_state: spec_normalizing
+  to_state: spec_valid
+  timestamp: '2026-08-28T16:59:41Z'
+  triggered_by: agent
+- from_state: spec_valid
+  to_state: api_cases_generating
+  timestamp: '2026-08-28T17:02:04Z'
+  triggered_by: agent
+- from_state: api_cases_generating
+  to_state: api_cases_exported
+  timestamp: '2026-08-28T17:02:36Z'
+  triggered_by: agent
+- from_state: api_cases_exported
+  to_state: api_automation_generating
+  timestamp: '2026-08-28T17:20:29Z'
+  triggered_by: agent
+- from_state: api_automation_generating
+  to_state: api_automation_generated
+  timestamp: '2026-08-28T17:24:15Z'
+  triggered_by: agent
+- from_state: api_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-28T17:24:20Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T17:24:30Z'
+  triggered_by: agent
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T17:24:50Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-28T17:26:01Z'
+  triggered_by: agent
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-28T17:26:09Z'
+  triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-28T17:26:09Z'
+  triggered_by: agent
+- from_state: accepted
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T18:15:34Z'
+  triggered_by: agent
+  delegation_id: delegation-argus-v1
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T18:24:28Z'
+  triggered_by: agent
+- from_state: requirements_accepted
+  to_state: requirements_mapped
+  timestamp: '2026-08-28T18:25:10Z'
+  triggered_by: agent
+- from_state: requirements_mapped
+  to_state: spec_normalizing
+  timestamp: '2026-08-28T18:25:17Z'
+  triggered_by: agent
+- from_state: spec_normalizing
+  to_state: spec_valid
+  timestamp: '2026-08-28T18:25:17Z'
+  triggered_by: agent
+- from_state: spec_valid
+  to_state: api_cases_generating
+  timestamp: '2026-08-28T18:25:18Z'
+  triggered_by: agent
+- from_state: api_cases_generating
+  to_state: api_cases_exported
+  timestamp: '2026-08-28T18:25:18Z'
+  triggered_by: agent
+- from_state: api_cases_exported
+  to_state: api_automation_generating
+  timestamp: '2026-08-28T18:25:18Z'
+  triggered_by: agent
+- from_state: api_automation_generating
+  to_state: api_automation_generated
+  timestamp: '2026-08-28T18:25:18Z'
+  triggered_by: agent
+- from_state: api_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-28T18:25:24Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T18:25:24Z'
+  triggered_by: agent
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T18:25:24Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-28T18:26:27Z'
+  triggered_by: agent
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-28T18:26:27Z'
+  triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-28T18:26:38Z'
+  triggered_by: agent
+source_manifest:
+- path: iterations/2026-08-medusa-api-checkout/00-raw/medusa-store-api-source.yaml
+  sha256: 30acdcc118408fea519e0e2605007ea8491d47fdd21648b0d6aefa28a3eff2a0
+  captured_at: '2026-08-28T16:56:56Z'
+  redacted: false
+updated_at: '2026-08-28T18:26:38Z'
+delegation:
+  id: delegation-argus-v1
+  granted_by: user
+  basis: 用户已明确要求在当前 goal 中自行调整并继续执行，不再重复询问确认。
+  basis_sha256: da7fd60bd9e199c7c7b09966ab33c73d54d2c24c5eec1c3c44c55e55a1acd8cf
+  scope:
+  - exemptions
+  - environment
+  - acceptance
+  - lifecycle_reopen
+  granted_at: '2026-08-28T16:00:00Z'
+  expires_at: '2026-12-31T23:59:59Z'

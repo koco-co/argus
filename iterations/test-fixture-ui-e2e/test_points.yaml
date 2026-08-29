@@ -1,0 +1,14 @@
+schema_version: "1.0"
+iteration_id: test-fixture-ui-e2e
+status: draft
+test_points:
+  - test_point_id: T0001
+    requirement_ids: [R0001]
+    description: 有效折扣码按种子比例降低购物车总额。
+    type: happy
+    priority: 1
+  - test_point_id: T0002
+    requirement_ids: [R0001]
+    description: 无效折扣码不得降低购物车总额。
+    type: negative
+    priority: 1

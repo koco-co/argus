@@ -1,0 +1,4 @@
+结论：通过
+允许范围：automation/web/pages/checkout/product_page.py
+冻结范围改动：0
+违规项：0

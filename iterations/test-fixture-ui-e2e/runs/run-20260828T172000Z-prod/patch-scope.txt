@@ -1,0 +1,6 @@
+结论：立即升级，未生成 patch
+故障分类：product_behavior_mismatch（只允许升级）
+实际失败轮次：1
+剩余自动修复预算：5/5
+冻结范围改动：0
+证据：traces/attempt-1-trace.zip

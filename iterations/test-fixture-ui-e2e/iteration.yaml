@@ -1,0 +1,18 @@
+schema_version: "1.0"
+iteration_id: test-fixture-ui-e2e
+state: created
+blocked_reason: null
+branches: {ui: true, api: false}
+artifacts:
+  requirements: {status: draft, input_sha256: null}
+  exemptions: {status: not_started, input_sha256: null}
+  test_points: {status: draft, input_sha256: null}
+  functional_cases: {status: draft, input_sha256: null}
+  api_spec: {status: not_started, input_sha256: null}
+  api_cases: {status: not_started, input_sha256: null}
+  web_automation: {status: generated, input_sha256: null}
+  api_automation: {status: not_started, input_sha256: null}
+  execution: {status: not_started, input_sha256: null}
+approvals: []
+events: []
+source_manifest: []

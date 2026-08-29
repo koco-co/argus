@@ -151,3 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{'present' if seeds is not None else 'absent'}]"
     )
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

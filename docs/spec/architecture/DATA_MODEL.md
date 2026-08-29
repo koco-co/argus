@@ -197,6 +197,9 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
         {"properties": {"ui": {"const": false}, "api": {"const": true}}}
       ]
     },
+    "delegation": {
+      "$ref": "#/definitions/delegation"
+    },
     "artifacts": {
       "type": "object", "additionalProperties": false,
       "required": ["requirements", "test_points", "functional_cases",
@@ -219,13 +222,25 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
         "type": "object", "additionalProperties": false,
         "required": ["stage", "action", "actor", "timestamp", "artifact_sha256"],
         "properties": {
-          "stage": {"enum": ["requirements", "test_points", "environment", "skill_change", "acceptance"]},
-          "action": {"enum": ["accepted", "rejected", "provided", "approved"]},
-          "actor": {"enum": ["user"]},
+          "stage": {"enum": ["requirements", "exemptions", "test_points", "environment", "skill_change", "acceptance"]},
+          "action": {"enum": ["accepted", "rejected", "provided", "approved", "delegated"]},
+          "actor": {"enum": ["user", "agent"]},
           "timestamp": {"type": "string", "format": "date-time"},
           "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-          "note": {"type": "string"}
-        }
+          "note": {"type": "string"},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
+        },
+        "allOf": [{
+          "if": {"properties": {"action": {"const": "delegated"}}, "required": ["action"]},
+          "then": {
+            "properties": {"actor": {"const": "agent"}, "note": {"minLength": 1}},
+            "required": ["note", "delegation_id"]
+          },
+          "else": {
+            "properties": {"actor": {"const": "user"}},
+            "not": {"required": ["delegation_id"]}
+          }
+        }]
       }
     },
     "events": {
@@ -237,7 +252,8 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
           "from_state": {"type": "string"},
           "to_state": {"type": "string"},
           "timestamp": {"type": "string", "format": "date-time"},
-          "triggered_by": {"enum": ["agent", "script", "user"]}
+          "triggered_by": {"enum": ["agent", "script", "user"]},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
         }
       }
     },
@@ -257,6 +273,21 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "definitions": {
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "granted_by", "basis", "basis_sha256", "scope", "granted_at", "expires_at"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"},
+        "granted_by": {"const": "user"},
+        "basis": {"type": "string", "minLength": 1},
+        "basis_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "scope": {"type": "array", "minItems": 1, "uniqueItems": true,
+                  "items": {"enum": ["requirements", "exemptions", "test_points", "environment", "acceptance", "skill_change", "lifecycle_reopen"]}},
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "artifact_status": {
       "type": "object", "additionalProperties": false,
       "required": ["status"],
@@ -273,7 +304,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
 }
 ```
 
-Semantic check (scripts, not schema): transitions follow PRD §5 routes (`requirements_mapped` applies to the API branch only); v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`. Writer convergence: `state` and `events[]` are written exclusively by `scripts/record_event.py` (called by skills after each legal transition); `approvals[]` exclusively by `scripts/record_approval.py`; hand edits to either namespace are validation errors. `exemptions` in `artifacts` is an optional aggregate mirror — the authoritative exemption state remains `exemptions.yaml` itself.
+Semantic check (scripts, not schema): transitions follow PRD §5 routes (`requirements_mapped` applies to the API branch only); v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`. Writer convergence: `state` and `events[]` are written exclusively by `scripts/record_event.py` (called by skills after each legal transition); regular `approvals[]` entries are written exclusively by `scripts/record_approval.py`; the structured `delegation` grant and its one-time legacy binding are written exclusively by `scripts/record_delegation.py`; hand edits to either namespace are validation errors. Explicit user decisions use `actor: user`. A delegated decision is valid only with `action: delegated`, `actor: agent`, a matching `delegation_id`, a non-empty note, and a delegation object whose issuer is `user`, basis hash, scope, and validity window all verify. An agent reopen additionally requires the `lifecycle_reopen` scope and stores the same delegation id on the event; delegation ids on unrelated events are invalid. Both decision types bind the current artifact digest and cannot replace environment mechanical checks, real execution evidence, notification delivery, non-author review, or a real merge SHA. `exemptions` in `artifacts` is an optional aggregate mirror — the authoritative exemption state remains `exemptions.yaml` itself.
 
 ## 4. `test_points.yaml`
 
@@ -457,6 +488,8 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
           "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
           "summary": {"type": "string"},
           "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "requirement_ids": {"type": "array", "minItems": 1,
+            "items": {"type": "string", "pattern": "^R[0-9]{4}$"}},
           "authentication": {"type": "string"},
           "parameters": {"type": "array", "items": {"$ref": "#/definitions/param"}},
           "request_body": {
@@ -788,7 +821,7 @@ Cross-file and stage-dependent semantics belong to dedicated checkers so schemas
 | Functional expectation kind/seed rule; no unexplained numeric or currency literal for `derived_value`; `derived_from.seed` resolves against the seed registry (advisory without one, hard gate from M6); exactly one `module:` tag per case | `check_functional_expectations.py` | after M3/M6 generation |
 | Collected automation nodeids are not orphans: every test's `(iteration, case_id)` markers resolve against the owning iteration's cases and its `traceability.yaml` rows (reverse closure — no untracked hand-written tests) | `check_orphan_tests.py` | static-checks + verification battery |
 | Client fields are a subset of source schema fields; variables resolve to seed/path/previous response | `check_api_models.py` + API semantic pass | after M5/M7 generation |
-| Legal iteration-state transitions; approval/event completeness; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
+| Legal iteration-state transitions; approval/event completeness; latest stage decision and current artifact SHA-256 match for requirements/test-points/exemptions gates; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
 | Exported implies ≥1 case; `.xmind` tree is iteration→module→R→T→C→step; `.xlsx` columns match the API export contract | exporter round-trip tests + CI byte-repro check | CI |
 | Retired nodeids are not active coverage; at most one in-progress iteration exists in v1 | `check_coverage.py` + `validate_iteration.py` | every validation run |
 

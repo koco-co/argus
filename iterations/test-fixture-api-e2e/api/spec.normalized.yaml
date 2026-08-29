@@ -1,0 +1,56 @@
+schema_version: "1.0"
+iteration_id: test-fixture-api-e2e
+status: spec_draft
+service_name: Medusa Store API
+base_path: /store
+auth_model: x-publishable-api-key
+source_refs:
+  - kind: dev_docs
+    location: https://docs.medusajs.com/api/store
+components:
+  schemas:
+    ApplyPromotionsRequest:
+      type: object
+      required: [promo_codes]
+      properties:
+        promo_codes: {type: array, items: {type: string}}
+    Cart:
+      type: object
+      required: [id, total, subtotal]
+      properties:
+        id: {type: string}
+        total: {type: number}
+        subtotal: {type: number}
+        discount_total: {type: number}
+    CartResponse:
+      type: object
+      required: [cart]
+      properties:
+        cart: {$ref: "#/components/schemas/Cart"}
+    ErrorResponse:
+      type: object
+      required: [type, message]
+      properties:
+        type: {type: string}
+        message: {type: string}
+endpoints:
+  - operation_id: applyCartPromotions
+    path: /store/carts/{id}/promotions
+    method: POST
+    module: checkout
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/ApplyPromotionsRequest"}
+    responses:
+      - status_code: 200
+        description: 促销应用成功
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 400
+        description: 请求字段非法
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}

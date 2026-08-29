@@ -65,6 +65,7 @@ def test_registry_binding_matches_data_model_placement(
         "api_cases": ".agents/skills/api-test-design/schemas/api_cases.schema.json",
         "traceability": "scripts/schemas/traceability.schema.json",
         "run_summary": "scripts/schemas/run_summary.schema.json",
+        "medusa_source": "scripts/schemas/medusa_source.schema.json",
     }
     assert set(bindings) == (set(expected_schemas) | {"source_payload"})
     for artifact, schema in expected_schemas.items():

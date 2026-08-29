@@ -1,0 +1,16 @@
+schema_version: "1.0"
+skill_name: api-test-design
+skill_version: "1.0.0"
+sample_id: medusa-api-promotions
+inputs:
+  - path: input/iterations/test-fixture-api-e2e/requirements.yaml
+    sha256: ef5180b84f7c22177e197f3cb5a357655782d4a606895bad7a55f5bf7d23f033
+  - path: input/iterations/test-fixture-api-e2e/00-raw/openapi.yaml
+    sha256: 42dbd3c08f55f4554185c9eb6ce7b68a0f98085b89fe15785cf899cbddd256de
+artifacts:
+  - path: iterations/test-fixture-api-e2e/api/spec.normalized.yaml
+    comparison: yaml
+    schema: .agents/skills/api-test-design/schemas/api_spec.schema.json
+  - path: iterations/test-fixture-api-e2e/api/cases.yaml
+    comparison: yaml
+    schema: .agents/skills/api-test-design/schemas/api_cases.schema.json
