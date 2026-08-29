@@ -50,6 +50,14 @@ class CheckoutPage:
 
     def place_order(self) -> None:
         self.page.get_by_role("button", name="Place order").click()
+        # Medusa 的 server action 先返回 NEXT_REDIRECT，再异步渲染确认页；等待真实路由和成功标题，
+        # 避免在确认页尚未完成流式渲染时读取到 Checkout 的中间状态。
+        self.page.wait_for_url(
+            re.compile(r"/order/[^/]+/confirmed(?:\?.*)?$"),
+            wait_until="domcontentloaded",
+            timeout=30_000,
+        )
+        self.success_heading().wait_for(state="visible", timeout=30_000)
 
     def complete_guest_checkout(self, address: dict[str, str]) -> None:
         self.fill_guest_address(address)
