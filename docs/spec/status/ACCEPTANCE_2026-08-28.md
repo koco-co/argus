@@ -25,7 +25,8 @@
 | Skill 黄金基线 | 四个生成 Skill 各有 1 份版本化冻结输入；10 项代表性 YAML/Python 产物通过 Schema、结构语义或 AST 语义比较，输入/YAML/AST 漂移反向测试均会失败 | `make skill-golden`；`scripts/tests/test_check_skill_golden.py` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 的 `static-checks` 与 Compose-only `e2e` 均通过；e2e 日志显示 38 passed，通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 新 head 的 Actions run `33202248757`、`33202248717`；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
+| GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 与最新 head `59618d5ca8296093fdde0c8745efa29133fecf6b` 的 `static-checks`、Compose-only `e2e` 均通过；最新 e2e 日志显示 38 passed，通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 最新 head 的 Actions run `33203109968`、`33203109999`；合并到 main 后 static-checks run `33234492727`；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
+| main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`，产生 merge SHA `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；`release` 未被该操作改写 | `gh pr view 1`；`git ls-remote origin refs/heads/main refs/heads/release` |
 
 ## 不可伪造的外部事实
 
@@ -33,8 +34,8 @@
 
 1. 正式 UI/API iteration 的上游与终态记录已按当前任务授权完成：UI 记录用户 `accepted`，API 的 exemptions/environment/acceptance 记录 `delegated`；API 的结构化 delegation 绑定用户 basis 摘要、scope 和有效期，且旧终态已经 reopen 后由 fresh run 重建；所有批准记录由 `record_approval.py` 写入并绑定当前摘要。该代理授权不改变外部事实门禁。
 2. `config/notify.yaml` 不存在，Actions Secrets/Variables 当前为空；适配器、隔离重试、Secrets 环境变量装配和 CI `always()` 已验证，但“真实频道收到消息”未成立。
-3. PR #1 当前仍为 OPEN、`REVIEW_REQUIRED`、`BLOCKED`，远端 head 已包含本轮最新交付提交，reviews 为 0；受保护 `release` 要求至少一名非作者人工批准与最后推送后的批准，作者不能批准自己的 PR。
-4. `finalize_merge.py` 需要真实 PR 合并 SHA；合并前不得伪造 `state: merged` 或 merge event。
+3. PR #1 已于 2026-08-29 真实合并到 `main`，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；受保护 `release` 仍停在 `c51649fe0e05db9c71077eec33773d114ceaf5d2`，其合并仍要求至少一名非作者人工批准与最后推送后的批准。
+4. `finalize_merge.py` 的 v1 收口目标是受保护 `release`；必须使用该真实合并事实对应的 SHA，合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
 
 这些事实未成立前，Roadmap 对应人工门禁保持未勾选，且不得宣称 v1 最终验收完成。

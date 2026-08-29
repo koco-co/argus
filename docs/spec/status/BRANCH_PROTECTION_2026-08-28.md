@@ -21,3 +21,7 @@ gh api repos/koco-co/argus/branches/release/protection
 gh pr checks 1
 git ls-remote origin refs/heads/release
 ```
+
+## 2026-08-29 交付更新
+
+按用户明确要求，PR #1 的目标从 `release` 改为默认分支 `main`，随后由 GitHub 真实合并，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`。`main` 当前未配置分支保护；该次合并没有改写受保护的 `release`，其远端 SHA 仍为 `c51649fe0e05db9c71077eec33773d114ceaf5d2`。因此本更新记录的是 `main` 交付事实，不替代 7.5、7.6 或 Phase 9 所要求的受保护 `release` 合并与收口。
