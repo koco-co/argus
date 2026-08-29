@@ -8,7 +8,7 @@
 - 2026-08-29：`main` 合并后再次执行真实 Compose-only 回归。手工 Actions run `33234802753` 首轮 C0005 在订单确认标题等待处失败，唯一重试 38/38 通过并按工作流规则标记 `flaky-suspect`；随后本地 fresh reset 后独立重放 C0005 三次均通过，完整 Web/API/fixture/靶场套件为 38/38（125.82 秒）。未修改冻结断言或伪装该次 CI 为稳定全绿。
 - 2026-08-29：按用户明确要求将 PR #1 的目标从 `release` 改为 `main` 并真实合并；GitHub 返回 merge SHA `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`，合并后 `main` 的 static-checks run `33234492727` 成功。受保护 `release` 保持原 SHA 与审批门禁，未把 `main` 合并冒充 release 收口。
 - 2026-08-29：提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 GitHub `static-checks`（run `33202248757`）与 Compose-only `e2e`（run `33202248717`）均通过，e2e 日志为 38 passed，通知步骤实际执行但因无 Secret 保持零渠道。PR 仍等待非作者审批，受保护 `release` 合并与真实通知送达继续保持未验收。
-- 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报同步当前 430 项框架测试和 38 条全栈回归证据。
+- 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报记录了当时 430 项框架测试和 38 条全栈回归证据；后续回归计数以各自日期条目为准。
 
 - 2026-08-29：针对审计复核重建 API iteration 的真实验收链。新增结构化、限时用户 delegation（basis_sha256、scope、有效期和 delegation_id 语义校验），禁止终态后追加 acceptance 记录，并要求 agent reopen 具备 lifecycle_reopen scope；API 来源信封改为严格 Schema 并补充有效/无效夹具。Medusa 真实负向响应统一按已探测的 400/404 声明，A0018 缺少 provider 改为 400，整个 setup 链副作用改为 creates；fresh reset 后新 run `run-20260828T182611Z-api3` 为 22/22，通过新的 endpoint/status/模型/孤儿闭包门禁。
 
