@@ -13,7 +13,7 @@
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
 | UI 生成链 | 正式 UI：需求→测试点→功能用例→POM→8 条 Chromium 用例→traceability 完整；fresh reset 后 M9 10/10 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；最新 `run-20260828T183412Z-ui03` |
 | API 生成链 | 正式 API：需求→映射/豁免→真实 Medusa 来源规范化→20 个 API case→Pydantic 模型/FullStoreClient→traceability 完整；fresh reset 后 M9 连同 fixture 22/22，A0018 缺少 provider 返回结构化 400 | `iterations/2026-08-medusa-api-checkout/`；最新 `run-20260828T182611Z-api3` |
-| 全栈完整回归 | fresh reset 后正式 UI/API、既有 fixture 与靶场探针共 38 条通过 | 本地最终运行：`make target-app-reset && TEST_ENV=local uv run pytest automation/web automation/api -q --junitxml=/tmp/argus-fullstack-final-20260829.xml` → `38 passed in 122.71s`；main 合并后再次 fresh reset 同套件 → `38 passed in 125.82s`；双 worker 隔离证据仍见 5.1 记录 |
+| 全栈完整回归 | fresh reset 后正式 UI/API、既有 fixture 与靶场探针共 38 条通过 | 本地最终运行：`make target-app-reset && TEST_ENV=local uv run pytest automation/web automation/api -q --junitxml=/tmp/argus-fullstack-final-20260829.xml` → `38 passed in 122.71s`；main 合并后再次 fresh reset 同套件 → `38 passed in 125.82s`；POM 时序修复后受影响 C0005 与完整套件分别通过，双 worker 隔离证据仍见 5.1 记录 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | PR 覆盖范围 | iteration 工件变化只检查对应目录；自动化、共享代码或覆盖门禁变化检查全部；删除 iteration 明确失败；CI 取得完整 base 历史 | `check_coverage.py --changed-base <sha>`；`test_check_coverage.py` |
 | CI 对抗控制 | `force_failure` 远端连续两轮均为 1 失败/9 通过并以失败终止；`force_flaky` 首轮 1 失败/9 通过、第二轮 10 通过，被归类为 `flaky-suspect` 并以成功终止；两条路径均上传证据、执行汇总通知并清理容器/网络/卷 | Actions run `33167112680`、`33167439010`；artifact `9684097115`、`9684232762` |
@@ -25,8 +25,8 @@
 | Skill 黄金基线 | 四个生成 Skill 各有 1 份版本化冻结输入；10 项代表性 YAML/Python 产物通过 Schema、结构语义或 AST 语义比较，输入/YAML/AST 漂移反向测试均会失败 | `make skill-golden`；`scripts/tests/test_check_skill_golden.py` |
 | 视觉 | 真实折扣购物车在 `1440×900` 与 `390×844` 的顶部、总额、底部滚动状态已截图检查 | `run-20260828T164100Z-ui01/visual-verdict.md` 与该 run 的 `traces/` |
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
-| GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 与 head `59618d5ca8296093fdde0c8745efa29133fecf6b` 的 `static-checks`、Compose-only `e2e` 均通过；main 合并后的 static-checks 通过，手工 Compose-only e2e 首轮 1 条 C0005 失败、自动唯一重试 38/38 通过，按工作流规则标记 `flaky-suspect`；通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 原 head Actions run `33203109968`、`33203109999`；main static-checks run `33234492727`、`33234766050`；main e2e run `33234802753`（job `99053798298`）；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
-| main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`，产生 merge SHA `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；`release` 未被该操作改写 | `gh pr view 1`；`git ls-remote origin refs/heads/main refs/heads/release` |
+| GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 与 head `59618d5ca8296093fdde0c8745efa29133fecf6b` 的 `static-checks`、Compose-only `e2e` 均通过；修复前 main 手工 e2e 首轮 1 条 C0005 失败、自动唯一重试 38/38 通过，按工作流规则标记 `flaky-suspect`；PR #9 的 POM 时序修复 e2e 通过且分类 `normal`；合并后 main 手工 e2e 再次为 38/38、分类 `normal`；通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 原 head Actions run `33203109968`、`33203109999`；修复前 main e2e run `33234802753`（job `99053798298`）；PR #9 e2e run `33236374652`；修复后 main e2e run `33236596449`（job `99058554054`）；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
+| main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`，PR #9 的 POM 时序修复也已由 GitHub 真实合并；当前 `main` merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；`release` 未被上述操作改写 | `gh pr view 1`、`gh pr view 9`；`git ls-remote origin refs/heads/main refs/heads/release` |
 
 ## 不可伪造的外部事实
 
@@ -34,12 +34,14 @@
 
 1. 正式 UI/API iteration 的上游与终态记录已按当前任务授权完成：UI 记录用户 `accepted`，API 的 exemptions/environment/acceptance 记录 `delegated`；API 的结构化 delegation 绑定用户 basis 摘要、scope 和有效期，且旧终态已经 reopen 后由 fresh run 重建；所有批准记录由 `record_approval.py` 写入并绑定当前摘要。该代理授权不改变外部事实门禁。
 2. `config/notify.yaml` 不存在，Actions Secrets/Variables 当前为空；适配器、隔离重试、Secrets 环境变量装配和 CI `always()` 已验证，但“真实频道收到消息”未成立。
-3. PR #1 已于 2026-08-29 真实合并到 `main`，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；受保护 `release` 仍停在 `c51649fe0e05db9c71077eec33773d114ceaf5d2`，其合并仍要求至少一名非作者人工批准与最后推送后的批准。
+3. PR #1 已于 2026-08-29 真实合并到 `main`，merge SHA 为 `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`；随后 PR #9 的 Medusa 订单确认时序 POM 修复也已真实合并，当前 `main` merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`。受保护 `release` 仍停在 `c51649fe0e05db9c71077eec33773d114ceaf5d2`，其合并仍要求至少一名非作者人工批准与最后推送后的批准。
 4. `finalize_merge.py` 的 v1 收口目标是受保护 `release`；必须使用该真实合并事实对应的 SHA，合并前不得伪造 `state: merged` 或 merge event。
 5. Skill 自优化只有候选达到量化阈值并由用户确认具体 proposal diff 后才能应用；当前候选注册表为空。
 
 ## main 合并后复核
 
 `main` 的手工回归 run `33234802753` 首轮在 `automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]` 等待精确成功标题时超时；页面已进入真实订单确认路由并出现 `Order Confirmed`，但当时无目标 heading。工作流仅重试一次，第二轮 38/38 通过并按约定标记 `flaky-suspect`，因此该次 CI 不能被表述为无波动全绿。随后本地 fresh reset 后对 C0005 独立重放 3 次均通过，再执行完整 38 条套件为 38/38（125.82 秒）；未修改冻结断言或以较弱定位器掩盖该时序证据。
+
+在上述复核后，PR #9 仅修改 `automation/web/pages/checkout/checkout_page.py` 的允许 POM 等待面：下单后先等待 `/order/<id>/confirmed` 路由，再等待既有精确成功标题；未修改冻结断言、需求或测试点。PR #9 的 e2e run `33236374652` 通过并分类 `normal`。其真实合并后的 `main` 手工 run `33236596449` 在 Compose-only 环境中为 `38 passed in 82.15s`，分类 `normal`，run evidence 已上传并完成靶应用清理。该次通知仍因没有 `config/notify.yaml` 或 Actions Secret/Variable 而为零渠道，不能作为真实外部送达证据。
 
 这些事实未成立前，Roadmap 对应人工门禁保持未勾选，且不得宣称 v1 最终验收完成。
