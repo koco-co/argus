@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 import pytest  # pyright: ignore[reportMissingImports]
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -210,6 +210,7 @@ EXPECTED_FILES: set[str] = {
     "packages/argus-core/src/argus_core/cli.py",
     "packages/argus-core/src/argus_core/models.py",
     "packages/argus-core/src/argus_core/promotion.py",
+    "packages/argus-core/src/argus_core/parsing.py",
     "packages/argus-core/src/argus_core/schema.py",
     "packages/argus-core/src/argus_core/state.py",
     "packages/argus-core/src/argus_core/store.py",
@@ -262,6 +263,7 @@ EXPECTED_FILES: set[str] = {
     "scripts/check_db_readonly.py",
     "scripts/check_secrets.py",
     "scripts/check_skill_golden.py",
+    "scripts/check_iteration_gates.py",
     "scripts/finalize_merge.py",
     "scripts/notify.py",
     ".github/workflows/ci.yml",
@@ -311,8 +313,16 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
     "automation/api": {"conftest.py", "clients", "models", "tests", "har"},
     "automation/perf": {"locustfiles", "scenarios"},
     "shared": {"utils", "assertions", "config", "db", "notify", "testdata"},
-    # junit.xml 与 visual 是回归工作流的运行时产物，和 Allure 目录一样被 gitignore。
-    "reports": {"allure-results", "allure-report", "visual", "junit.xml"},
+    # 首轮/重试 JUnit 与 Allure 目录都是回归工作流的运行时产物，且被 gitignore。
+    "reports": {
+        "allure-results",
+        "allure-report",
+        "allure-first",
+        "allure-retry",
+        "visual",
+        "junit-first.xml",
+        "junit-retry.xml",
+    },
     "knowledge": {
         "patterns.md",
         "anti-patterns.md",
@@ -349,6 +359,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "finalize_merge.py",
         "weekly_escalation.py",
         "check_functional_expectations.py",
+        "check_iteration_gates.py",
         "_writers.py",
         "record_event.py",
         "record_approval.py",
@@ -376,6 +387,7 @@ GOVERNED_CHILDREN: dict[str, set[str]] = {
         "cli.py",
         "models.py",
         "promotion.py",
+        "parsing.py",
         "schema.py",
         "state.py",
         "store.py",

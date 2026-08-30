@@ -11,6 +11,8 @@ from .models import (  # pyright: ignore[reportMissingImports]
     ApprovalStage,
     DelegationGrant,
     IterationDocument,
+    IterationStatus,
+    WorkstreamStatus,
 )
 
 
@@ -69,14 +71,63 @@ def require_latest(
             raise ApprovalError("requirements acceptance must be an explicit user decision")
     elif approval.action != action and approval.action != ApprovalAction.DELEGATED:
         raise ApprovalError(f"latest {stage.value} approval must be {action.value} or delegated")
+    window_start = document._approval_window_start(workstream_id, stage)
+    if stage in {
+        ApprovalStage.REQUIREMENTS,
+        ApprovalStage.DESIGN,
+        ApprovalStage.MAPPING,
+        ApprovalStage.CASES,
+        ApprovalStage.ENVIRONMENT,
+        ApprovalStage.EXECUTION,
+        ApprovalStage.PROMOTION,
+    } and (window_start is None or approval.recorded_at < window_start):
+        raise ApprovalError(
+            f"latest {stage.value} approval is outside the current lifecycle window"
+        )
     verify_delegation(document, approval)
     return approval
 
 
 def append_approval(document: IterationDocument, approval: Approval) -> None:
-    """在模型已通过固定矩阵后追加审批；调用方负责持久化。"""
-    if approval.workstream_id not in {item.id for item in document.workstreams}:
-        raise ApprovalError(f"unknown workstream: {approval.workstream_id}")
+    """Append an approval only during its corresponding lifecycle window."""
+    try:
+        workstream = document.workstream(approval.workstream_id)
+    except KeyError as exc:
+        raise ApprovalError(f"unknown workstream: {approval.workstream_id}") from exc
+    allowed_states: dict[ApprovalStage, set[object]] = {
+        ApprovalStage.REQUIREMENTS: {WorkstreamStatus.CREATED},
+        ApprovalStage.DESIGN: {WorkstreamStatus.DESIGN_PENDING},
+        ApprovalStage.MAPPING: {WorkstreamStatus.MAPPING_PENDING},
+        ApprovalStage.CASES: {WorkstreamStatus.CASES_PENDING},
+        ApprovalStage.ENVIRONMENT: {WorkstreamStatus.READY},
+        ApprovalStage.EXECUTION: {
+            WorkstreamStatus.PASSED,
+            WorkstreamStatus.BUDGET_EXCEEDED,
+            WorkstreamStatus.ESCALATED,
+        },
+        ApprovalStage.PROMOTION: {WorkstreamStatus.PASSED},
+        ApprovalStage.SKILL_CHANGE: {
+            WorkstreamStatus.PASSED,
+            WorkstreamStatus.BUDGET_EXCEEDED,
+            WorkstreamStatus.ESCALATED,
+            WorkstreamStatus.PROMOTED,
+        },
+    }
+    # Promotion is an iteration aggregate decision, so it is only available
+    # once every workstream has passed (the aggregate status is accepted).
+    if approval.stage == ApprovalStage.PROMOTION:
+        if document.status != IterationStatus.ACCEPTED:
+            raise ApprovalError("promotion approval requires an accepted iteration")
+        if workstream.status != WorkstreamStatus.PASSED:
+            raise ApprovalError("promotion approval requires a passed workstream")
+    if (
+        approval.stage != ApprovalStage.PROMOTION
+        and workstream.status not in allowed_states[approval.stage]
+    ):
+        raise ApprovalError(
+            f"{approval.stage.value} approval is not valid while workstream is "
+            f"{workstream.status.value}"
+        )
     if approval.action == ApprovalAction.DELEGATED:
         verify_delegation(document, approval)
     document.approvals.append(approval)

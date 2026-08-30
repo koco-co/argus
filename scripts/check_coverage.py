@@ -39,8 +39,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 _TIERS = ("r-t", "t-c", "c-auto", "r-a", "a-auto")
 _NODEID = re.compile(r"^automation/.+::[^:]+$")
@@ -59,19 +59,25 @@ class Report:
 
 
 def _load(path: Path) -> Any:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    _assert_safe_path(path, label="artifact", require_file=True)
+    return load_yaml(path.read_bytes())
 
 
 def _load_required(iteration_dir: Path, name: str, report: Report) -> Any:
     path = iteration_dir / name
+    if path.is_symlink():
+        report.fail(f"{path}: 必须是安全的普通文件")
+        return None
     if not path.exists():
         return None
     try:
         validate_path(path)
+        return _load(path)
     except RegistryError as exc:
         report.fail(str(exc))
-        return None
-    return _load(path)
+    except (OSError, UnicodeError, ValueError):
+        report.fail(f"{path}: 不是安全可解析的 YAML 文档")
+    return None
 
 
 # ---------------------------------------------------------------- exemptions
@@ -80,8 +86,12 @@ def _load_required(iteration_dir: Path, name: str, report: Report) -> Any:
 def load_exemptions(iteration_dir: Path) -> dict[str, str]:
     """返回已接受且带理由的 ``requirement_id -> kind`` 映射。"""
     path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     if not path.exists():
         return {}
+    if not path.is_file():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     document = _load(path)
     if not isinstance(document, dict) or document.get("status") != "accepted":
         return {}  # draft/review exemptions are not yet honored
@@ -101,12 +111,18 @@ def load_exemptions(iteration_dir: Path) -> dict[str, str]:
 def load_exemption_document(iteration_dir: Path, report: Report) -> dict[str, Any] | None:
     """读取豁免，供完整性检查同时检查未接受的条目。"""
     path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        report.fail("exemptions.yaml 必须是安全的普通文件")
+        return None
     if not path.exists():
+        return None
+    if not path.is_file():
+        report.fail("exemptions.yaml 必须是安全的普通文件")
         return None
     try:
         document = _load(path)
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
-        report.fail(f"无法读取 exemptions.yaml：{exc}")
+    except (OSError, UnicodeError, ValueError, RegistryError):
+        report.fail("无法读取安全的 exemptions.yaml")
         return None
     if not isinstance(document, dict):
         report.fail("exemptions.yaml 顶层必须是映射")
@@ -214,6 +230,12 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     """Real pytest collection (``pytest.main --collect-only``) over the
     automation tree, recorded through ``pytest_collection_finish``."""
     root = Path(automation_dir)
+    try:
+        _assert_safe_path(root, label="automation directory")
+    except RegistryError as exc:
+        raise CoverageError(str(exc)) from exc
+    if root.is_symlink():
+        raise CoverageError(f"automation directory must not be a symlink: {root}")
     if not root.is_dir():
         return frozenset()
 
@@ -238,7 +260,7 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     os.chdir(root.parent)
     try:
-        pytest.main(
+        collection_status = pytest.main(
             [
                 "--collect-only",
                 "-q",
@@ -248,6 +270,10 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
             ],
             plugins=[recorder],
         )
+        if collection_status != 0:
+            raise CoverageError(
+                f"pytest collection failed for {root_absolute} (exit={collection_status})"
+            )
     finally:
         os.chdir(previous_cwd)
         sys.path[:] = saved_path
@@ -467,9 +493,18 @@ def tiers_for_state(branches: dict, state: str) -> list[str]:
 
 
 def _all_iteration_dirs(iterations_dir: Path) -> list[Path]:
-    return [
-        child for child in sorted(iterations_dir.iterdir()) if (child / "iteration.yaml").is_file()
-    ]
+    selected: list[Path] = []
+    for child in sorted(iterations_dir.iterdir()):
+        if child.is_symlink():
+            raise CoverageError(f"iteration directory must not be a symlink: {child}")
+        if not child.is_dir():
+            continue
+        iteration_yaml = child / "iteration.yaml"
+        if iteration_yaml.is_symlink():
+            raise CoverageError(f"iteration.yaml must not be a symlink: {iteration_yaml}")
+        if iteration_yaml.is_file():
+            selected.append(child)
+    return selected
 
 
 def select_changed_iteration_dirs(iterations_dir: Path, changed_paths: list[str]) -> list[Path]:
@@ -496,8 +531,14 @@ def select_changed_iteration_dirs(iterations_dir: Path, changed_paths: list[str]
     selected: list[Path] = []
     for iteration_id in sorted(iteration_ids):
         candidate = iterations_dir / iteration_id
-        if not (candidate / "iteration.yaml").is_file():
-            raise CoverageError(f"变更的 iteration 已不存在或缺少 iteration.yaml：{iteration_id}")
+        iteration_yaml = candidate / "iteration.yaml"
+        if (
+            candidate.is_symlink()
+            or not candidate.is_dir()
+            or iteration_yaml.is_symlink()
+            or not iteration_yaml.is_file()
+        ):
+            raise CoverageError(f"变更的 iteration 已不存在或不是安全目录：{iteration_id}")
         selected.append(candidate)
     return selected
 
@@ -559,7 +600,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.iteration is None:
         args.iteration = REPO_ROOT / "iterations"
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
-    if not iteration_dir.is_dir():
+    try:
+        _assert_safe_path(iteration_dir, label="iteration directory")
+    except RegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
         print(f"error: iteration directory {iteration_dir} not found", file=sys.stderr)
         return 1
 
@@ -577,7 +623,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     else:
         # 无显式 iteration 时评估全部；release push/定时任务使用此路径。
-        iteration_dirs = _all_iteration_dirs(iteration_dir) or [iteration_dir]
+        try:
+            iteration_dirs = _all_iteration_dirs(iteration_dir) or [iteration_dir]
+        except (OSError, CoverageError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
 
     overall = 0
     for single_dir in iteration_dirs:
@@ -591,14 +641,22 @@ def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> in
     iteration_yaml = iteration_dir / "iteration.yaml"
     branches: dict = {"ui": True, "api": False}
     state = "created"
-    if iteration_yaml.exists():
+    if iteration_yaml.is_symlink() or iteration_yaml.exists():
+        validated = True
         try:
             validate_path(iteration_yaml)
         except RegistryError as exc:
             report.fail(str(exc))
-        document = _load(iteration_yaml) or {}
-        branches = document.get("branches", branches)
-        state = document.get("state", state)
+            validated = False
+        document: Any = {}
+        if validated:
+            try:
+                document = _load(iteration_yaml) or {}
+            except (OSError, UnicodeError, ValueError, RegistryError):
+                report.fail(f"{iteration_yaml}: 不是安全可解析的 YAML 文档")
+        if isinstance(document, dict):
+            branches = document.get("branches", branches)
+            state = document.get("state", state)
 
     requirements = _load_required(iteration_dir, "requirements.yaml", report)
     test_points = _load_required(iteration_dir, "test_points.yaml", report)
@@ -635,7 +693,11 @@ def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> in
     else:
         tiers = [tier_arg]
 
-    collected = collected_nodeids(str(automation_dir))
+    try:
+        collected = collected_nodeids(str(automation_dir))
+    except CoverageError as exc:
+        report.fail(f"automation collection unavailable: {exc}")
+        collected = frozenset()
     for tier in tiers:
         try:
             check_tier(

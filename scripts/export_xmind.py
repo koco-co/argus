@@ -28,8 +28,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
 
 PROJECT = REPO_ROOT.name
 FIXED_DATE = (1980, 1, 1, 0, 0, 0)
@@ -120,8 +120,11 @@ def render_support_files() -> tuple[str, str]:
 
 
 def write_xmind(destination: Path, content_json: str) -> None:
+    _assert_safe_path(destination, label="XMind destination")
+    if destination.is_symlink() or destination.exists():
+        raise RegistryError(f"XMind destination already exists: {destination}")
     metadata_json, manifest_json = render_support_files()
-    with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(destination, "x", zipfile.ZIP_DEFLATED) as archive:
         for name, data in (
             ("content.json", content_json),
             ("metadata.json", metadata_json),
@@ -137,6 +140,7 @@ def next_version(exports_dir: Path) -> int:
     highest = 0
     if exports_dir.is_dir():
         for existing in exports_dir.glob(f"{PROJECT}_v*_Cases.xmind"):
+            _assert_safe_path(existing, label="existing XMind export")
             match = FILENAME_PATTERN.match(existing.name)
             if match:
                 try:
@@ -151,10 +155,13 @@ def load_tree_sources(iteration_dir: Path) -> dict[str, Any]:
     sources: dict[str, Any] = {}
     for name in ("requirements.yaml", "test_points.yaml", "functional-cases.yaml"):
         path = iteration_dir / name
-        if not path.exists():
+        if path.is_symlink() or not path.exists():
             raise RegistryError(f"missing source for export: {path}")
         validate_path(path)
-        sources[name] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        try:
+            sources[name] = load_yaml(path.read_bytes())
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(f"source is not safely parseable: {path}") from exc
     cases_status = sources["functional-cases.yaml"]["status"]
     if cases_status not in CASES_READY:
         raise RegistryError(
@@ -171,7 +178,7 @@ def verify_structure(xmind_path: Path) -> dict[str, Any]:
             names = set(archive.namelist())
             if not {"content.json", "metadata.json", "manifest.json"} <= names:
                 raise RegistryError("XMind 导出缺少必需的 ZIP 成员")
-            sheet = json.loads(archive.read("content.json"))[0]
+            sheet = load_json(archive.read("content.json"))[0]
         root = sheet["rootTopic"]
 
         def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
@@ -204,6 +211,9 @@ def verify_structure(xmind_path: Path) -> dict[str, Any]:
 
 
 def export(iteration_dir: Path) -> Path:
+    _assert_safe_path(iteration_dir, label="iteration")
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
+        raise RegistryError(f"iteration must be a safe directory: {iteration_dir}")
     sources = load_tree_sources(iteration_dir)
     sheet = build_tree(
         sources["requirements.yaml"],
@@ -211,6 +221,9 @@ def export(iteration_dir: Path) -> Path:
         sources["functional-cases.yaml"],
     )
     exports_dir = iteration_dir / "exports"
+    _assert_safe_path(exports_dir, label="exports directory")
+    if exports_dir.is_symlink() or (exports_dir.exists() and not exports_dir.is_dir()):
+        raise RegistryError(f"exports directory is not safe: {exports_dir}")
     exports_dir.mkdir(exist_ok=True)
     version = next_version(exports_dir)
     destination = exports_dir / f"{PROJECT}_v{version}_Cases.xmind"

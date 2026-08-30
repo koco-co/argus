@@ -26,7 +26,13 @@ from .models import (  # pyright: ignore[reportMissingImports]
     Workstream,
     WorkstreamStatus,
 )
-from .promotion import PromotionError, promote  # pyright: ignore[reportMissingImports]
+from .parsing import ParseError, load_json, load_yaml  # pyright: ignore[reportMissingImports]
+from .promotion import (  # pyright: ignore[reportMissingImports]
+    PromotionError,
+    VerifiedMergeFact,
+    load_verified_merge_fact,
+    promote,
+)
 from .schema import iteration_schema, validate_iteration  # pyright: ignore[reportMissingImports]
 from .state import StateError, transition  # pyright: ignore[reportMissingImports]
 from .store import IterationStore, StoreError  # pyright: ignore[reportMissingImports]
@@ -39,6 +45,7 @@ __all__ = [
     "ApprovalAction",
     "ApprovalError",
     "ApprovalStage",
+    "ParseError",
     "DelegationGrant",
     "IterationDocument",
     "IterationStatus",
@@ -46,6 +53,8 @@ __all__ = [
     "LifecycleEvent",
     "MergeFact",
     "PromotionError",
+    "VerifiedMergeFact",
+    "load_verified_merge_fact",
     "StateError",
     "StoreError",
     "SCHEMA_VERSION",
@@ -57,6 +66,8 @@ __all__ = [
     "promote",
     "require_latest",
     "iteration_schema",
+    "load_json",
+    "load_yaml",
     "validate_iteration",
     "transition",
     "verify_delegation",

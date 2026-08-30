@@ -13,8 +13,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-import pytest
-import yaml
+import pytest  # pyright: ignore[reportMissingImports]
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from conftest import FIXTURES_DIR, _load_script
 
 SCHEMA_FIXTURES = FIXTURES_DIR / "schemas"
@@ -449,9 +449,7 @@ def test_hand_edited_event_chain_rejected(validator: Any, tmp_path: Path) -> Non
     assert validator.main([str(iteration_dir)]) == 1
 
 
-def test_blocked_with_budget_reason_accepted_and_user_unblock(
-    validator: Any, tmp_path: Path
-) -> None:
+def test_blocked_can_only_be_resumed_to_created(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-budget",
         ui=True,
@@ -468,8 +466,8 @@ def test_blocked_with_budget_reason_accepted_and_user_unblock(
     )
     doc["blocked_reason"] = None  # unblocked again
     iteration_dir = _scaffold(tmp_path, "2026-08-budget", doc)
-    # blocked 跳转仅在进入 blocked 时要求理由；这里保持解阻状态，因此合法。
-    assert validator.main([str(iteration_dir)]) == 0
+    # A user may resume a blocked iteration, but only through the created state.
+    assert validator.main([str(iteration_dir)]) == 1
 
 
 def test_blocked_without_reason_rejected(validator: Any, tmp_path: Path) -> None:

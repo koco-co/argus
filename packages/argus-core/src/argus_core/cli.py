@@ -16,11 +16,10 @@ from .models import (  # pyright: ignore[reportMissingImports]
     ApprovalAction,
     ApprovalStage,
     DelegationGrant,
-    MergeFact,
     Surface,
     Workstream,
 )
-from .promotion import promote  # pyright: ignore[reportMissingImports]
+from .promotion import load_verified_merge_fact, promote  # pyright: ignore[reportMissingImports]
 from .store import IterationStore, StoreError  # pyright: ignore[reportMissingImports]
 
 
@@ -28,9 +27,32 @@ def _timestamp(value: str | None) -> datetime:
     if value is None:
         return datetime.now(UTC)
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("时间必须包含时区")
     return parsed.astimezone(UTC)
+
+
+def _confined_file(project_root: Path, supplied: Path, *, label: str) -> Path:
+    root = project_root.resolve()
+    candidate = supplied if supplied.is_absolute() else root / supplied
+    if "\x00" in str(candidate) or "\\" in str(candidate):
+        raise ValueError(f"{label} 不得包含 NUL 字符")
+    if candidate.is_symlink() or not candidate.is_file():
+        raise ValueError(f"{label} 必须是项目目录内的普通文件")
+    try:
+        relative = candidate.relative_to(root)
+        if ".." in relative.parts:
+            raise ValueError(f"{label} 包含路径穿越")
+        current = root
+        for part in relative.parts:
+            current /= part
+            if current.is_symlink():
+                raise ValueError(f"{label} 不得经过符号链接")
+        resolved = candidate.resolve()
+        resolved.relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{label} 必须位于项目目录内且不得经过符号链接") from exc
+    return resolved
 
 
 def _sha256(path: Path, supplied: str | None) -> str:
@@ -148,12 +170,12 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_common(promotion)
     promotion.add_argument("iteration_id")
     promotion.add_argument("--workstream-id", required=True)
-    promotion.add_argument("--repository", required=True)
-    promotion.add_argument("--pull-request", type=int, required=True)
-    promotion.add_argument("--merge-sha", required=True)
-    promotion.add_argument("--merged-at", required=True)
-    promotion.add_argument("--source-url", required=True)
-    promotion.add_argument("--verified-at")
+    promotion.add_argument(
+        "--fact-file",
+        type=Path,
+        required=True,
+        help="独立 GitHub verifier 产生的 MergeFact envelope（YAML/JSON）",
+    )
     return parser
 
 
@@ -176,16 +198,15 @@ def _create(args: argparse.Namespace, store: IterationStore) -> Any:
 
 def _approve(args: argparse.Namespace, store: IterationStore) -> Any:
     document = store.load(args.iteration_id)
-    artifact_path = Path(args.artifact)
-    if not artifact_path.is_absolute():
-        artifact_path = store.project_root / artifact_path
+    artifact_path = _confined_file(store.project_root, Path(args.artifact), label="artifact")
+    artifact_reference = artifact_path.relative_to(store.project_root).as_posix()
     approval = Approval(
         id=args.approval_id or f"approval-{len(document.approvals) + 1:04d}",
         workstream_id=args.workstream_id,
         stage=ApprovalStage(args.stage),
         action=ApprovalAction(args.action),
         actor=Actor(args.actor),
-        artifact=args.artifact,
+        artifact=artifact_reference,
         artifact_sha256=_sha256(artifact_path, args.artifact_sha256),
         recorded_at=_timestamp(args.recorded_at),
         note=args.note,
@@ -198,8 +219,8 @@ def _grant(args: argparse.Namespace, store: IterationStore) -> Any:
     if bool(args.basis) == bool(args.basis_file):
         raise ValueError("必须且只能提供 --basis 或 --basis-file")
     basis_file = args.basis_file
-    if basis_file is not None and not basis_file.is_absolute():
-        basis_file = store.project_root / basis_file
+    if basis_file is not None:
+        basis_file = _confined_file(store.project_root, basis_file, label="basis-file")
     basis = basis_file.read_text(encoding="utf-8") if basis_file else args.basis
     if basis is None:
         raise ValueError("授权 basis 不能为空")
@@ -216,16 +237,11 @@ def _grant(args: argparse.Namespace, store: IterationStore) -> Any:
 
 
 def _promote(args: argparse.Namespace, store: IterationStore) -> Any:
-    fact = MergeFact(
-        workstream_id=args.workstream_id,
-        repository=args.repository,
-        pull_request=args.pull_request,
-        merge_sha=args.merge_sha,
-        merged_at=_timestamp(args.merged_at),
-        source_url=args.source_url,
-        verified_at=_timestamp(args.verified_at),
-    )
-    promote(store, args.iteration_id, args.workstream_id, fact)
+    fact_path = _confined_file(store.project_root, args.fact_file, label="fact-file")
+    verified = load_verified_merge_fact(fact_path)
+    if verified.fact.workstream_id != args.workstream_id:
+        raise ValueError("verifier fact workstream_id does not match the target")
+    promote(store, args.iteration_id, args.workstream_id, verified)
     return store.load(args.iteration_id)
 
 

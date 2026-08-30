@@ -6,7 +6,7 @@ name: trusted-notifications
 
 permissions: {}
 
-on:
+on: # zizmor: ignore[dangerous-triggers] privileged code is default-branch only; artifact input is allowlisted data
   workflow_run:
     workflows: ["static-checks", "e2e"]
     types: [completed]
@@ -28,14 +28,6 @@ jobs:
       actions: read
       contents: read
     env:
-      ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
-      ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
-      ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
-      ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
-      ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
-      ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
-      ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
-      ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
       ARGUS_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
       ARGUS_WORKFLOW_STATUS: ${{ github.event.workflow_run.conclusion || 'unknown' }}
     steps:
@@ -47,7 +39,8 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
-      - run: uv sync --group dev
+          enable-cache: false
+      - run: uv sync --locked --group dev
       - name: 下载 e2e 的受限分类证据
         if: ${{ env.ARGUS_WORKFLOW_NAME == 'e2e' }}
         continue-on-error: true
@@ -56,15 +49,15 @@ jobs:
           name: run-evidence-${{ github.event.workflow_run.id }}
           path: trusted-evidence
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
       - id: classification
         name: 校验通知分类
         shell: bash
         run: |
           value=""
           path="trusted-evidence/reports/notification/classification"
-          if [[ -f "$path" ]]; then
-            value=$(head -n 1 "$path")
+          if [[ -f "$path" && ! -L "$path" ]]; then
+            value=$(head -n 1 -- "$path")
           fi
           case "$value" in
             normal|flaky-suspect|failed) ;;
@@ -75,6 +68,14 @@ jobs:
         if: ${{ always() }}
         continue-on-error: true
         env:
+          ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
+          ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
+          ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
+          ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
+          ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
+          ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
+          ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
+          ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
           ARGUS_CLASSIFICATION: ${{ steps.classification.outputs.value }}
         run: >-
           uv run python scripts/notify.py
@@ -96,7 +97,6 @@ jobs:
       contents: read
       issues: write
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       ARGUS_WEEKLY_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,8 +106,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
-      - run: uv sync --group dev
+          enable-cache: false
+      - run: uv sync --locked --group dev
       - name: 升级周回归跟踪 issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           uv run python scripts/weekly_escalation.py
           --classification failed

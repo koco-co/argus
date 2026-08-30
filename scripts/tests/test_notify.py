@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import sys
@@ -121,7 +122,10 @@ def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> 
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
     trusted = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
-    assert "hashFiles('reports/junit.xml') != ''" in workflow
+    assert "reports/junit-first.xml" in workflow
+    assert "reports/junit-retry.xml" in workflow
+    assert "reports/allure-first" in workflow
+    assert "reports/allure-retry" in workflow
     assert "scripts/notify.py --summary auto" not in workflow
     assert "保存受限通知分类" in workflow
     assert '--job "$ARGUS_WORKFLOW_NAME"' in trusted
@@ -248,10 +252,9 @@ def test_render_summary_supports_flaky_suspect_classification() -> None:
 
 
 class _WebhookResponse:
-    content = b"{}"
-
     def __init__(self, body: dict[str, Any]) -> None:
         self.body = body
+        self.content = json.dumps(body).encode("utf-8")
 
     def raise_for_status(self) -> None:
         return None

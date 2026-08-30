@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
-import httpx
-from pydantic import BaseModel
+import httpx  # pyright: ignore[reportMissingImports]
+from argus_core.parsing import load_json  # pyright: ignore[reportMissingImports]
+from pydantic import BaseModel  # pyright: ignore[reportMissingImports]
 
 from automation.api.models.checkout.store import (
     ApplyPromotionsRequest,
@@ -37,6 +38,11 @@ from automation.api.models.checkout.store import (
 )
 
 
+def _json_payload(response: httpx.Response) -> object:
+    """严格解析不可信 API JSON，拒绝重复键与非有限数字。"""
+    return load_json(response.content)
+
+
 class StoreClient:
     def __init__(self, base_url: str, publishable_key: str) -> None:
         self._client = httpx.Client(
@@ -51,12 +57,12 @@ class StoreClient:
             "/store/products", params={"handle": "t-shirt", "region_id": region_id}
         )
         response.raise_for_status()
-        return ProductListResponse.model_validate(response.json())
+        return ProductListResponse.model_validate(_json_payload(response))
 
     def create_cart(self, region_id: str) -> CartResponse:
         response = self._client.post("/store/carts", json={"region_id": region_id})
         response.raise_for_status()
-        return CartResponse.model_validate(response.json())
+        return CartResponse.model_validate(_json_payload(response))
 
     def add_line_item(self, cart_id: str, variant_id: str) -> CartResponse:
         response = self._client.post(
@@ -64,20 +70,20 @@ class StoreClient:
             json={"variant_id": variant_id, "quantity": 1},
         )
         response.raise_for_status()
-        return CartResponse.model_validate(response.json())
+        return CartResponse.model_validate(_json_payload(response))
 
     def apply_promotions(self, cart_id: str, request: ApplyPromotionsRequest) -> CartResponse:
         response = self._client.post(
             f"/store/carts/{cart_id}/promotions", json=request.model_dump()
         )
         response.raise_for_status()
-        return CartResponse.model_validate(response.json())
+        return CartResponse.model_validate(_json_payload(response))
 
     def apply_promotions_error(self, cart_id: str) -> ErrorResponse:
         response = self._client.post(f"/store/carts/{cart_id}/promotions", json={"code": "ARGUS10"})
         if response.status_code != 400:
             response.raise_for_status()
-        return ErrorResponse.model_validate(response.json())
+        return ErrorResponse.model_validate(_json_payload(response))
 
     def close(self) -> None:
         self._client.close()
@@ -97,7 +103,7 @@ class FullStoreClient(StoreClient):
         """把结构化错误解析为完整 API 模型。"""
 
         try:
-            return ApiErrorResponse.model_validate(response.json())
+            return ApiErrorResponse.model_validate(_json_payload(response))
         except ValueError as exc:
             raise httpx.HTTPStatusError(
                 "Medusa error response is not a typed error envelope",
@@ -115,14 +121,14 @@ class FullStoreClient(StoreClient):
             },
         )
         response.raise_for_status()
-        return ApiProductListResponse.model_validate(response.json())
+        return ApiProductListResponse.model_validate(_json_payload(response))
 
     def list_products(self, handle: str, region_id: str) -> ApiProductListResponse:
         response = self._client.get(
             "/store/products", params={"handle": handle, "region_id": region_id}
         )
         response.raise_for_status()
-        return ApiProductListResponse.model_validate(response.json())
+        return ApiProductListResponse.model_validate(_json_payload(response))
 
     def list_products_error(self, handle: str, region_id: str) -> ApiErrorResponse:
         response = self._client.get(
@@ -136,7 +142,7 @@ class FullStoreClient(StoreClient):
         payload = ApiCreateCartRequest(region_id=region_id)
         response = self._client.post("/store/carts", json=self._dump(payload))
         response.raise_for_status()
-        return ApiCartResponse.model_validate(response.json())
+        return ApiCartResponse.model_validate(_json_payload(response))
 
     def create_cart_error(self, payload: ApiInvalidCreateCartRequest) -> ApiErrorResponse:
         response = self._client.post("/store/carts", json=self._dump(payload))
@@ -148,7 +154,7 @@ class FullStoreClient(StoreClient):
         payload = ApiAddLineItemRequest(variant_id=variant_id, quantity=1)
         response = self._client.post(f"/store/carts/{cart_id}/line-items", json=self._dump(payload))
         response.raise_for_status()
-        return ApiCartResponse.model_validate(response.json())
+        return ApiCartResponse.model_validate(_json_payload(response))
 
     def add_line_item_error(
         self, cart_id: str, payload: ApiMissingVariantLineItemRequest
@@ -161,7 +167,7 @@ class FullStoreClient(StoreClient):
     def apply_promotions(self, cart_id: str, request: ApiApplyPromotionsRequest) -> ApiCartResponse:
         response = self._client.post(f"/store/carts/{cart_id}/promotions", json=self._dump(request))
         response.raise_for_status()
-        return ApiCartResponse.model_validate(response.json())
+        return ApiCartResponse.model_validate(_json_payload(response))
 
     def apply_promotions_error(self, cart_id: str, code: str | None = None) -> ApiErrorResponse:
         request: BaseModel
@@ -177,7 +183,7 @@ class FullStoreClient(StoreClient):
     def update_cart(self, cart_id: str, request: ApiUpdateCartRequest) -> ApiCartResponse:
         response = self._client.post(f"/store/carts/{cart_id}", json=self._dump(request))
         response.raise_for_status()
-        return ApiCartResponse.model_validate(response.json())
+        return ApiCartResponse.model_validate(_json_payload(response))
 
     def update_cart_error(
         self, cart_id: str, payload: ApiInvalidUpdateCartRequest
@@ -190,7 +196,7 @@ class FullStoreClient(StoreClient):
     def list_shipping_options(self, cart_id: str) -> ApiShippingOptionListResponse:
         response = self._client.get("/store/shipping-options", params={"cart_id": cart_id})
         response.raise_for_status()
-        return ApiShippingOptionListResponse.model_validate(response.json())
+        return ApiShippingOptionListResponse.model_validate(_json_payload(response))
 
     def list_shipping_options_error(self) -> ApiErrorResponse:
         response = self._client.get("/store/shipping-options")
@@ -204,7 +210,7 @@ class FullStoreClient(StoreClient):
             f"/store/carts/{cart_id}/shipping-methods", json=self._dump(payload)
         )
         response.raise_for_status()
-        return ApiCartResponse.model_validate(response.json())
+        return ApiCartResponse.model_validate(_json_payload(response))
 
     def add_shipping_method_error(self, cart_id: str, option_id: str) -> ApiErrorResponse:
         payload = ApiAddShippingMethodRequest(option_id=option_id)
@@ -219,7 +225,7 @@ class FullStoreClient(StoreClient):
         payload = ApiCreatePaymentCollectionRequest(cart_id=cart_id)
         response = self._client.post("/store/payment-collections", json=self._dump(payload))
         response.raise_for_status()
-        return ApiPaymentCollectionResponse.model_validate(response.json())
+        return ApiPaymentCollectionResponse.model_validate(_json_payload(response))
 
     def create_payment_collection_error(
         self, payload: ApiMissingCartIdPaymentCollectionRequest
@@ -238,7 +244,7 @@ class FullStoreClient(StoreClient):
             json=self._dump(payload),
         )
         response.raise_for_status()
-        return ApiPaymentCollectionResponse.model_validate(response.json())
+        return ApiPaymentCollectionResponse.model_validate(_json_payload(response))
 
     def initialize_payment_session_error(
         self, collection_id: str, payload: ApiMissingProviderPaymentSessionRequest
@@ -254,7 +260,7 @@ class FullStoreClient(StoreClient):
     def complete_cart(self, cart_id: str) -> ApiOrderResponse:
         response = self._client.post(f"/store/carts/{cart_id}/complete")
         response.raise_for_status()
-        return ApiOrderResponse.model_validate(response.json())
+        return ApiOrderResponse.model_validate(_json_payload(response))
 
     def complete_cart_error(self, cart_id: str) -> ApiErrorResponse:
         response = self._client.post(f"/store/carts/{cart_id}/complete")

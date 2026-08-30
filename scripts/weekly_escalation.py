@@ -5,19 +5,30 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from typing import Any
 
-import httpx
+import httpx  # pyright: ignore[reportMissingImports]
+from argus_core.parsing import load_json  # pyright: ignore[reportMissingImports]
 
 ISSUE_TITLE = "[Argus] 周回归连续失败"
 API_VERSION = "2022-11-28"
+_REPOSITORY = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/"
+    r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})$"
+)
+_CANONICAL_SERVER_URL = "https://github.com"
 
 
 def has_previous_failure(runs: list[dict[str, Any]], current_run_id: int) -> bool:
     """按 API 返回顺序寻找当前 run 之前最近的已完成 schedule。"""
     for run in runs:
-        if int(run.get("id", 0)) == current_run_id:
+        run_id_value = run.get("id", 0)
+        if isinstance(run_id_value, bool) or not isinstance(run_id_value, int):
+            continue
+        run_id = run_id_value
+        if run_id == current_run_id:
             continue
         if run.get("event") != "schedule" or run.get("status") != "completed":
             continue
@@ -33,7 +44,10 @@ def existing_issue(issues: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _get_json(client: httpx.Client, path: str, **params: str | int) -> Any:
     response = client.get(path, params=params)
     response.raise_for_status()
-    return response.json()
+    try:
+        return load_json(response.content)
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("GitHub API returned an unsafe JSON response") from exc
 
 
 def escalate(
@@ -43,22 +57,39 @@ def escalate(
     server_url: str,
 ) -> str:
     """检查上次 schedule 并在需要时创建可去重的 issue。"""
+    if not isinstance(repo, str) or not _REPOSITORY.fullmatch(repo):
+        raise ValueError("GITHUB_REPOSITORY must be an owner/repository")
+    if (
+        isinstance(current_run_id, bool)
+        or not isinstance(current_run_id, int)
+        or current_run_id < 1
+    ):
+        raise ValueError("GITHUB_RUN_ID must be a positive integer")
+    if server_url != _CANONICAL_SERVER_URL:
+        raise ValueError("GITHUB_SERVER_URL must be the canonical github.com URL")
     runs_payload = _get_json(
         client,
         f"/repos/{repo}/actions/workflows/regression.yml/runs",
         event="schedule",
         per_page=10,
     )
-    runs = runs_payload.get("workflow_runs", [])
+    if not isinstance(runs_payload, dict) or not isinstance(
+        runs_payload.get("workflow_runs"), list
+    ):
+        raise ValueError("GitHub workflow response has an invalid shape")
+    runs = [run for run in runs_payload["workflow_runs"] if isinstance(run, dict)]
     if not has_previous_failure(runs, current_run_id):
         return "上一次周回归未失败，不创建 issue"
 
-    issues = _get_json(client, f"/repos/{repo}/issues", state="open", per_page=100)
+    issues_payload = _get_json(client, f"/repos/{repo}/issues", state="open", per_page=100)
+    if not isinstance(issues_payload, list):
+        raise ValueError("GitHub issues response has an invalid shape")
+    issues = [issue for issue in issues_payload if isinstance(issue, dict)]
     opened = existing_issue(issues)
     if opened is not None:
-        return f"复用已有跟踪 issue：{opened.get('html_url', opened.get('number'))}"
+        return "复用已有跟踪 issue"
 
-    run_url = f"{server_url.rstrip('/')}/{repo}/actions/runs/{current_run_id}"
+    run_url = f"{server_url}/{repo}/actions/runs/{current_run_id}"
     response = client.post(
         f"/repos/{repo}/issues",
         json={
@@ -72,8 +103,13 @@ def escalate(
         },
     )
     response.raise_for_status()
-    issue = response.json()
-    return f"已创建跟踪 issue：{issue.get('html_url', issue.get('number'))}"
+    try:
+        issue = load_json(response.content)
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("GitHub issue response is not safe JSON") from exc
+    if not isinstance(issue, dict):
+        raise ValueError("GitHub issue response has an invalid shape")
+    return "已创建跟踪 issue"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,8 +144,8 @@ def main(argv: list[str] | None = None) -> int:
             trust_env=False,
         ) as client:
             print(escalate(client, args.repo, args.run_id, args.server_url))
-    except (httpx.HTTPError, ValueError) as exc:
-        print(f"周回归 issue 升级失败：{exc}", file=sys.stderr)
+    except (httpx.HTTPError, ValueError):
+        print("周回归 issue 升级失败：GitHub API 返回错误或不安全响应", file=sys.stderr)
         return 1
     return 0
 

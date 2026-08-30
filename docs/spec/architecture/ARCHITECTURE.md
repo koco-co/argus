@@ -10,7 +10,7 @@ Version: 1.6 · Performance/load testing is reserved for post-v1 · Companion do
 
 ## 1. Layered Architecture Overview
 
-```
+```text
 ┌───────────────────────────────────────────────────────────────────┐
 │  Plugin Interface Layer            plugins/                        │
 │  fetch(source_ref) -> normalized SOURCE PAYLOAD envelope.           │
@@ -62,7 +62,7 @@ Version: 1.6 · Performance/load testing is reserved for post-v1 · Companion do
 
 Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 scaffolds exactly this; additions vs v1.0 flagged ⭐):
 
-```
+```text
 <target-app>-automation/
 ├── AGENTS.md                        # ⭐ single source of operating rules (Phase plan: Roadmap 0.6)
 ├── CLAUDE.md                        # `@AGENTS.md` include only
@@ -270,12 +270,12 @@ class EnvConfig(BaseModel):
 
 def load_env(env_name: str | None = None, cli_flag: str | None = None) -> EnvConfig:
     # precedence: CLI --env > TEST_ENV env var > "local"
-    env_name = cli_flag or os.environ.get("TEST_ENV") or "local"
-    path = Path(f"config/env.{env_name}.yaml")
+    env_name = resolve_env_name(cli_flag or env_name)
+    path = REPO_ROOT / "config" / f"env.{env_name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"{path} missing — copy config/env.example.yaml")
-    data = yaml.safe_load(path.read_text()) or {}   # empty-file guard (safe_load returns None)
-    return EnvConfig(**data)
+    data = load_yaml(path.read_bytes()) or {}   # empty-file guard (load_yaml returns None)
+    return EnvConfig.model_validate(data)
 ```
 
 Fixes vs v1.0 snippets: `--env` precedence actually implemented (was prose-only); empty YAML no longer crashes; `auth`/`db` optional to support guest-checkout flows。可选的 `api_base_url`/`ARGUS_API_BASE_URL` 在站点和后端使用不同地址时保持生成 API 夹具与环境解耦。
@@ -350,13 +350,13 @@ jobs:
       - uses: actions/checkout@<full-sha>        # v4 — pin exact SHA; Dependabot updates
         with: {fetch-depth: 0}                    # PR base SHA 必须可供范围选择器解析
       - uses: astral-sh/setup-uv@<full-sha>      # v5
-      - run: uv sync --group dev
-      - run: uv run pre-commit run --all-files   # schemas/state/staleness/POM/
-                                                  # models/markers/db/secrets/lint
+      - run: uv sync --locked --group dev
+      - run: uv run pre-commit run --all-files
       - run: uv run pytest scripts/tests          # framework's own suites
-                                                  # includes schema-block and patch-scope fixtures
-      - run: uv run python scripts/check_coverage.py --tier from-iteration --changed-base "$ARGUS_BASE_SHA"
-                                                  # PR 仅检查变更 iteration；自动化/共享门禁变化检查全部
+      - run: make static-gates                    # schema/semantic/coverage,
+                                                  # layering, POM, models, markers,
+                                                  # DB scope, orphan, README, lint,
+                                                  # Pyright and Skill goldens
 # .github/workflows/regression.yml — e2e for release PRs or automation/iteration changes
 # Target-app provisioning is compose-only; target_app_up.py owns the full stack.
 # workflow_dispatch 可选择 normal/force_failure/force_flaky，验收失败通知与单次重跑分类。
@@ -371,7 +371,7 @@ jobs:
     steps:
       - uses: actions/checkout@<full-sha>
       - uses: astral-sh/setup-uv@<full-sha>
-      - run: uv sync --group dev
+      - run: uv sync --locked --group dev
       - run: uv run playwright install --with-deps chromium
       - run: uv run python scripts/target_app_up.py
       - run: uv run python scripts/target_app_healthcheck.py
@@ -379,9 +379,12 @@ jobs:
       # never as shell arguments, never via inline echo (log-tracing would leak them);
       # settings.py reads env-var overrides first, so most jobs never need the YAML at all
       - run: uv run python -m shared.config.settings assemble --env ci   # writes gitignored config/env.ci.yaml
-      - run: TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml
-      - run: uv run python scripts/self_debug_helper.py record-ci-auto --junit reports/junit.xml --env ci
-      # 首次失败只复跑一次；复跑转绿时 job 依据复跑结果放行，但通知分类保持 flaky-suspect
+      # 首轮失败时仅重试一次；retry 使用独立 JUnit/Allure 路径，不覆盖首轮证据。
+      - id: regression
+        run: first run; if it fails, retry once; exit with retry status
+      - if: always()
+        run: choose junit-first.xml or junit-retry.xml and record final evidence
+      # 首次失败且复跑转绿时分类为 flaky-suspect；两轮失败才分类 failed。
       - if: always() && steps.regression.outputs.classification != ''
         run: printf '%s\n' "$ARGUS_CLASSIFICATION" > reports/notification/classification
         env:

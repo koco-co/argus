@@ -6,8 +6,8 @@ import os
 import re
 from collections.abc import Iterator
 
-import httpx
-import pytest
+import httpx  # pyright: ignore[reportMissingImports]
+import pytest  # pyright: ignore[reportMissingImports]
 
 from shared.config.settings import EnvConfig, load_env
 

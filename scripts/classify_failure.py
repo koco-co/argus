@@ -5,9 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from _registry_lib import RegistryError, _assert_safe_path
+from argus_core.parsing import load_json  # pyright: ignore[reportMissingImports]
 
 _ESCALATION_ONLY = {
     "environment_unavailable",
@@ -86,7 +90,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("evidence", type=Path, help="结构化 JSON 证据")
     args = parser.parse_args(argv)
-    evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
+    try:
+        _assert_safe_path(args.evidence, label="evidence")
+        if args.evidence.is_symlink() or not args.evidence.is_file():
+            raise RegistryError("evidence must be a regular file")
+        evidence = load_json(args.evidence.read_bytes())
+    except (OSError, UnicodeError, ValueError, RegistryError):
+        print("error: evidence 不是安全可解析的 JSON", file=sys.stderr)
+        return 1
+    if not isinstance(evidence, dict):
+        print("error: evidence 顶层必须是对象", file=sys.stderr)
+        return 1
     print(json.dumps(asdict(classify(evidence)), ensure_ascii=False, sort_keys=True))
     return 0
 

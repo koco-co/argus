@@ -5,7 +5,7 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint skill-golden \
+.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint static-gates skill-golden \
 	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
 	target-app-down
 
@@ -15,24 +15,24 @@ setup:
 	uv run playwright install chromium
 
 new-iteration:
-	uv run python scripts/new_iteration.py $(ID) --branch $(BRANCH)
+	uv run python scripts/new_iteration.py "$(ID)" --branch "$(BRANCH)"
 
 validate-iteration:
-	uv run python scripts/validate_schema.py iterations/$(ID)
+	uv run python scripts/validate_schema.py "iterations/$(ID)"
 
 validate-readme:
 	uv run python scripts/validate_readme.py --strict
 
 export:
-	@if [ -f iterations/$(ID)/functional-cases.yaml ]; then uv run python scripts/export_xmind.py iterations/$(ID); fi
-	@if [ -f iterations/$(ID)/api/cases.yaml ]; then uv run python scripts/export_xlsx.py iterations/$(ID); fi
-	uv run python scripts/render_md.py iterations/$(ID)
+	if [ -f "iterations/$(ID)/functional-cases.yaml" ]; then uv run python scripts/export_xmind.py "iterations/$(ID)"; fi
+	if [ -f "iterations/$(ID)/api/cases.yaml" ]; then uv run python scripts/export_xlsx.py "iterations/$(ID)"; fi
+	uv run python scripts/render_md.py "iterations/$(ID)"
 
 web-tests:
-	TEST_ENV=$(ENV) uv run pytest automation/web/tests/$(MODULE) --alluredir=reports/allure-results
+	TEST_ENV="$(ENV)" uv run pytest "automation/web/tests/$(MODULE)" --alluredir="reports/allure-results"
 
 api-tests:
-	TEST_ENV=$(ENV) uv run pytest automation/api/tests/$(MODULE) --alluredir=reports/allure-results
+	TEST_ENV="$(ENV)" uv run pytest "automation/api/tests/$(MODULE)" --alluredir="reports/allure-results"
 
 lint:
 	uv run ruff check .
@@ -40,11 +40,19 @@ lint:
 	uv run pyright
 	uv run python scripts/validate_readme.py --strict
 
+static-gates: lint skill-golden
+	uv run python scripts/check_layering.py --all
+	uv run python scripts/check_pom_boundary.py --all
+	uv run python scripts/check_test_markers.py --all
+	uv run python scripts/check_db_readonly.py --all
+	uv run python scripts/check_prod_scope.py --all
+	uv run python scripts/check_orphan_tests.py
+	uv run python scripts/check_api_models.py --all
+	uv run python scripts/check_coverage.py --tier from-iteration
+	uv run python scripts/check_iteration_gates.py
+
 skill-golden:
-	@for manifest in .agents/skills/*/versions/baselines/*/manifest.yaml; do \
-		baseline=$$(dirname "$$manifest"); \
-		uv run python scripts/check_skill_golden.py --baseline "$$baseline" --actual-root . || exit 1; \
-	done
+	uv run python scripts/check_skill_golden.py --all --actual-root .
 
 target-app-up:
 	uv run python scripts/target_app_up.py

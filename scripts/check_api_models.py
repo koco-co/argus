@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
 from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 
 class Report:
@@ -187,8 +187,15 @@ def main(argv: list[str] | None = None) -> int:
         except RegistryError as exc:
             report.fail(str(exc))
         else:
-            spec = yaml.safe_load(args.spec.read_text(encoding="utf-8")) or {}
-            check_models_against_spec(models_dir, spec, report)
+            try:
+                spec = load_yaml(args.spec.read_bytes()) or {}
+            except (OSError, UnicodeError, ValueError):
+                report.fail(f"{args.spec}: 不是安全可解析的 YAML 文档")
+            else:
+                if isinstance(spec, dict):
+                    check_models_against_spec(models_dir, spec, report)
+                else:
+                    report.fail(f"{args.spec}: 顶层必须是映射")
 
     for problem in report.problems:
         print(f"api model violation: {problem}")

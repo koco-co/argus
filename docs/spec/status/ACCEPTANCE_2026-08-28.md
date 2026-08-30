@@ -8,12 +8,12 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 430 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 历史记录 430 项通过；当前复核 497 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
-| UI 生成链 | 正式 UI：需求→测试点→功能用例→POM→8 条 Chromium 用例→traceability 完整；fresh reset 后 M9 10/10 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；最新 `run-20260828T183412Z-ui03` |
-| API 生成链 | 正式 API：需求→映射/豁免→真实 Medusa 来源规范化→20 个 API case→Pydantic 模型/FullStoreClient→traceability 完整；fresh reset 后 M9 连同 fixture 22/22，A0018 缺少 provider 返回结构化 400 | `iterations/2026-08-medusa-api-checkout/`；最新 `run-20260828T182611Z-api3` |
-| 全栈完整回归 | fresh reset 后正式 UI/API、既有 fixture 与靶场探针共 38 条通过 | 本地最终运行：`make target-app-reset && TEST_ENV=local uv run pytest automation/web automation/api -q --junitxml=/tmp/argus-fullstack-final-20260829.xml` → `38 passed in 122.71s`；main 合并后再次 fresh reset 同套件 → `38 passed in 125.82s`；POM 时序修复后受影响 checkout `10 passed`、完整套件 `38 passed in 135.71s`；双 worker 隔离证据仍见 5.1 记录 |
+| UI 生成链 | 历史运行曾完成 10/10；当前复核使用真实本地靶场完成 10/10 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；历史 run `run-20260828T183412Z-ui03` |
+| API 生成链 | 历史运行曾完成 22/22；当前复核使用真实本地靶场完成 22/22 | `iterations/2026-08-medusa-api-checkout/`；历史 run `run-20260828T182611Z-api3` |
+| 全栈完整回归 | 当前复核分面完成：Web 10/10、API 22/22；另有框架靶场健康与 seed canary 通过 | API/Web 分面命令及真实靶场证据；完整合并套件未在本轮重复执行 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | PR 覆盖范围 | iteration 工件变化只检查对应目录；自动化、共享代码或覆盖门禁变化检查全部；删除 iteration 明确失败；CI 取得完整 base 历史 | `check_coverage.py --changed-base <sha>`；`test_check_coverage.py` |
 | CI 对抗控制 | `force_failure` 远端连续两轮均为 1 失败/9 通过并以失败终止；`force_flaky` 首轮 1 失败/9 通过、第二轮 10 通过，被归类为 `flaky-suspect` 并以成功终止；两条路径均上传证据、执行汇总通知并清理容器/网络/卷 | Actions run `33167112680`、`33167439010`；artifact `9684097115`、`9684232762` |
@@ -27,6 +27,10 @@
 | 分支保护 | `release` 严格要求 `static-checks`、`e2e`、1 名非作者批准、last-push approval；禁止强推/删除 | `docs/spec/status/BRANCH_PROTECTION_2026-08-28.md` |
 | GitHub Actions | 交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 与 head `59618d5ca8296093fdde0c8745efa29133fecf6b` 的 `static-checks`、Compose-only `e2e` 均通过；修复前 main 手工 e2e 首轮 1 条 C0005 失败、自动唯一重试 38/38 通过，按工作流规则标记 `flaky-suspect`；PR #9 的 POM 时序修复 e2e 通过且分类 `normal`；合并后 main 手工 e2e 再次为 38/38、分类 `normal`；通知步骤从 Actions Secrets 环境变量装配并在无 Secret 时安全按零渠道执行 | 原 head Actions run `33203109968`、`33203109999`；修复前 main e2e run `33234802753`（job `99053798298`）；PR #9 e2e run `33236374652`；修复后 main e2e run `33236596449`（job `99058554054`）；历史对抗与回归 run `33167112164`、`33167112680`、`33167439010` |
 | main 合并交付 | PR #1 已由 GitHub 真实合并到 `main`；PR #9 的 POM 时序修复也已由 GitHub 真实合并（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`）；随后 PR #10、PR #11 文档更新继续真实合并（merge SHA 分别为 `aec57829a3fecd57b77d59c1ca73a175346c6215`、`dd5dacf62d92c528afedaab6f021cbbb9a535d45`）；`release` 未被上述操作改写 | `gh pr view 1`、`gh pr view 9`、`gh pr view 10`、`gh pr view 11`；`git ls-remote origin refs/heads/main refs/heads/release` |
+
+## 当前复核收尾
+
+2026-08-29 当前复核已用真实 Docker 靶场完成健康检查、seed canary、API checkout 22/22 和 Web checkout 10/10。仍需执行最终 `target-app-reset`、`target-app-down` 并确认容器、网络和卷清理；真实通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
 
 ## 不可伪造的外部事实
 

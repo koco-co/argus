@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-29：完成不可信 YAML/JSON 严格解析迁移：`argus-core` 的 `load_yaml/load_json` 与 SDK 安全 JSON 解析统一拒绝重复键、非有限数字、YAML alias、过深/过大文档和不支持类型；文件、插件输出及 HTTP 响应的生产读取点同步收口，错误诊断不回显载荷。新增 `make static-gates` 汇总静态、Schema、语义、覆盖和边界门禁；当前框架测试为 497 passed，三份 0.2.0 workspace 包已完成 lock/build 复核。
+
 - 2026-08-29：补齐 `scripts/validate_readme.py --strict`，将 README 标题、UTF-8 编码、本地链接和仓库越界链接纳入可执行校验；新增 `make validate-readme` 并接入 `make lint`/static-checks，框架测试更新为 481 passed。
 
 - 2026-08-29：启动并完成 Argus `0.2.0` clean-break workspace 基础实现。新增 `packages/argus-core`（Pydantic 控制面模型、最新审批规则、workstream 状态机、POSIX 锁内原子 Store、promotion 事实和中文 CLI）、`packages/argus-plugin-sdk`（严格二选一 source envelope、凭据序列化隔离、SSRF/大小/超时边界、显式注册表、GitHub Issues/OpenAPI 参考连接器）和 `adapters/medusa`（Web/API 路由及非秘密配置）。新增静态 Schema、registry、0.2 架构/PRD/数据模型和 ADR-013；四个 workspace 包可独立构建，未实现 Agent/LLM Runtime、Skill 执行或 v1 迁移。新增 16 项核心/SDK/适配器回归后框架测试为 479 passed；未将 mock、fixture、零渠道日志或本地判断冒充真实外部通知、review、protected merge 或 SHA。

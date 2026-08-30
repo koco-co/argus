@@ -30,9 +30,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
-from openpyxl import Workbook, load_workbook
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
+from openpyxl import Workbook, load_workbook  # pyright: ignore[reportMissingModuleSource]
 
 PROJECT = REPO_ROOT.name
 FIXED_DATE = (1980, 1, 1, 0, 0, 0)
@@ -93,9 +93,14 @@ def next_version(exports_dir: Path) -> int:
     highest = 0
     if exports_dir.is_dir():
         for existing in exports_dir.glob(f"{PROJECT}_v*_API_Cases.xlsx"):
+            _assert_safe_path(existing, label="existing XLSX export")
             match = FILENAME_PATTERN.match(existing.name)
             if match:
-                highest = max(highest, int(match.group(1)))
+                try:
+                    version = int(match.group(1))
+                except ValueError:
+                    continue
+                highest = max(highest, version)
     return highest + 1
 
 
@@ -125,11 +130,17 @@ def deterministic_xlsx_bytes(workbook: Workbook) -> bytes:
 
 
 def export(iteration_dir: Path) -> Path:
+    _assert_safe_path(iteration_dir, label="iteration")
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
+        raise RegistryError(f"iteration must be a safe directory: {iteration_dir}")
     cases_path = iteration_dir / "api" / "cases.yaml"
-    if not cases_path.exists():
+    if cases_path.is_symlink() or not cases_path.exists():
         raise RegistryError(f"missing source for export: {cases_path}")
     validate_path(cases_path)
-    document = yaml.safe_load(cases_path.read_text(encoding="utf-8"))
+    try:
+        document = load_yaml(cases_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise RegistryError(f"source for export is not safely parseable: {cases_path}") from exc
     status = document["status"]
     if status not in CASES_READY:
         raise RegistryError(
@@ -139,16 +150,25 @@ def export(iteration_dir: Path) -> Path:
 
     workbook = Workbook()
     sheet = workbook.active
-    assert sheet is not None  # a new workbook always has one active sheet
+    if sheet is None:  # pragma: no cover - openpyxl always creates an active sheet
+        raise RegistryError("openpyxl workbook has no active sheet")
     sheet.title = "API Cases"
     sheet.append(COLUMNS)
     for case in sorted(document["cases"], key=lambda c: c["api_case_id"]):
         sheet.append(row_for(case))
 
     exports_dir = iteration_dir / "exports"
+    _assert_safe_path(exports_dir, label="exports directory")
+    if exports_dir.is_symlink() or (exports_dir.exists() and not exports_dir.is_dir()):
+        raise RegistryError(f"exports directory is not safe: {exports_dir}")
     exports_dir.mkdir(exist_ok=True)
     version = next_version(exports_dir)
     destination = exports_dir / f"{PROJECT}_v{version}_API_Cases.xlsx"
+    if destination.is_symlink() or destination.exists():
+        raise RegistryError(f"XLSX destination already exists: {destination}")
+    # exports_dir is a checked directory and the destination is checked for
+    # existing symlinks before this no-overwrite write.
+    # pi-lens-ignore: python-path-traversal
     destination.write_bytes(deterministic_xlsx_bytes(workbook))
     return destination
 
@@ -156,7 +176,8 @@ def export(iteration_dir: Path) -> Path:
 def round_trip(path: Path) -> tuple[list[str], list[list[Any]]]:
     workbook = load_workbook(path)
     sheet = workbook.active
-    assert sheet is not None
+    if sheet is None:
+        raise ValueError("workbook has no active sheet")
     rows = list(sheet.iter_rows(values_only=True))
     header = [str(cell) for cell in rows[0]]
     return header, [list(row) for row in rows[1:]]

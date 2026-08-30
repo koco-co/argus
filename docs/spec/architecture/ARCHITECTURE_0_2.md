@@ -13,6 +13,7 @@ argus/
 │   │       ├── approvals.py    # 固定审批矩阵与 latest 规则
 │   │       ├── state.py        # workstream 状态机
 │   │       ├── store.py        # POSIX 锁与原子替换
+│   │       ├── parsing.py      # 不可信 YAML/JSON 严格解析
 │   │       ├── promotion.py    # 外部 merge fact 收口
 │   │       └── cli.py          # 中文控制面 CLI
 │   └── argus-plugin-sdk/
@@ -56,13 +57,15 @@ argus-plugin-sdk  ←  argus-medusa（仅契约复用）
 
 `iteration.yaml` 只允许 `schema_version: "2.0"`，运行时契约在 `argus_core.models.IterationDocument`，可导出的静态 Schema 在 `argus_core/schemas/iteration.schema.json`，注册表在同目录 `registry.yaml`。
 
+所有来自文件、环境变量、插件输出和 HTTP 响应的不可信 YAML/JSON 都必须经过 `argus_core.parsing.load_yaml/load_json`（SDK 来源边界使用其等价安全解析器）。解析器只接受 UTF-8 的单文档，限制为 8 MiB 和 64 层嵌套，并拒绝重复键、YAML alias、非有限数字、非字符串对象键及不支持的类型；HTTP 客户端从 `response.content` 进入该边界，不调用宽松的 `response.json()`。解析失败只返回稳定诊断，不回显输入载荷。
+
 ## 4. Workstream 与审批
 
-Web/API workstream 有独立状态和 revision，iteration status 由它们聚合。需求接受必须存在最新 `requirements/accepted/user` 决定；Web 设计、API mapping/cases 和环境必须满足各自最新审批；promotion 审批固定为 user-only。latest 规则意味着新拒绝会覆盖旧接受。
+Web/API workstream 有独立状态和 revision，iteration status 由它们聚合。需求接受必须存在当前生命周期窗口内的最新 `requirements/accepted/user` 决定；Web 设计、API mapping/cases 和环境必须满足各自最新审批；promotion 审批固定为 user-only，execution 终态 acceptance 是 promotion 的前置门禁。审批以追加顺序保存，重开后的旧决定不能满足新窗口；latest 规则意味着新拒绝会覆盖旧接受。
 
 DelegationGrant 需要用户 basis、basis SHA-256、唯一 scope 和有效时间窗。scope 禁止 `requirements` 与 `promotion`；delegated 记录始终是 `actor=agent`，必须带匹配 delegation ID 和非空 note。审批 append 和状态迁移都在同一 Store 事务内完成。
 
-`MergeFact` 必须包含 workstream、GitHub repository、正整数 PR、`release` base、真实格式的 merge SHA、merge time、source URL 和 verified time。每条 workstream 最多一条 fact；只有所有 workstream 都有 fact，iteration 才能变成 `promoted`。
+`MergeFact` 必须包含 workstream、GitHub repository、正整数 PR、`release` base、真实格式的 merge SHA、merge time、source URL 和 verified time，并由 `github-api` verifier 与环境 HMAC 签名绑定。每条 workstream 最多一条 fact；Store 在读取和写入时复核签名，只有所有 workstream 都有 fact，iteration 才能变成 `promoted`。
 
 ## 5. 来源插件安全
 

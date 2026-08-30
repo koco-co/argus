@@ -244,7 +244,7 @@
           "type": "string"
         },
         "repository": {
-          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})$",
           "title": "Repository",
           "type": "string"
         },
@@ -284,6 +284,32 @@
           "format": "date-time",
           "title": "Verified At",
           "type": "string"
+        },
+        "verifier": {
+          "anyOf": [
+            {
+              "pattern": "^github-api$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verifier"
+        },
+        "verification_signature": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verification Signature"
         }
       },
       "required": [

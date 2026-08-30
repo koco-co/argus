@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-import httpx
-import yaml
+import httpx  # pyright: ignore[reportMissingImports]
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TARGET_DIR = REPO_ROOT / "target-app"
@@ -27,9 +27,28 @@ class HarnessError(RuntimeError):
     """靶应用生命周期无法继续时抛出的可诊断错误。"""
 
 
+def _assert_safe_path(path: Path, *, label: str) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise HarnessError(f"{label} 不得包含路径穿越：{path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise HarnessError(f"{label} 不得经过符号链接：{path}")
+
+
 def load_lock(path: Path = LOCK_FILE) -> dict[str, Any]:
     """读取并检查所有会漂移的靶应用依赖都已精确锁定。"""
-    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    _assert_safe_path(path, label="锁文件")
+    if path.is_symlink() or not path.is_file():
+        raise HarnessError(f"锁文件不是安全的普通文件：{path}")
+    try:
+        document = load_yaml(path.read_bytes()) or {}
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise HarnessError("锁文件不是安全可解析的 YAML 文档") from exc
+    if not isinstance(document, dict):
+        raise HarnessError("锁文件顶层必须是映射")
     for key in ("medusa", "storefront", "node", "postgres", "redis", "pnpm"):
         if not isinstance(document.get(key), dict):
             raise HarnessError(f"锁文件缺少 {key}")
@@ -43,9 +62,12 @@ def load_lock(path: Path = LOCK_FILE) -> dict[str, Any]:
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
+    _assert_safe_path(path, label="runtime.env")
     values: dict[str, str] = {}
     if not path.exists():
         return values
+    if path.is_symlink() or not path.is_file():
+        raise HarnessError(f"runtime.env 不是安全的普通文件：{path}")
     for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw or raw.lstrip().startswith("#") or "=" not in raw:
             continue
@@ -56,8 +78,13 @@ def _read_dotenv(path: Path) -> dict[str, str]:
 
 def write_runtime_env(values: dict[str, str], path: Path = RUNTIME_ENV) -> None:
     """原子性不是跨进程契约；0600 权限和不打印秘密才是本地边界。"""
+    _assert_safe_path(path, label="runtime.env")
     path.parent.mkdir(parents=True, exist_ok=True)
     body = "".join(f"{key}={value}\n" for key, value in sorted(values.items()))
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise HarnessError(f"runtime.env 不是安全的普通文件：{path}")
+    # The destination is checked as a non-symlink path above.
+    # pi-lens-ignore: python-path-traversal
     path.write_text(body, encoding="utf-8")
     path.chmod(0o600)
 
@@ -113,6 +140,12 @@ def compose(
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """只在固定 Compose 项目中执行命令，避免影响机器上的其他容器。"""
+    _assert_safe_path(TARGET_DIR, label="target-app directory")
+    _assert_safe_path(COMPOSE_FILE, label="Compose file")
+    if TARGET_DIR.is_symlink() or not TARGET_DIR.is_dir():
+        raise HarnessError(f"target-app directory is not safe: {TARGET_DIR}")
+    if COMPOSE_FILE.is_symlink() or not COMPOSE_FILE.is_file():
+        raise HarnessError(f"Compose file is not safe: {COMPOSE_FILE}")
     command = ["docker", "compose", "-f", str(COMPOSE_FILE), *arguments]
     return subprocess.run(
         command,
@@ -266,6 +299,8 @@ def wait_http(url: str, *, timeout: float = 180.0) -> None:
                 last_error = f"HTTP {response.status_code}"
             except httpx.HTTPError as exc:
                 last_error = str(exc)
+            # Polling backoff is intentional; the helper waits for a real service.
+            # pi-lens-ignore: python-sleep-in-test
             time.sleep(2)
     raise HarnessError(f"等待 {url} 超时：{last_error}")
 
@@ -276,5 +311,7 @@ def healthcheck(*, consecutive: int = 2) -> None:
         wait_http("http://127.0.0.1:9000/health", timeout=60)
         wait_http("http://127.0.0.1:9000/app", timeout=60)
         wait_http("http://127.0.0.1:8000", timeout=120)
+        # Separate consecutive health observations deliberately.
+        # pi-lens-ignore: python-sleep-in-test
         time.sleep(1)
     verify_readonly_role()

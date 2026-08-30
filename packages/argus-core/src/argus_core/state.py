@@ -54,15 +54,15 @@ def _transition_map(workstream: Workstream) -> dict[WorkstreamStatus, set[Workst
 def _refresh_iteration_status(document: IterationDocument) -> None:
     statuses = {item.status for item in document.workstreams}
     if WorkstreamStatus.BLOCKED in statuses:
-        document.status = IterationStatus.BLOCKED
+        object.__setattr__(document, "status", IterationStatus.BLOCKED)
     elif statuses and statuses <= {WorkstreamStatus.PROMOTED}:
-        document.status = IterationStatus.PROMOTED
+        object.__setattr__(document, "status", IterationStatus.PROMOTED)
     elif statuses and statuses <= {WorkstreamStatus.PASSED, WorkstreamStatus.PROMOTED}:
-        document.status = IterationStatus.ACCEPTED
+        object.__setattr__(document, "status", IterationStatus.ACCEPTED)
     elif statuses <= {WorkstreamStatus.CREATED}:
-        document.status = IterationStatus.CREATED
+        object.__setattr__(document, "status", IterationStatus.CREATED)
     else:
-        document.status = IterationStatus.ACTIVE
+        object.__setattr__(document, "status", IterationStatus.ACTIVE)
 
 
 def transition(
@@ -79,8 +79,6 @@ def transition(
     except KeyError as exc:
         raise StateError(str(exc)) from exc
     allowed = _transition_map(workstream).get(workstream.status, set())
-    if target == WorkstreamStatus.BLOCKED:
-        allowed = {WorkstreamStatus.BLOCKED}
     if workstream.status == WorkstreamStatus.BLOCKED and actor != Actor.USER:
         raise StateError("leaving blocked requires an explicit user action")
     if target not in allowed:

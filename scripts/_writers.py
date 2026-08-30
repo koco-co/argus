@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -30,8 +31,9 @@ try:
 except ImportError:  # pragma: no cover - Windows has no fcntl
     fcntl = None
 
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from _registry_lib import binding_for_path, schema_errors
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 APPROVAL_STAGES = (
     "requirements",
@@ -87,12 +89,119 @@ class WriterError(Exception):
     """User-facing refusal to write."""
 
 
+def _assert_safe_path(path: Path, *, label: str) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise WriterError(f"{label} 不得包含路径穿越：{path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise WriterError(f"{label} 路径不得经过符号链接：{path}")
+
+
+# Only finalize_merge.py receives this capability through record_merged_event;
+# callers cannot opt into merged by passing a boolean flag.
+_MERGE_AUTHORIZATION = object()
+_MERGE_VERIFIER_CAPABILITY = object()
+_MERGE_SHA = re.compile(r"^[a-f0-9]{40}$")
+
+
+class MergeVerification:
+    """Opaque result from the external GitHub verifier."""
+
+    __slots__ = ("_merge_sha", "_pr_number")
+
+    def __init__(
+        self,
+        merge_sha: str,
+        pr_number: int,
+        *,
+        evidence: dict[str, Any],
+        capability: object | None = None,
+    ) -> None:
+        if capability is not _MERGE_VERIFIER_CAPABILITY:
+            raise WriterError("merge verification must be created by the verifier boundary")
+        if not isinstance(evidence, dict):
+            raise WriterError("GitHub verifier evidence must be an object")
+        merged = evidence.get("merged")
+        if not isinstance(merged, bool) or not merged:
+            raise WriterError("GitHub verifier evidence must state merged=true")
+        if not isinstance(merge_sha, str) or not _MERGE_SHA.fullmatch(merge_sha):
+            raise WriterError("invalid verified merge SHA or PR number")
+        if isinstance(pr_number, bool) or not isinstance(pr_number, int) or pr_number < 1:
+            raise WriterError("invalid verified merge SHA or PR number")
+        if evidence.get("merge_commit_sha") != merge_sha:
+            raise WriterError("GitHub verifier evidence SHA does not match")
+        evidence_number = evidence.get("number")
+        if (
+            isinstance(evidence_number, bool)
+            or not isinstance(evidence_number, int)
+            or evidence_number != pr_number
+        ):
+            raise WriterError("GitHub verifier evidence PR number does not match")
+        base = evidence.get("base")
+        if not isinstance(base, dict) or base.get("ref") != "release":
+            raise WriterError("GitHub verifier evidence must target release")
+        merged_at = evidence.get("merged_at")
+        if not isinstance(merged_at, str) or not merged_at:
+            raise WriterError("GitHub verifier evidence must include merged_at")
+        try:
+            parsed = datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
+        except ValueError:
+            raise WriterError("GitHub verifier evidence merged_at is invalid") from None
+        if parsed.tzinfo is None or parsed > datetime.now(UTC):
+            raise WriterError(
+                "GitHub verifier evidence merged_at must be timezone-aware and current"
+            )
+        object.__setattr__(self, "_merge_sha", merge_sha)
+        object.__setattr__(self, "_pr_number", pr_number)
+
+    @property
+    def merge_sha(self) -> str:
+        return self._merge_sha
+
+    @property
+    def pr_number(self) -> int:
+        return self._pr_number
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if name in self.__slots__ and hasattr(self, name):
+            raise AttributeError("merge verification is immutable")
+        object.__setattr__(self, name, value)
+
+
+def _make_merge_verification(
+    merge_sha: str, pr_number: int, evidence: dict[str, Any]
+) -> MergeVerification:
+    """Convert a checked external verifier response into an opaque capability."""
+    return MergeVerification(
+        merge_sha,
+        pr_number,
+        evidence=evidence,
+        capability=_MERGE_VERIFIER_CAPABILITY,
+    )
+
+
 @contextmanager
 def iteration_lock(iteration_yaml: Path) -> Iterator[None]:
     """在跨进程稳定锁文件上串行化 iteration 的读改写事务。"""
+    _assert_safe_path(iteration_yaml, label="iteration")
+    if iteration_yaml.is_symlink() or iteration_yaml.parent.is_symlink():
+        raise WriterError(f"iteration path is not safe: {iteration_yaml}")
     lock_path = iteration_yaml.with_name(f".{iteration_yaml.name}.lock")
+    if lock_path.is_symlink():
+        raise WriterError(f"iteration lock is not safe: {lock_path}")
+    if fcntl is None:
+        raise WriterError("生命周期写入器需要支持 POSIX flock 的运行时")
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        # _assert_safe_path above checks every existing path component and O_NOFOLLOW
+        # prevents a final-component symlink race.
+        # pi-lens-ignore: python-path-traversal
+        descriptor = os.open(lock_path, flags, 0o600)
     except OSError as exc:
         raise WriterError(f"无法创建 iteration 锁：{lock_path}") from exc
     with os.fdopen(descriptor, "a+", encoding="utf-8") as lock:
@@ -173,9 +282,15 @@ def delegation_violations(
 
 def load_iteration(iteration_dir: Path) -> tuple[Path, dict[str, Any]]:
     iteration_yaml = iteration_dir / "iteration.yaml"
-    if not iteration_yaml.exists():
-        raise WriterError(f"{iteration_yaml} not found")
-    document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8")) or {}
+    _assert_safe_path(iteration_yaml, label="iteration")
+    if iteration_yaml.is_symlink() or not iteration_yaml.is_file():
+        raise WriterError(f"{iteration_yaml} is missing or symlinked")
+    try:
+        document = load_yaml(iteration_yaml.read_bytes()) or {}
+    except (OSError, TypeError, ValueError) as exc:
+        raise WriterError("iteration.yaml is not a safely parseable YAML document") from exc
+    if not isinstance(document, dict):
+        raise WriterError("iteration.yaml must contain an object")
     return iteration_yaml, document
 
 
@@ -211,6 +326,9 @@ def validate_document(
 def _write_iteration_unlocked(
     iteration_yaml: Path, document: dict[str, Any], *, check_lifecycle: bool = True
 ) -> None:
+    _assert_safe_path(iteration_yaml, label="iteration")
+    if iteration_yaml.is_symlink() or iteration_yaml.parent.is_symlink():
+        raise WriterError(f"iteration path is not safe: {iteration_yaml}")
     if check_lifecycle:
         validate_document(iteration_yaml, document)
     else:
@@ -236,9 +354,8 @@ def _write_iteration_unlocked(
         os.replace(temporary_path, iteration_yaml)
         try:
             directory_descriptor = os.open(iteration_yaml.parent, os.O_RDONLY)
-        except OSError:
-            # 某些平台不允许打开目录；文件替换本身仍已完成。
-            return
+        except OSError as exc:
+            raise WriterError(f"无法打开 iteration 目录以同步：{iteration_yaml.parent}") from exc
         try:
             os.fsync(directory_descriptor)
         finally:
@@ -267,7 +384,7 @@ def _record_event_unlocked(
     mark_downstream_stale: bool = False,
     delegation_id: str | None = None,
     *,
-    allow_merge: bool = False,
+    merge_authorization: object | None = None,
 ) -> dict[str, Any]:
     from validate_iteration import approval_gate_violations, legal_transition
 
@@ -278,7 +395,7 @@ def _record_event_unlocked(
         allow_terminal_acceptance_repair=mark_downstream_stale
         and to_state == "requirements_clarifying",
     )
-    if to_state == "merged" and not allow_merge:
+    if to_state == "merged" and merge_authorization is not _MERGE_AUTHORIZATION:
         raise WriterError("merged 只能由 finalize_merge.py 在合并事实核验后写入")
     if document["state"] != from_state:
         raise WriterError(
@@ -293,11 +410,20 @@ def _record_event_unlocked(
         iteration_dir,
         document.get("approvals", []),
         document,
+        before=_now(),
     )
     if gate_violations:
         raise WriterError("; ".join(gate_violations))
     if to_state == "blocked" and not (reason or "").strip():
         raise WriterError("moving to blocked requires a non-empty --reason")
+    if (
+        to_state == "requirements_clarifying"
+        and from_state not in {"created", "requirements_clarifying"}
+        and not mark_downstream_stale
+    ):
+        raise WriterError(
+            "reopening accepted work requires the reopen_iteration stale propagation path"
+        )
     if mark_downstream_stale and not (
         triggered_by in {"user", "agent"} and to_state == "requirements_clarifying"
     ):
@@ -359,8 +485,6 @@ def record_event(
     pr_number: int | None = None,
     mark_downstream_stale: bool = False,
     delegation_id: str | None = None,
-    *,
-    allow_merge: bool = False,
 ) -> dict[str, Any]:
     with iteration_lock(iteration_dir / "iteration.yaml"):
         return _record_event_unlocked(
@@ -373,7 +497,26 @@ def record_event(
             pr_number,
             mark_downstream_stale,
             delegation_id,
-            allow_merge=allow_merge,
+        )
+
+
+def record_merged_event(
+    iteration_dir: Path,
+    verification: MergeVerification | object,
+    *legacy_fields: object,
+) -> dict[str, Any]:
+    """Write merged only from an opaque, validated verifier result."""
+    if legacy_fields or type(verification) is not MergeVerification:
+        raise WriterError("merged requires a validated external verifier result")
+    with iteration_lock(iteration_dir / "iteration.yaml"):
+        return _record_event_unlocked(
+            iteration_dir,
+            "accepted",
+            "merged",
+            "script",
+            merge_sha=verification.merge_sha,
+            pr_number=verification.pr_number,
+            merge_authorization=_MERGE_AUTHORIZATION,
         )
 
 
@@ -541,12 +684,21 @@ def bind_delegated_approvals(
 
 
 def artifact_digest(path: Path) -> str:
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise WriterError(f"artifact 必须是安全的普通文件：{path}")
     return _sha256(path.read_bytes())
 
 
 def redacted_digest(path: Path) -> str:
     """SHA-256 over a redacted copy: keys and shape preserved, values masked."""
-    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise WriterError(f"artifact 必须是安全的普通文件：{path}")
+    try:
+        document = load_yaml(path.read_bytes()) or {}
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise WriterError("digest source is not safely parseable YAML") from exc
 
     def mask(value: Any) -> Any:
         if isinstance(value, dict):

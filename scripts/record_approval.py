@@ -65,19 +65,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"error: environment check failed: {problem}", file=sys.stderr)
             return 1
 
-    if args.artifact is not None:
-        digest = (
-            redacted_digest(args.artifact)
-            if args.stage == "environment"
-            else artifact_digest(args.artifact)
-        )
-    elif args.sha256:
-        digest = args.sha256
-    else:
-        parser.error("pass --artifact <file> or --sha256 <hex>")
-        return 2
-
     try:
+        if args.artifact is not None:
+            digest = (
+                redacted_digest(args.artifact)
+                if args.stage == "environment"
+                else artifact_digest(args.artifact)
+            )
+        elif args.sha256:
+            digest = args.sha256
+        else:
+            parser.error("pass --artifact <file> or --sha256 <hex>")
+            return 2
         document = record_approval(
             args.iteration,
             args.stage,

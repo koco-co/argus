@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-from jsonschema import Draft7Validator, FormatChecker
+from _registry_lib import RegistryError, _assert_safe_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
+from jsonschema import Draft7Validator, FormatChecker  # pyright: ignore[reportMissingModuleSource]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_COMPARISONS = {"yaml", "python_ast", "python_ast_compatible"}
@@ -31,7 +31,7 @@ def _safe_relative(value: object, *, field_name: str, report: Report) -> Path | 
         report.problems.append(f"{field_name} 必须是非空相对路径")
         return None
     path = Path(value)
-    if path.is_absolute() or ".." in path.parts:
+    if "\x00" in value or "\\" in value or path.is_absolute() or ".." in path.parts:
         report.problems.append(f"{field_name} 不得越出基线目录：{value}")
         return None
     return path
@@ -39,14 +39,27 @@ def _safe_relative(value: object, *, field_name: str, report: Report) -> Path | 
 
 def _load_yaml(path: Path, *, label: str, report: Report) -> Any | None:
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
-        report.problems.append(f"{label} 无法读取为 YAML：{exc}")
+        _assert_safe_path(path, label=label, require_file=True)
+        return load_yaml(path.read_bytes())
+    except (OSError, UnicodeError, ValueError, RegistryError):
+        report.problems.append(f"{label} 无法读取为安全 YAML 文档")
         return None
 
 
 def _confined_file(root: Path, relative: Path, *, label: str, report: Report) -> Path | None:
     """解析基线/输出文件并拒绝经符号链接逃出所属根目录。"""
+    try:
+        _assert_safe_path(root, label=label)
+        _assert_safe_path(root / relative, label=label)
+    except RegistryError as exc:
+        if "symlink" in str(exc).lower():
+            report.problems.append(f"{label} 不得通过符号链接越出目录：{relative.as_posix()}")
+        else:
+            report.problems.append(f"{label} 不得通过不安全路径访问：{relative.as_posix()}")
+        return None
+    if root.is_symlink() or (root.exists() and not root.is_dir()):
+        report.problems.append(f"{label} 根目录不是安全目录：{root}")
+        return None
     root_resolved = root.resolve()
     candidate = root_resolved / relative
     try:
@@ -137,11 +150,7 @@ def _compare_yaml(
     if schema is not None:
         _validate_schema(actual, schema, artifact_path=actual_path, report=report)
     if expected != actual:
-        report.problems.append(
-            f"{actual_path.name} 存在 YAML 语义差异："
-            f"expected={json.dumps(expected, ensure_ascii=False, sort_keys=True)}；"
-            f"actual={json.dumps(actual, ensure_ascii=False, sort_keys=True)}"
-        )
+        report.problems.append(f"{actual_path.name} 存在 YAML 语义差异")
 
 
 def _ast_dump(path: Path, *, label: str, report: Report) -> str | None:
@@ -278,6 +287,18 @@ def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
     """用一份基线清单验证冻结输入和隔离目录内的再生成产物。"""
 
     report = Report()
+    try:
+        _assert_safe_path(baseline_dir, label="基线目录")
+        _assert_safe_path(actual_root, label="再生成目录")
+    except RegistryError as exc:
+        report.problems.append(str(exc))
+        return report
+    if baseline_dir.is_symlink() or not baseline_dir.is_dir():
+        report.problems.append("基线目录必须是安全的普通目录")
+        return report
+    if actual_root.is_symlink() or (actual_root.exists() and not actual_root.is_dir()):
+        report.problems.append("再生成目录必须是安全的普通目录")
+        return report
     manifest_path = baseline_dir / "manifest.yaml"
     manifest = _load_yaml(manifest_path, label="基线清单", report=report)
     if not isinstance(manifest, dict):
@@ -347,10 +368,32 @@ def verify_baseline(baseline_dir: Path, actual_root: Path) -> Report:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline", type=Path, required=True)
+    selector = parser.add_mutually_exclusive_group(required=True)
+    selector.add_argument("--baseline", type=Path)
+    selector.add_argument(
+        "--all",
+        action="store_true",
+        help="校验仓库内所有 Skill 的基线",
+    )
     parser.add_argument("--actual-root", type=Path, required=True)
     args = parser.parse_args(argv)
-    report = verify_baseline(args.baseline.resolve(), args.actual_root.resolve())
+
+    if args.all:
+        baselines = sorted((REPO_ROOT / ".agents" / "skills").glob("*/versions/baselines/*"))
+        if not baselines:
+            print("ERROR: 仓库内没有找到 Skill 黄金基线")
+            return 1
+        combined = Report()
+        for baseline in baselines:
+            report = verify_baseline(baseline, args.actual_root)
+            combined.problems.extend(
+                f"{baseline.relative_to(REPO_ROOT)}: {problem}" for problem in report.problems
+            )
+            combined.compared.extend(report.compared)
+        report = combined
+    else:
+        report = verify_baseline(args.baseline, args.actual_root)
+
     if report.problems:
         for problem in report.problems:
             print(f"ERROR: {problem}")

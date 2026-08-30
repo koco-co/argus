@@ -16,4 +16,4 @@ def assert_row_exists(
 
     rows = client.read(sql, params)
     if not rows:
-        raise AssertionError(f"只读查询未返回任何记录：{sql[:80]}")
+        raise AssertionError("只读查询未返回任何记录")

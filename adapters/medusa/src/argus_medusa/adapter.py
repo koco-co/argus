@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from argus_core.models import Surface, Workstream  # pyright: ignore[reportMissingImports]
 from argus_plugin_sdk.contracts import PluginManifest  # pyright: ignore[reportMissingImports]
@@ -12,6 +12,25 @@ from pydantic import (  # pyright: ignore[reportMissingImports]
     Field,
     field_validator,
 )
+
+_MAX_URL_UNQUOTE_PASSES = 8
+
+
+def _decoded(value: str) -> str:
+    decoded = value
+    for _ in range(_MAX_URL_UNQUOTE_PASSES):
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            return decoded
+        decoded = next_value
+    raise ValueError("Medusa endpoint contains excessive encoding")
+
+
+def _has_raw_control_or_space(value: str) -> bool:
+    return any(
+        character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+        for character in value
+    )
 
 
 class MedusaConfig(BaseModel):
@@ -26,11 +45,31 @@ class MedusaConfig(BaseModel):
     @field_validator("storefront_url", "store_api_url")
     @classmethod
     def validate_endpoint_url(cls, value: str) -> str:
-        parts = urlsplit(value)
-        if parts.scheme not in {"http", "https"} or not parts.netloc:
+        if _has_raw_control_or_space(value):
+            raise ValueError("Medusa endpoint is malformed")
+        try:
+            parts = urlsplit(value)
+            port = parts.port
+            decoded_path = _decoded(parts.path)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Medusa endpoint is malformed") from exc
+        if parts.scheme not in {"http", "https"} or not parts.netloc or not parts.hostname:
             raise ValueError("Medusa endpoint must use http or https")
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError("Medusa endpoint port is invalid")
         if parts.username or parts.password or parts.query or parts.fragment:
             raise ValueError("Medusa endpoint must not contain credentials, query, or fragment")
+        if (
+            "\x00" in value
+            or "\\" in value
+            or _has_raw_control_or_space(decoded_path)
+            or "\x00" in decoded_path
+            or "\\" in decoded_path
+            or "?" in decoded_path
+            or "#" in decoded_path
+            or any(part == ".." for part in decoded_path.split("/"))
+        ):
+            raise ValueError("Medusa endpoint must not contain NUL, backslash, or traversal")
         return value.rstrip("/")
 
 
@@ -41,8 +80,29 @@ class _SurfaceAdapter:
         self.base_url = base_url
 
     def url(self, path: str) -> str:
-        if not path.startswith("/") or "?" in path or "#" in path:
-            raise ValueError("Medusa route must be an absolute path without query or fragment")
+        if not isinstance(path, str):
+            raise ValueError("Medusa route must be a string")
+        if _has_raw_control_or_space(path):
+            raise ValueError("Medusa route is malformed")
+        try:
+            decoded = _decoded(path)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Medusa route is malformed") from exc
+        if (
+            not path.startswith("/")
+            or path.startswith("//")
+            or "?" in path
+            or "#" in path
+            or "\\" in path
+            or "\x00" in path
+            or _has_raw_control_or_space(decoded)
+            or "\\" in decoded
+            or "\x00" in decoded
+            or "?" in decoded
+            or "#" in decoded
+            or any(part == ".." for part in decoded.split("/"))
+        ):
+            raise ValueError("Medusa route must be an absolute path without query or traversal")
         return f"{self.base_url}{path}"
 
 

@@ -22,10 +22,11 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from _registry_lib import DEFAULT_REGISTRY, REPO_ROOT, RegistryError
+from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
 from check_secrets import Report, scan_text
 from new_iteration import ITERATION_ID_PATTERN
 from validate_schema import validate_one
@@ -34,18 +35,73 @@ PLUGIN_REGISTRY = REPO_ROOT / "plugins/registry.yaml"
 MAX_BYTES = 8 * 1024 * 1024
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 30
-_SECRET_KEYS = {"password", "secret", "token", "api_key", "access_token", "authorization", "cookie"}
+_SECRET_KEYS = {
+    "password",
+    "secret",
+    "token",
+    "apikey",
+    "accesstoken",
+    "authorization",
+    "cookie",
+    "privatekey",
+    "credential",
+    "credentials",
+    "clientsecret",
+    "bearer",
+    "auth",
+}
+
+
+def _sensitive_key(key: object) -> bool:
+    normalized = "".join(character for character in str(key).lower() if character.isalnum())
+    return normalized in _SECRET_KEYS or normalized.endswith(
+        ("password", "secret", "token", "apikey", "credential", "authorization", "cookie")
+    )
 
 
 class PluginError(Exception):
     """不携带载荷或凭据的可展示错误。"""
 
 
+_MAX_URL_UNQUOTE_PASSES = 8
+
+
+def _decoded_ref(value: str) -> str:
+    decoded = value
+    for _ in range(_MAX_URL_UNQUOTE_PASSES):
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            return decoded
+        decoded = next_value
+    raise PluginError("来源引用包含过度编码")
+
+
+def _has_raw_control_or_space(value: str) -> bool:
+    return any(
+        character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+        for character in value
+    )
+
+
+def _assert_safe_path(path: Path, *, label: str, require_file: bool = False) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise PluginError(f"{label} 不得包含路径穿越：{path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise PluginError(f"{label} 路径不得经过符号链接：{path}")
+    if require_file and (candidate.is_symlink() or not candidate.is_file()):
+        raise PluginError(f"{label} 必须是安全的普通文件：{path}")
+
+
 def resolve_plugin(name: str, registry_path: Path = PLUGIN_REGISTRY) -> dict[str, Any]:
     """未知名称不猜测路径，也不扫描来源目录寻找替代插件。"""
+    _assert_safe_path(registry_path, label="插件注册表", require_file=True)
     try:
-        document = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+        document = load_yaml(registry_path.read_bytes())
+    except (OSError, ValueError) as exc:
         raise PluginError("无法读取插件注册表；请检查 plugins/registry.yaml") from exc
     entries = document.get("plugins") if isinstance(document, dict) else None
     if not isinstance(entries, list):
@@ -66,6 +122,10 @@ def resolve_plugin(name: str, registry_path: Path = PLUGIN_REGISTRY) -> dict[str
     if not isinstance(match.get("path"), str) or not isinstance(match.get("source_type"), str):
         raise PluginError("插件注册项必须包含 path 和 source_type")
     base = registry_path.resolve().parent
+    try:
+        _assert_safe_path(base / match["path"], label="插件 path")
+    except PluginError as exc:
+        raise PluginError("插件 path 必须指向 plugins/ 内存在的 Python 文件") from exc
     path = (base / match["path"]).resolve()
     if not path.is_relative_to(base) or path.suffix != ".py" or not path.is_file():
         raise PluginError("插件 path 必须指向 plugins/ 内存在的 Python 文件")
@@ -74,18 +134,59 @@ def resolve_plugin(name: str, registry_path: Path = PLUGIN_REGISTRY) -> dict[str
 
 def guard_source_ref(source_ref: str) -> None:
     """拒绝携带凭据或解析至非公网地址的 URL；连接器仍须逐跳检查重定向。"""
-    parts = urlsplit(source_ref)
+    if not isinstance(source_ref, str):
+        raise PluginError("来源引用必须是字符串")
+    if _has_raw_control_or_space(source_ref):
+        raise PluginError("URL 来源格式无效")
+    try:
+        parts = urlsplit(source_ref)
+        port = parts.port
+        decoded_ref = _decoded_ref(source_ref)
+    except (TypeError, ValueError, PluginError) as exc:
+        raise PluginError("URL 来源格式无效") from exc
+    if (
+        "\x00" in source_ref
+        or "\x00" in decoded_ref
+        or "\\" in source_ref
+        or "\\" in decoded_ref
+        or _has_raw_control_or_space(decoded_ref)
+    ):
+        raise PluginError("来源引用不得包含 NUL 或反斜杠")
     if not parts.scheme:
+        if (
+            source_ref.startswith("/")
+            or parts.netloc
+            or parts.query
+            or parts.fragment
+            or any(part == ".." for part in decoded_ref.split("/"))
+        ):
+            raise PluginError("来源引用不得包含绝对路径、网络位置、查询、片段或路径穿越")
         return
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         raise PluginError("URL 来源只允许 http/https")
-    if parts.username or parts.password or _SECRET_KEYS.intersection(parse_qs(parts.query)):
-        raise PluginError("来源引用不得携带凭据；请使用注册项的 credentials_env")
+    if port is not None and not 1 <= port <= 65535:
+        raise PluginError("来源 URL 端口无效")
+    if (
+        parts.username
+        or parts.password
+        or parts.query
+        or parts.fragment
+        or any(part == ".." for part in _decoded_ref(parts.path).split("/"))
+    ):
+        raise PluginError("来源引用不得携带凭据、查询参数、片段或路径穿越")
     try:
-        addresses = socket.getaddrinfo(parts.hostname, parts.port or 443, type=socket.SOCK_STREAM)
+        addresses = socket.getaddrinfo(
+            parts.hostname,
+            port if port is not None else (443 if parts.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
     except (OSError, ValueError) as exc:
         raise PluginError("无法安全解析来源主机") from exc
-    if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
+    try:
+        public = all(ipaddress.ip_address(item[4][0]).is_global for item in addresses)
+    except (IndexError, TypeError, ValueError) as exc:
+        raise PluginError("来源主机解析结果无效") from exc
+    if not addresses or not public:
         raise PluginError("URL 来源不得访问私有、回环、链路本地或其他非公网地址")
 
 
@@ -120,19 +221,30 @@ def has_secrets(value: Any, credentials: dict[str, str] | None = None, depth: in
         raise PluginError("载荷嵌套过深或存在循环引用")
     if isinstance(value, dict):
         for key, item in value.items():
-            if (
-                str(key).lower() in _SECRET_KEYS
-                and isinstance(item, str)
-                and item
-                and "CHANGE_ME" not in item
-            ):
+            if _sensitive_key(key) and item not in (None, "", "CHANGE_ME"):
                 return True
             if has_secrets(item, credentials, depth + 1):
                 return True
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple, set, frozenset)):
         return any(has_secrets(item, credentials, depth + 1) for item in value)
     elif isinstance(value, str):
         if any(secret and secret in value for secret in (credentials or {}).values()):
+            return True
+        try:
+            parts = urlsplit(value)
+        except ValueError:
+            parts = None
+        if (
+            parts is not None
+            and parts.scheme in {"http", "https"}
+            and (
+                parts.username
+                or parts.password
+                or any(
+                    _sensitive_key(key) for key, _ in parse_qsl(parts.query, keep_blank_values=True)
+                )
+            )
+        ):
             return True
         report = Report()
         scan_text(Path("source-payload.yaml"), value, report)
@@ -168,8 +280,8 @@ def fetch_envelope(entry: dict[str, Any], source_ref: str) -> Any:
     if result.returncode or len(encoded) > MAX_BYTES:
         return error_envelope(entry["source_type"], "fetch_failed")
     try:
-        envelope = json.loads(encoded)
-    except (ValueError, UnicodeError):
+        envelope = load_json(encoded, max_bytes=MAX_BYTES)
+    except (ValueError, TypeError):
         return error_envelope(entry["source_type"], "invalid_plugin_output")
     if has_secrets(envelope, credentials):
         return error_envelope(entry["source_type"], "credential_in_output")
@@ -181,7 +293,10 @@ def worker() -> int:
     try:
         # Linux/macOS 的单文件限制也约束直接写入标准输出的插件。
         resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_BYTES, MAX_BYTES))
-        request = json.loads(sys.stdin.read(MAX_BYTES))
+        request_bytes = sys.stdin.buffer.read(MAX_BYTES + 1)
+        if len(request_bytes) > MAX_BYTES:
+            return 1
+        request = load_json(request_bytes, max_bytes=MAX_BYTES)
         with (
             open(os.devnull, "w") as sink,
             contextlib.redirect_stdout(sink),
@@ -203,29 +318,47 @@ def worker() -> int:
         return 1
 
 
+def _payload_parse_error(exc: Exception) -> PluginError:
+    """将严格解析器拒绝的别名/深层载荷映射为稳定的旧版诊断。"""
+    if any(marker in str(exc).lower() for marker in ("alias", "deep")):
+        return PluginError("载荷嵌套过深或存在循环引用；请修复输入文件")
+    return PluginError("来源信封不是有效 YAML；请修复输入文件")
+
+
 def read_payload(path: Path) -> Any:
     """原始输入及 gzip 解压后内容均受限；不允许 YAML 执行 Python 对象。"""
+    _assert_safe_path(path, label="载荷文件", require_file=True)
+    if path.is_symlink() or not path.is_file():
+        raise PluginError("载荷文件必须是安全的普通文件")
+    # The path is checked as a regular, non-symlink file immediately above.
+    # pi-lens-ignore: python-path-traversal
     if path.stat().st_size > MAX_BYTES:
         raise PluginError("载荷文件超过大小限制")
     if path.suffix == ".gz":
         with gzip.open(path, "rb") as stream:
             encoded = stream.read(MAX_BYTES + 1)
     else:
+        # The path is checked as a regular, non-symlink file above.
+        # pi-lens-ignore: python-path-traversal
         encoded = path.read_bytes()
     if len(encoded) > MAX_BYTES:
         raise PluginError("解压后载荷超过大小限制")
     try:
-        return yaml.safe_load(encoded)
-    except (yaml.YAMLError, UnicodeError) as exc:
-        raise PluginError("来源信封不是有效 YAML；请修复输入文件") from exc
+        return load_yaml(encoded, max_bytes=MAX_BYTES)
+    except ValueError as exc:
+        raise _payload_parse_error(exc) from exc
+    except TypeError as exc:
+        raise _payload_parse_error(exc) from exc
 
 
 def output_path(iteration: Path) -> Path:
+    _assert_safe_path(iteration, label="iteration")
     resolved = iteration.resolve()
     if resolved.parent.name != "iterations" or not ITERATION_ID_PATTERN.fullmatch(resolved.name):
         raise PluginError("--iteration 必须是 iterations/<合法 ID> 目录")
-    if not (resolved / "iteration.yaml").is_file():
-        raise PluginError("迭代不存在；请先通过 scripts/new_iteration.py 创建")
+    iteration_yaml = resolved / "iteration.yaml"
+    if iteration_yaml.is_symlink() or not iteration_yaml.is_file():
+        raise PluginError("迭代不存在或 iteration.yaml 不是安全的普通文件；请先创建")
     raw = resolved / "00-raw"
     if not raw.is_dir() or raw.is_symlink():
         raise PluginError("迭代的 00-raw 必须是已有的真实目录")
@@ -234,6 +367,7 @@ def output_path(iteration: Path) -> Path:
 
 def persist_then_validate(envelope: Any, path: Path) -> list[str]:
     """保留无效信封供排查；已有来源不可覆盖，字节相同的重入只做校验。"""
+    _assert_safe_path(path, label="来源信封")
     if has_secrets(envelope):
         raise PluginError("载荷含疑似凭据，已拒绝落盘；请先脱敏")
     try:

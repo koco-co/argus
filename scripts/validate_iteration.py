@@ -31,8 +31,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, binding_for_path, validate_path
+from _registry_lib import (
+    REPO_ROOT,
+    RegistryError,
+    _assert_safe_path,
+    binding_for_path,
+    validate_path,
+)
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 _REGISTRY = REPO_ROOT / "scripts" / "schema_registry.yaml"
 
@@ -98,24 +104,28 @@ def successors(state: str, ui: bool) -> set[str]:
         for source, targets in layer.items():
             graph.setdefault(source, set()).update(targets)
     graph.setdefault("blocked", set())
-    # 任意状态都可以进入 blocked；离开 blocked 需要用户动作，其余路径由用户与 agent 共同选择。
+    # 任意状态都可以进入 blocked；只有用户才能恢复，且恢复边固定为 created。
     for source in list(graph):
         if source != "blocked":
             graph[source].add("blocked")
-        graph["blocked"].add(source)
+    graph["blocked"].add("created")
     return graph.get(state, set())
 
 
 def legal_transition(from_state: str, to_state: str, ui: bool, triggered_by: str) -> str | None:
     """合法时返回 None，否则返回可读的拒绝原因。"""
     if to_state == "blocked":
-        return None  # any state may block; blocked_reason completeness checked separately
-    if from_state == "blocked":
         return (
-            None
-            if triggered_by == "user"
-            else ("leaving blocked requires a user action (triggered_by=user)")
+            "iteration is already blocked"
+            if from_state == "blocked"
+            else None  # any other state may block; reason is checked separately
         )
+    if from_state == "blocked":
+        if triggered_by != "user":
+            return "leaving blocked requires a user action (triggered_by=user)"
+        if to_state != "created":
+            return "blocked may only be resumed to created"
+        return None
     if (
         triggered_by in {"user", "agent"}
         and to_state == "requirements_clarifying"
@@ -141,7 +151,76 @@ def legal_transition(from_state: str, to_state: str, ui: bool, triggered_by: str
 
 
 def sha256_of(path: Path) -> str:
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise RegistryError(f"artifact must be a regular file: {path}")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _parse_fact_time(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _latest_reopen_at(
+    document: dict[str, Any] | None,
+    before: datetime | None,
+) -> datetime | None:
+    if not document:
+        return None
+    events = document.get("events", [])
+    if not isinstance(events, list):
+        return None
+    latest: datetime | None = None
+    blocked_seen = False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        event_time = _parse_fact_time(event.get("timestamp"))
+        if before is not None and (event_time is None or event_time > before):
+            continue
+        if event.get("to_state") == "blocked":
+            blocked_seen = True
+        # An ordinary accepted-artifact reopen keeps the original M1 fact;
+        # only the blocked -> created recovery starts a fresh requirements
+        # approval window.
+        if (
+            event.get("from_state") == "created"
+            and event.get("to_state") == "requirements_clarifying"
+            and event_time is not None
+            and (before is None or event_time <= before)
+            and blocked_seen
+        ):
+            latest = event_time
+    return latest
+
+
+def _has_later_reopen(
+    document: dict[str, Any] | None,
+    before: datetime | None,
+) -> bool:
+    if document is None or before is None:
+        return False
+    events = document.get("events", [])
+    if not isinstance(events, list):
+        return False
+    return any(
+        isinstance(event, dict)
+        and event.get("to_state") == "requirements_clarifying"
+        and (event_time := _parse_fact_time(event.get("timestamp"))) is not None
+        and event_time > before
+        for event in events
+    )
 
 
 def approval_gate_violations(
@@ -149,14 +228,27 @@ def approval_gate_violations(
     iteration_dir: Path,
     approvals: list[dict[str, Any]],
     document: dict[str, Any] | None = None,
+    before: object | None = None,
 ) -> list[str]:
     """返回进入状态前未满足的批准条件，供校验器与唯一事件写入器共用。"""
     violations: list[str] = []
+    before_time = _parse_fact_time(before) if before is not None else None
+    reopen_at = _latest_reopen_at(document, before_time)
+    historical_reopen = _has_later_reopen(document, before_time)
     for stage, action in _APPROVAL_GATES.get(to_state, ()):
-        latest = next(
-            (approval for approval in reversed(approvals) if approval.get("stage") == stage),
-            None,
-        )
+        latest = None
+        for approval in reversed(approvals):
+            if approval.get("stage") != stage:
+                continue
+            approval_time = _parse_fact_time(approval.get("timestamp"))
+            if approval_time is None:
+                continue
+            if before_time is not None and approval_time > before_time:
+                continue
+            if reopen_at is not None and approval_time < reopen_at:
+                continue
+            latest = approval
+            break
         if latest is None:
             violations.append(
                 f"transition to {to_state} requires an approvals[] entry "
@@ -193,19 +285,45 @@ def approval_gate_violations(
                 execution_digest = (
                     (document or {}).get("artifacts", {}).get("execution", {}).get("input_sha256")
                 )
-                if execution_digest and latest.get("artifact_sha256") != execution_digest:
+                later_acceptance = any(
+                    event.get("to_state") == "accepted"
+                    and (event_time := _parse_fact_time(event.get("timestamp"))) is not None
+                    and (before_time is None or event_time > before_time)
+                    for event in (document or {}).get("events", [])
+                    if isinstance(event, dict)
+                )
+                # A previous accepted event belongs to an earlier execution
+                # snapshot.  Only the latest accepted event can be checked
+                # against the current aggregate execution digest.
+                if (
+                    not later_acceptance
+                    and not historical_reopen
+                    and execution_digest
+                    and latest.get("artifact_sha256") != execution_digest
+                ):
                     violations.append(
                         "acceptance approval must reference the current execution evidence digest"
                     )
             continue
+        if historical_reopen:
+            # The artifact may have been intentionally changed by a later
+            # reopen; the old event is historical and has no stored snapshot.
+            continue
         artifact_path = iteration_dir / artifact_name
-        if not artifact_path.is_file():
+        if artifact_path.is_symlink() or not artifact_path.is_file():
             violations.append(
                 f"transition to {to_state} requires {artifact_name} so the "
                 f"stage={stage} approval digest can be verified"
             )
             continue
-        current_digest = sha256_of(artifact_path)
+        try:
+            current_digest = sha256_of(artifact_path)
+        except (OSError, RegistryError):
+            violations.append(
+                f"transition to {to_state} requires a safe regular file for "
+                f"stage={stage}: {artifact_path}"
+            )
+            continue
         if latest.get("artifact_sha256") != current_digest:
             violations.append(
                 f"transition to {to_state} has stale or invalid "
@@ -321,17 +439,39 @@ def lifecycle_violations(document: dict[str, Any]) -> list[str]:
 
 def resolve_recorded(recorded: str, iterations_dir: Path) -> Path | None:
     """解析记录路径，并将结果限制在仓库根目录内。"""
-    if not isinstance(recorded, str) or not recorded or Path(recorded).is_absolute():
+    if (
+        not isinstance(recorded, str)
+        or not recorded
+        or "\x00" in recorded
+        or "\\" in recorded
+        or Path(recorded).is_absolute()
+    ):
         return None
 
     def within(base: Path, relative: str | Path = recorded) -> Path | None:
-        root = base.resolve()
-        candidate = (root / relative).resolve()
+        relative_path = Path(relative)
+        if ".." in relative_path.parts:
+            return None
+        base_candidate = base if base.is_absolute() else Path.cwd() / base
+        if ".." in base_candidate.parts:
+            return None
+        current_base = Path(base_candidate.anchor)
+        for part in base_candidate.parts:
+            current_base /= part
+            if current_base.is_symlink():
+                return None
+        root = base_candidate.resolve()
+        raw_candidate = root
+        for part in relative_path.parts:
+            raw_candidate /= part
+            if raw_candidate.is_symlink():
+                return None
+        candidate = raw_candidate.resolve()
         try:
             candidate.relative_to(root)
         except ValueError:
             return None
-        return candidate if candidate.exists() else None
+        return candidate if candidate.is_file() and not candidate.is_symlink() else None
 
     for base in (REPO_ROOT, iterations_dir.parent, iterations_dir):
         candidate = within(base)
@@ -359,7 +499,10 @@ class IterationReport:
 
 
 def _load_yaml(path: Path) -> Any:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise RegistryError(f"artifact must be a regular file: {path}")
+    return load_yaml(path.read_bytes())
 
 
 def check_iteration(
@@ -374,7 +517,11 @@ def check_iteration(
     except RegistryError as exc:
         report.error(str(exc))
         return
-    document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
+    try:
+        document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
+    except (OSError, ValueError, RegistryError):
+        report.error(f"{iteration_yaml}: is not a safely parseable YAML document")
+        return
     iteration_id: str = document["iteration_id"]
     state: str = document["state"]
 
@@ -394,7 +541,11 @@ def check_iteration(
     approvals: list[dict[str, Any]] = document.get("approvals", [])
     for event in events:
         for violation in approval_gate_violations(
-            event["to_state"], iteration_dir, approvals, document
+            event["to_state"],
+            iteration_dir,
+            approvals,
+            document,
+            before=event.get("timestamp"),
         ):
             report.error(violation)
 
@@ -406,15 +557,31 @@ def check_iteration(
         artifact_binding = binding_for_path(artifact_file, _REGISTRY)
         if artifact_binding is None:
             continue
-        doc = _load_yaml(artifact_file)
+        try:
+            doc = _load_yaml(artifact_file)
+        except (OSError, ValueError, RegistryError):
+            report.error(f"{artifact_file}: is not a safely parseable YAML document")
+            continue
         if not isinstance(doc, dict):
             continue
         generated_from = doc.get("generated_from")
         if not isinstance(generated_from, dict):
             continue
-        upstream = resolve_recorded(generated_from["artifact"], iteration_dir)
-        current = sha256_of(upstream) if upstream else None
-        if current != generated_from["sha256"]:
+        recorded_artifact = generated_from.get("artifact")
+        recorded_sha = generated_from.get("sha256")
+        if (
+            not isinstance(recorded_artifact, str)
+            or not recorded_artifact
+            or not isinstance(recorded_sha, str)
+        ):
+            report.error(f"{artifact_file}: generated_from must contain artifact and sha256")
+            continue
+        upstream = resolve_recorded(recorded_artifact, iteration_dir)
+        try:
+            current = sha256_of(upstream) if upstream else None
+        except (OSError, RegistryError):
+            current = None
+        if current != recorded_sha:
             map_key = artifact_binding["artifact"]
             proposed[map_key] = "stale"
             detail = "upstream missing" if upstream is None else "upstream hash mismatch"
@@ -456,7 +623,11 @@ def check_run_summary(run_summary: Path, report: IterationReport) -> None:
     except RegistryError as exc:
         report.error(str(exc))
         return
-    doc: dict[str, Any] = _load_yaml(run_summary) or {}
+    try:
+        doc: dict[str, Any] = _load_yaml(run_summary) or {}
+    except (OSError, ValueError, RegistryError) as exc:
+        report.error(f"{label}: is not a safely parseable YAML document ({type(exc).__name__})")
+        return
     attempts: list[dict[str, Any]] = doc.get("attempts", [])
     numbers = [a["attempt_number"] for a in attempts]
     if numbers != list(range(1, len(numbers) + 1)):
@@ -492,7 +663,7 @@ def find_in_progress(iterations_dir: Path, exclude: str | None = None) -> str | 
             continue  # permanent script-test fixtures are exempt (Roadmap 1.16)
         try:
             document = _load_yaml(iteration_yaml)
-        except yaml.YAMLError:
+        except (OSError, ValueError, RegistryError):
             continue
         state = document.get("state") if isinstance(document, dict) else None
         if state not in {"accepted", "merged"} and iteration_yaml.parent.name != exclude:
@@ -501,35 +672,50 @@ def find_in_progress(iterations_dir: Path, exclude: str | None = None) -> str | 
 
 
 def apply_fixes(iteration_dir: Path, report: IterationReport) -> None:
+    """Apply stale proposals in one locked, atomic read/modify/write transaction."""
+    from _writers import _write_iteration_unlocked, iteration_lock, load_iteration
+
     iteration_yaml = iteration_dir / "iteration.yaml"
-    document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
-    changed = False
-    for artifact_file in sorted(iteration_dir.rglob("*.yaml")):
-        if artifact_file == iteration_yaml:
-            continue
-        binding = binding_for_path(artifact_file, _REGISTRY)
-        if binding is None:
-            continue
-        doc = _load_yaml(artifact_file)
-        if not isinstance(doc, dict) or not isinstance(doc.get("generated_from"), dict):
-            continue
-        generated_from = doc["generated_from"]
-        upstream = resolve_recorded(generated_from["artifact"], iteration_dir)
-        current = sha256_of(upstream) if upstream else None
-        if current != generated_from["sha256"]:
-            map_key = binding["artifact"]
-            entry = document.setdefault("artifacts", {}).setdefault(
-                map_key, {"status": "not_started", "input_sha256": None}
-            )
-            if entry.get("status") != "stale":
-                entry["status"] = "stale"
-                changed = True
-    if changed:
-        # pi-lens-ignore: python-path-traversal
-        iteration_yaml.write_text(
-            yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
-        )
-        report.verdict(f"--fix wrote stale statuses to {iteration_yaml}")
+    with iteration_lock(iteration_yaml):
+        iteration_yaml, document = load_iteration(iteration_dir)
+        changed = False
+        for artifact_file in sorted(iteration_dir.rglob("*.yaml")):
+            if artifact_file == iteration_yaml:
+                continue
+            binding = binding_for_path(artifact_file, _REGISTRY)
+            if binding is None:
+                continue
+            try:
+                doc = _load_yaml(artifact_file)
+            except (OSError, ValueError, RegistryError) as exc:
+                raise ValueError(f"{artifact_file} is not safely parseable") from exc
+            if not isinstance(doc, dict) or not isinstance(doc.get("generated_from"), dict):
+                continue
+            generated_from = doc["generated_from"]
+            recorded_artifact = generated_from.get("artifact")
+            recorded_sha = generated_from.get("sha256")
+            if (
+                not isinstance(recorded_artifact, str)
+                or not recorded_artifact
+                or not isinstance(recorded_sha, str)
+            ):
+                raise ValueError(f"{artifact_file} generated_from must contain artifact and sha256")
+            upstream = resolve_recorded(recorded_artifact, iteration_dir)
+            try:
+                current = sha256_of(upstream) if upstream else None
+            except (OSError, RegistryError):
+                current = None
+            if current != recorded_sha:
+                map_key = binding["artifact"]
+                entry = document.setdefault("artifacts", {}).setdefault(
+                    map_key, {"status": "not_started", "input_sha256": None}
+                )
+                if entry.get("status") != "stale":
+                    entry["status"] = "stale"
+                    changed = True
+        if changed:
+            _write_iteration_unlocked(iteration_yaml, document)
+            report.verdict(f"--fix wrote stale statuses to {iteration_yaml}")
 
 
 def main(argv: list[str] | None = None) -> int:

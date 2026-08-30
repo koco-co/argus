@@ -46,7 +46,7 @@ jobs:
         run: |
           if [[ "$ARGUS_EVENT_NAME" != "pull_request" ]] || [[ "$ARGUS_BASE_REF" == "release" ]]; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$ARGUS_BASE_SHA" "$ARGUS_HEAD_SHA" | grep -Eq '^(automation|iterations)/'; then
+          elif git diff --name-only "$ARGUS_BASE_SHA" "$ARGUS_HEAD_SHA" | grep -Eq '^(automation|iterations|shared|target-app|config)/|^(Makefile|pyproject.toml|uv.lock)$|^scripts/(_target_app|target_app_).*\.py$'; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
@@ -71,7 +71,8 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.12"
-      - run: uv sync --group dev
+          enable-cache: false
+      - run: uv sync --locked --group dev
       - run: uv run playwright install --with-deps chromium
       - run: uv run python scripts/target_app_up.py
       - run: uv run python scripts/target_app_healthcheck.py
@@ -80,11 +81,11 @@ jobs:
         shell: bash
         run: |
           set +e
-          TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml --alluredir=reports/allure-results
+          TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit-first.xml --alluredir=reports/allure-first
           first=$?
           classification="normal"
           if [[ $first -ne 0 ]]; then
-            TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit.xml --alluredir=reports/allure-results
+            TEST_ENV=ci uv run pytest automation/web automation/api --junitxml=reports/junit-retry.xml --alluredir=reports/allure-retry
             second=$?
             if [[ $second -eq 0 ]]; then
               classification="flaky-suspect"
@@ -96,8 +97,19 @@ jobs:
           fi
           echo "classification=$classification" >> "$GITHUB_OUTPUT"
           exit "$second"
-      - if: "${{ always() && hashFiles('reports/junit.xml') != '' }}"
-        run: uv run python scripts/self_debug_helper.py record-ci-auto --junit reports/junit.xml --env ci
+      - if: ${{ always() }}
+        name: 记录最终回归证据
+        shell: bash
+        run: |
+          if [[ -f reports/junit-retry.xml ]]; then
+            junit=reports/junit-retry.xml
+          elif [[ -f reports/junit-first.xml ]]; then
+            junit=reports/junit-first.xml
+          else
+            echo "未生成 JUnit 证据，跳过汇总"
+            exit 0
+          fi
+          uv run python scripts/self_debug_helper.py record-ci-auto --junit "$junit" --env ci
       - name: 保存受限通知分类
         if: ${{ always() && steps.regression.outputs.classification != '' }}
         env:
@@ -114,4 +126,5 @@ jobs:
             iterations/*/runs/
           retention-days: 14
       - if: ${{ always() }}
+        name: 清理靶场
         run: uv run python scripts/target_app_down.py

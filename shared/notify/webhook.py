@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx  # pyright: ignore[reportMissingImports]
+from argus_core.parsing import load_json  # pyright: ignore[reportMissingImports]
 
 from shared.notify.base import Notifier
 
@@ -35,7 +36,16 @@ class WebhookNotifier(Notifier):
             raise RuntimeError(
                 f"{self.channel} webhook HTTP 状态 {exc.response.status_code}"
             ) from None
-        body = response.json() if response.content else {}
-        code = body.get("errcode", body.get("code", 0)) if isinstance(body, dict) else 0
-        if code not in {0, "0", None}:
-            raise RuntimeError(f"{self.channel} webhook 返回错误码 {code}")
+        try:
+            body = load_json(response.content) if response.content else {}
+        except (UnicodeError, ValueError) as exc:
+            raise RuntimeError(f"{self.channel} webhook 返回了不安全的 JSON") from exc
+        if not isinstance(body, dict):
+            raise RuntimeError(f"{self.channel} webhook 返回了非对象 JSON")
+        code = body.get("errcode", body.get("code", 0))
+        success = (
+            code is None or (type(code) is int and code == 0) or (type(code) is str and code == "0")
+        )
+        if not success:
+            detail = str(code) if type(code) is int and abs(code) <= 10**9 else "non-zero"
+            raise RuntimeError(f"{self.channel} webhook 返回错误码 {detail}")

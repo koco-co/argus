@@ -21,8 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
 from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 HappyKinds = {"happy_path"}
 NegativeKinds = {"negative", "edge"}
@@ -39,22 +39,38 @@ class Report:
 def _load_validated(iteration_dir: Path, name: str) -> dict[str, Any]:
     path = iteration_dir / name
     validate_path(path)
-    document: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    document = load_yaml(path.read_bytes()) or {}
+    if not isinstance(document, dict):
+        raise ValueError(f"{path} 顶层必须是映射")
     return document
 
 
 def load_exemptions(iteration_dir: Path) -> dict[str, str]:
     """返回带非空理由且已接受豁免的 requirement_id -> kind 映射。"""
     path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     if not path.exists():
         return {}
-    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not path.is_file():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
+    validate_path(path)
+    document = load_yaml(path.read_bytes()) or {}
+    if not isinstance(document, dict):
+        raise ValueError("exemptions.yaml 顶层必须是映射")
     if document.get("status") != "accepted":
         return {}
     honored: dict[str, str] = {}
-    for entry in document.get("exemptions", []):
-        if entry.get("reason", "").strip():
-            honored[entry["requirement_id"]] = entry["kind"]
+    exemptions = document.get("exemptions", [])
+    if not isinstance(exemptions, list) or any(not isinstance(entry, dict) for entry in exemptions):
+        raise ValueError("exemptions.yaml 的 exemptions 必须是对象列表")
+    for entry in exemptions:
+        reason = entry.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            requirement_id = entry.get("requirement_id")
+            kind = entry.get("kind")
+            if isinstance(requirement_id, str) and isinstance(kind, str):
+                honored[requirement_id] = kind
     return honored
 
 
@@ -142,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         cases = _load_validated(iteration_dir, "api/cases.yaml")
         requirements = _load_validated(iteration_dir, "requirements.yaml")
         exemptions = load_exemptions(iteration_dir)
-    except RegistryError as exc:
+    except (OSError, UnicodeError, ValueError, RegistryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

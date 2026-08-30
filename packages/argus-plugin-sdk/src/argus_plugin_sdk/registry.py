@@ -67,7 +67,9 @@ class PluginRegistry:
             source_type = manifest.source_types[0]
             return SourceEnvelope(
                 source_type=source_type,
-                source_ref=source_ref,
+                # Connector failures must not echo untrusted refs (which may
+                # contain credentials or other sensitive URL material).
+                source_ref=None,
                 fetched_at=datetime.now(UTC),
                 error=SourceErrorPayload.from_exception(exc),
             )

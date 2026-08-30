@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest  # pyright: ignore[reportMissingImports]
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from conftest import _load_script
 
 
@@ -96,9 +97,22 @@ def test_finalize_records_merge_metadata(
     finalizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _iteration(tmp_path)
+    monkeypatch.setattr(finalizer, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
     monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 0)
-    monkeypatch.setattr(finalizer, "verify_github_merge", lambda *args, **kwargs: {})
+    monkeypatch.setattr(finalizer, "_current_branch", lambda: "release")
+    monkeypatch.setattr(
+        finalizer,
+        "verify_github_merge",
+        lambda *args, **kwargs: {
+            "merged": True,
+            "merge_commit_sha": "b" * 40,
+            "merged_at": "2026-08-28T12:00:00Z",
+            "number": 42,
+            "html_url": "https://github.com/owner/repo/pull/42",
+            "base": {"ref": "release"},
+        },
+    )
     finalizer.finalize(path, "b" * 40, 42)
     document = yaml.safe_load((path / "iteration.yaml").read_text())
     assert document["state"] == "merged"
@@ -109,6 +123,7 @@ def test_finalize_records_merge_metadata(
 class _GitHubResponse:
     def __init__(self, payload: Any) -> None:
         self.payload = payload
+        self.content = json.dumps(payload).encode("utf-8")
 
     def raise_for_status(self) -> None:
         return None
@@ -133,6 +148,8 @@ def test_verify_github_merge_requires_real_release_pr_fact(finalizer: Any) -> No
             "merged": True,
             "merged_at": "2026-08-29T10:00:00Z",
             "merge_commit_sha": "b" * 40,
+            "number": 42,
+            "html_url": "https://github.com/owner/repo/pull/42",
             "base": {"ref": "release"},
         }
     )
@@ -153,6 +170,8 @@ def test_verify_github_merge_rejects_mismatched_fact(finalizer: Any) -> None:
             "merged": True,
             "merged_at": "2026-08-29T10:00:00Z",
             "merge_commit_sha": "c" * 40,
+            "number": 42,
+            "html_url": "https://github.com/owner/repo/pull/42",
             "base": {"ref": "release"},
         }
     )
@@ -166,10 +185,25 @@ def test_verify_github_merge_rejects_mismatched_fact(finalizer: Any) -> None:
         )
 
 
-def test_finalize_rejects_nonaccepted_and_bad_sha(finalizer: Any, tmp_path: Path) -> None:
+def test_finalize_rejects_nonaccepted_and_bad_sha(
+    finalizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = _iteration(tmp_path, state="created")
+    monkeypatch.setattr(finalizer, "REPO_ROOT", tmp_path)
     with pytest.raises(finalizer.WriterError):
         finalizer.finalize(path, "bad", 0)
+
+
+def test_finalize_rejects_nonrelease_checkout(
+    finalizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _iteration(tmp_path)
+    monkeypatch.setattr(finalizer, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
+    monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(finalizer, "_current_branch", lambda: "main")
+    with pytest.raises(finalizer.WriterError, match="release"):
+        finalizer.finalize(path, "b" * 40, 42)
 
 
 def test_finalize_rejects_nonaccepted_with_valid_metadata(
@@ -177,6 +211,7 @@ def test_finalize_rejects_nonaccepted_with_valid_metadata(
 ) -> None:
     """即使 SHA 和 PR 格式正确，也不得从非 accepted 终态收口。"""
     path = _iteration(tmp_path, state="created")
+    monkeypatch.setattr(finalizer, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
     with pytest.raises(finalizer.WriterError, match="accepted"):
         finalizer.finalize(path, "b" * 40, 42)
@@ -187,6 +222,7 @@ def test_finalize_rejects_coverage_gap(
 ) -> None:
     """受保护分支收口前必须再次通过当前分支的完整覆盖链。"""
     path = _iteration(tmp_path)
+    monkeypatch.setattr(finalizer, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(finalizer, "check_iteration", lambda *args, **kwargs: None)
     monkeypatch.setattr(finalizer, "coverage_main", lambda *args, **kwargs: 1)
     with pytest.raises(finalizer.WriterError, match="覆盖链"):

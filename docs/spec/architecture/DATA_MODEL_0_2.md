@@ -33,7 +33,7 @@
 - `promotion`：仅 `user/approved` 或 `user/rejected`；
 - `skill_change`：用户决定或 scope 内 agent delegated。
 
-`latest_approval()` 按追加顺序返回某 workstream/stage 最后决定，门禁不回看旧决定。delegated 决定必须匹配 iteration 的 `DelegationGrant`、scope、basis SHA、时间窗、`delegation_id` 和非空 note。
+`latest_approval()` 按追加顺序返回某 workstream/stage 最后决定，门禁不回看旧决定；审批时间必须保持追加顺序，且每个阶段只能在对应生命周期窗口记录。delegated 决定必须匹配 iteration 的 `DelegationGrant`、scope、basis SHA、时间窗、`delegation_id` 和非空 note。execution 终态的 acceptance 也是 promotion 的前置门禁。
 
 ## 4. MergeFact
 
@@ -50,9 +50,11 @@ merge_sha: <40 位小写 SHA-1>
 merged_at: <带时区时间>
 source_url: https://github.com/owner/repository/pull/123
 verified_at: <带时区时间>
+verifier: <独立 verifier 标识>
+verification_signature: <绑定上述字段的签名摘要>
 ```
 
-`argus-core` 只验证形状、审批和 workstream 状态；GitHub API 的真实 `merged`、`base_ref`、SHA、时间和非作者 review 由 `finalize_merge.py`/外部系统提供。任何 fixture、聊天记录、本地日志或 agent note 都不能生成 MergeFact。多 workstream iteration 必须为每条 workstream 收到事实后才聚合为 `promoted`。
+`verifier` 与 `verification_signature` 由外部 verifier 生成并随 promotion 持久化；没有可信 verifier key 或签名不匹配时，CLI/Store 拒绝 promotion 或读取被篡改的已 promotion 文档。当前实现使用由环境注入的 HMAC key 绑定 `github-api` verifier 身份；密钥持有与真实 GitHub 查询仍必须由受信任的外部 verifier 负责。`argus-core` 只验证形状、审批和 workstream 状态；GitHub API 的真实 `merged`、`base_ref`、SHA、时间和非作者 review 由 `finalize_merge.py`/外部系统提供。任何 fixture、聊天记录、本地日志或 agent note 都不能生成 MergeFact。多 workstream iteration 必须为每条 workstream 收到事实后才聚合为 `promoted`。
 
 ## 5. SourceEnvelope
 

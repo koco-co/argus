@@ -4,7 +4,7 @@ Prerequisites, initialization steps, and every operational command the framework
 
 ## Prerequisites
 
-最近真实自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。真实 webhook 尚无验证证据；按用户最新要求，该缺项在 Phase 7 首个实际依赖它的 DoD 前列为非阻塞待办，不提前阻塞开发。本次自检不等于靶应用启动、生成测试、M8 配置、通知送达或最终验收通过，也不改变下表历史命令状态。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
+历史自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。**当前复核（2026-08-29）使用用户提供的 gitignored `config/env.local.yaml`（`localhost:8000`/`localhost:9000`），真实靶场健康检查、seed canary、API checkout 22 项和 Web checkout 10 项均通过；靶场最终 reset/down 清理仍是收尾步骤。**真实 webhook 尚无验证证据；通知送达、外部合并和最终验收仍是独立门禁。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
 
 | Requirement | Version / note | Why |
 | --- | --- | --- |
@@ -33,7 +33,8 @@ validate-iteration ID=:  uv run python scripts/validate_schema.py iterations/$(I
 export ID=:       export_xmind + export_xlsx + render_md for iterations/$(ID)
 web-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/web/tests/$(MODULE) --alluredir=reports/allure-results
 api-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/api/tests/$(MODULE) --alluredir=reports/allure-results
-lint:             uv run ruff check . && uv run pyright
+lint:             ruff/format/pyright/README strict checks
+static-gates:     lint + Skill golden + schema/semantic/coverage/boundary gates
 target-app-up/seed/reset/healthcheck/down:  harness scripts (policy: TESTING_STRATEGY harness section)
 ```
 
@@ -55,15 +56,15 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation；格式检查直接扫描工作树，包含尚未被 Git 跟踪的新 Python 文件 | 已运行 2026-08-28（ruff lint、ruff format check 与 pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核（481 项；含批准主体、产物摘要完整性与写前门禁、正式 iteration 与永久夹具并存、Skill 黄金基线、未跟踪文件格式门禁、CLI 入口、通知信封、非空 job 状态与无 JUnit 降级、CI 强制失败/flaky 调度、PR 覆盖范围选择、环境化 API 地址、目录权威、导出跨秒确定性、UI/API 反向闭包、M9 四类终态、数据库只读角色与周回归 issue 升级，以及 0.2 core/SDK/adapter 契约） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：497 项通过；不代表 Web/API E2E 通过 |
 | Skill 黄金基线 | root | `make skill-golden` | 四个生成 Skill 的冻结输入 SHA、YAML Schema/结构语义与 Python AST 语义全部匹配 | 已运行 2026-08-28（4 份 1.0.0 baseline、10 项代表性产物通过；输入漂移、YAML 语义漂移和 Python AST 漂移反向测试通过） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
-| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-28（ruff、format、Schema、状态、DB 只读、密钥共 6 个真实钩子通过；CLI 静默空跑有回归门禁） |
-| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已运行 2026-08-28（Medusa 折扣正向/负向，Chromium 与双 worker 通过） |
-| Generated regression (API) | root | `make api-tests MODULE=checkout ENV=local` | typed client/model suite green against healthy harness | 已运行 2026-08-28（Store API 促销正向/非法载荷负向，双 worker 通过） |
+| Static all-gates | root | `make static-gates`（提交前另运行 `uv run pre-commit run --all-files`） | green on compliant tree; red on any broken schema, state, boundary, or secret fixture | 当前复核已运行（Ruff/format/Pyright/README、四份 Skill golden、Schema/semantic/coverage、分层/POM/markers/DB/prod/orphan/API model gates 通过） |
+| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 当前复核已运行：10 passed against the real Medusa harness |
+| Generated regression (API) | root | `make api-tests MODULE=checkout ENV=local` | typed client/model suite green against healthy harness | 当前复核已运行：22 passed against the real Medusa harness |
 | Harness parallel smoke | root | `ARGUS_RUN_ID=smoke TEST_ENV=local uv run pytest -n 2 automation/web/tests/harness` | gw0/gw1 均执行，worker 会话和命名空间隔离 | 已运行 2026-08-28（连续三轮全绿；PROD collect 另验证 1 项非只读探针被剔除） |
-| Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 已运行 2026-08-28（完整/破损/API/UI/空 YAML 夹具均通过预期；本地真实 UI/API fixture 配置均通过，文件权限为 `0600`） |
+| Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 当前本地端点配置已通过；真实通知 Secret 仍未提供/验收 |
 | Export artifacts | root | `make export ID=<id>` | branch-aware byte-reproducible `.xmind` or `.xlsx`, plus `.md`, written under `exports/` | 已运行 2026-08-28（UI/API 各连续两次 SHA-256 一致；XLSX 的 ZIP 与 core modified 时间均固定） |
 | Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive iterations/<id>/runs/<rid> reports/allure-results reports/logs` | display reports copied into the named run without overwrite | 已运行 2026-08-28（Playwright trace 与五轮 JUnit 日志归档；重复目标拒绝覆盖） |
 | CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已运行 2026-08-28（PR #1 的 static-checks/e2e 已真实通过；最新提交继续由同名必需检查验证） |

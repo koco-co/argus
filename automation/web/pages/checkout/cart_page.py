@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from playwright.sync_api import Locator, Page
+from playwright.sync_api import Locator, Page  # pyright: ignore[reportMissingImports]
 
 
 class CartPage:
@@ -18,7 +18,12 @@ class CartPage:
         # 真实 trace 显示该控件为无 button role 的可点击文本，按 locator 回退顺序使用 text。
         self.page.get_by_text("Add Promotion Code(s)", exact=True).click()
         self.page.get_by_role("textbox").fill(code)
-        self.page.get_by_role("button", name="Apply").click()
+        # 等待服务端 action 的响应，避免后端慢于默认 5 秒断言窗口时误报。
+        with self.page.expect_response(
+            lambda response: response.request.method == "POST" and "/cart" in response.url,
+            timeout=30_000,
+        ):
+            self.page.get_by_role("button", name="Apply").click()
 
     def promotion(self, code: str) -> Locator:
         return self.page.get_by_text(code, exact=True)

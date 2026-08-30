@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest  # pyright: ignore[reportMissingImports]
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from conftest import _load_script
 
 SHA = "a" * 64
@@ -170,6 +170,35 @@ def _add_requirements_approval(iteration_dir: Path) -> None:
         }
     )
     iteration_yaml.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
+def test_writer_rejects_symlinked_iteration_lock(record_event: Any, tmp_path: Path) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-w1-symlink-lock", "requirements_clarifying")
+    lock = iteration_dir / ".iteration.yaml.lock"
+    foreign = tmp_path / "foreign.lock"
+    foreign.write_text("unchanged", encoding="utf-8")
+    lock.symlink_to(foreign)
+    assert (
+        record_event.main(
+            [
+                str(iteration_dir),
+                "--from",
+                "requirements_clarifying",
+                "--to",
+                "requirements_accepted",
+                "--by",
+                "agent",
+            ]
+        )
+        == 1
+    )
+    assert foreign.read_text(encoding="utf-8") == "unchanged"
+
+
+def test_merged_writer_requires_verified_result(writers: Any, tmp_path: Path) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-w1-merged-capability", "accepted")
+    with pytest.raises(writers.WriterError, match="external verifier"):
+        writers.record_merged_event(iteration_dir, "not-a-sha", -7)
 
 
 def test_record_event_legal_transition_persists(record_event: Any, tmp_path: Path) -> None:
@@ -714,7 +743,7 @@ def test_hand_edited_state_blocks_event_writer(
 
 
 def test_reopen_preserves_ids_and_marks_downstream_stale(
-    reopen_iteration: Any, tmp_path: Path
+    reopen_iteration: Any, record_event: Any, record_approval: Any, tmp_path: Path
 ) -> None:
     iteration_dir = _scaffold(tmp_path, "2026-08-reopen", "test_points_accepted")
     document = yaml.safe_load((iteration_dir / "iteration.yaml").read_text())
@@ -732,6 +761,85 @@ def test_reopen_preserves_ids_and_marks_downstream_stale(
     assert requirements.read_text() == "schema_version: '1.0'\n"
     assert reopened["events"][-1]["triggered_by"] == "user"
     assert reopened["events"][-1]["to_state"] == "requirements_clarifying"
+
+    # An ordinary accepted-artifact reopen keeps the original M1 approval;
+    # only blocked recovery creates a fresh requirements window.
+    _add_requirements_approval(iteration_dir)
+    assert (
+        record_event.main(
+            [
+                str(iteration_dir),
+                "--from",
+                "requirements_clarifying",
+                "--to",
+                "requirements_accepted",
+                "--by",
+                "user",
+            ]
+        )
+        == 0
+    )
+
+    blocked_dir = _scaffold(tmp_path, "2026-08-blocked-reopen", "blocked")
+    _add_requirements_approval(blocked_dir)
+    assert (
+        record_event.main(
+            [
+                str(blocked_dir),
+                "--from",
+                "blocked",
+                "--to",
+                "created",
+                "--by",
+                "user",
+            ]
+        )
+        == 0
+    )
+    assert reopen_iteration.main([str(blocked_dir), "--reason", "retry after recovery"]) == 0
+    assert (
+        record_event.main(
+            [
+                str(blocked_dir),
+                "--from",
+                "requirements_clarifying",
+                "--to",
+                "requirements_accepted",
+                "--by",
+                "user",
+            ]
+        )
+        == 1
+    )
+    blocked_requirements = blocked_dir / "requirements.yaml"
+    assert (
+        record_approval.main(
+            [
+                str(blocked_dir),
+                "--stage",
+                "requirements",
+                "--action",
+                "accepted",
+                "--artifact",
+                str(blocked_requirements),
+            ]
+        )
+        == 0
+    )
+    assert (
+        record_event.main(
+            [
+                str(blocked_dir),
+                "--from",
+                "requirements_clarifying",
+                "--to",
+                "requirements_accepted",
+                "--by",
+                "user",
+            ]
+        )
+        == 0
+    )
 
 
 def test_reopen_blocks_stale_consumers_via_validator(

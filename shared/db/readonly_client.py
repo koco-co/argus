@@ -32,15 +32,17 @@ class ReadOnlyDBClient:
 
     @staticmethod
     def validate(sql: str) -> None:
+        if not isinstance(sql, str) or not sql.strip():
+            raise PermissionError("ReadOnlyDBClient 已阻止空或非字符串语句")
         normalized = sql.lstrip("( \n\t")
         parts = normalized.split(None, 1)
         head = parts[0].lower().rstrip(";") if parts else ""
         if head not in _STATEMENT_VERBS:
-            raise PermissionError(f"ReadOnlyDBClient 已阻止语句：{sql[:80]!r}")
+            raise PermissionError("ReadOnlyDBClient 已阻止非只读语句")
         if _MULTI_STATEMENT.search(sql):
-            raise PermissionError(f"ReadOnlyDBClient 已阻止多语句：{sql[:80]!r}")
+            raise PermissionError("ReadOnlyDBClient 已阻止多语句")
         if head in {"with", "explain"} and (_WRITE_TOKEN.search(sql) or _ANALYZE_TOKEN.search(sql)):
-            raise PermissionError(f"ReadOnlyDBClient 已阻止潜在写语句：{sql[:80]!r}")
+            raise PermissionError("ReadOnlyDBClient 已阻止潜在写语句")
 
     def read(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
         self.validate(sql)

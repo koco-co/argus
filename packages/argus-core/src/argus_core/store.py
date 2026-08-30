@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypeVar
 
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 
 from .approvals import append_approval  # pyright: ignore[reportMissingImports]
 from .models import (  # pyright: ignore[reportMissingImports]
@@ -21,6 +21,7 @@ from .models import (  # pyright: ignore[reportMissingImports]
     IterationDocument,
     Workstream,
 )
+from .parsing import load_yaml  # pyright: ignore[reportMissingImports]
 from .state import transition  # pyright: ignore[reportMissingImports]
 
 try:
@@ -36,19 +37,35 @@ class StoreError(RuntimeError):
     """迭代文件不可读、不可写或不满足 v2 契约。"""
 
 
+def _assert_safe_path(path: Path, *, label: str) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise StoreError(f"{label} path must not contain traversal: {path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise StoreError(f"{label} path must not pass through a symlink: {path}")
+
+
 class IterationStore:
     """每个 iteration 一个锁域；多个 workstream 可以安全并行提交事务。"""
 
     def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root.resolve()
+        candidate = project_root if project_root.is_absolute() else Path.cwd() / project_root
+        _assert_safe_path(candidate, label="project root")
+        if candidate.is_symlink() or (candidate.exists() and not candidate.is_dir()):
+            raise StoreError(f"project root is not a safe directory: {project_root}")
+        self.project_root = candidate
         self.iterations_root = self.project_root / ".argus" / "iterations"
 
     def path_for(self, iteration_id: str) -> Path:
-        if not _ID_PATTERN.fullmatch(iteration_id):
+        if not isinstance(iteration_id, str) or not _ID_PATTERN.fullmatch(iteration_id):
             raise StoreError(f"invalid iteration id: {iteration_id!r}")
         return self.iterations_root / iteration_id / "iteration.yaml"
 
     def _ensure_safe_directory(self, iteration_yaml: Path) -> None:
+        _assert_safe_path(iteration_yaml, label="iteration")
         directories = (self.project_root / ".argus", self.iterations_root, iteration_yaml.parent)
         for directory in directories:
             if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
@@ -59,6 +76,9 @@ class IterationStore:
     def _lock(self, iteration_yaml: Path) -> Iterator[None]:
         self._ensure_safe_directory(iteration_yaml)
         lock_path = iteration_yaml.with_name(f".{iteration_yaml.name}.lock")
+        _assert_safe_path(lock_path, label="iteration lock")
+        if lock_path.is_symlink():
+            raise StoreError(f"iteration lock is not safe: {lock_path}")
         flags = os.O_CREAT | os.O_RDWR
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
@@ -77,18 +97,43 @@ class IterationStore:
 
     @staticmethod
     def _read_unlocked(iteration_yaml: Path) -> IterationDocument:
+        _assert_safe_path(iteration_yaml, label="iteration")
         if not iteration_yaml.is_file() or iteration_yaml.is_symlink():
             raise StoreError(f"iteration file is missing or symlinked: {iteration_yaml}")
         try:
-            raw = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
-            return IterationDocument.model_validate(raw)
-        except (OSError, UnicodeError, yaml.YAMLError, TypeError, ValueError) as exc:
+            raw = load_yaml(iteration_yaml.read_bytes())
+            document = IterationDocument.model_validate(raw)
+            if document.promotions:
+                from .promotion import verify_persisted_promotions
+
+                verify_persisted_promotions(document)
+            return document
+        except (OSError, UnicodeError, TypeError, ValueError) as exc:
             raise StoreError(f"invalid v2 iteration document: {iteration_yaml}") from exc
 
     @staticmethod
+    def _validated_for_write(document: IterationDocument) -> IterationDocument:
+        """Rebuild the model so nested in-place mutations cannot bypass validation."""
+        try:
+            return IterationDocument.model_validate(document.model_dump(mode="json"))
+        except (TypeError, ValueError) as exc:
+            raise StoreError("iteration document or promotion evidence is invalid") from exc
+
+    @staticmethod
     def _write_unlocked(iteration_yaml: Path, document: IterationDocument) -> None:
+        _assert_safe_path(iteration_yaml, label="iteration")
+        if iteration_yaml.is_symlink() or iteration_yaml.parent.is_symlink():
+            raise StoreError(f"iteration path is not safe: {iteration_yaml}")
         if document.schema_version != SCHEMA_VERSION:
             raise StoreError("only the v2.0 iteration schema is writable")
+        document = IterationStore._validated_for_write(document)
+        if document.promotions:
+            from .promotion import verify_persisted_promotions
+
+            try:
+                verify_persisted_promotions(document)
+            except ValueError as exc:
+                raise StoreError("persisted promotion verifier evidence is invalid") from exc
         encoded = yaml.safe_dump(
             document.model_dump(mode="json"),
             sort_keys=False,
@@ -108,8 +153,10 @@ class IterationStore:
             os.replace(temporary, iteration_yaml)
             try:
                 directory = os.open(iteration_yaml.parent, os.O_RDONLY)
-            except OSError:
-                return
+            except OSError as exc:
+                raise StoreError(
+                    f"cannot open iteration directory for sync: {iteration_yaml.parent}"
+                ) from exc
             try:
                 os.fsync(directory)
             finally:
@@ -121,7 +168,7 @@ class IterationStore:
     def create(self, iteration_id: str, workstreams: list[Workstream]) -> IterationDocument:
         """创建 v2 文档；不会读取或改写任何 v1 iteration。"""
         iteration_yaml = self.path_for(iteration_id)
-        if iteration_yaml.exists():
+        if iteration_yaml.exists() or iteration_yaml.is_symlink():
             raise StoreError(f"iteration already exists: {iteration_id}")
         now = datetime.now(UTC)
         document = IterationDocument(
@@ -131,7 +178,7 @@ class IterationStore:
             workstreams=workstreams,
         )
         with self._lock(iteration_yaml):
-            if iteration_yaml.exists():
+            if iteration_yaml.exists() or iteration_yaml.is_symlink():
                 raise StoreError(f"iteration already exists: {iteration_id}")
             self._write_unlocked(iteration_yaml, document)
         return document
@@ -155,9 +202,9 @@ class IterationStore:
         with self._lock(iteration_yaml):
             document = self._read_unlocked(iteration_yaml)
             result = mutator(document)
-            document.revision += 1
             document.updated_at = datetime.now(UTC)
-            IterationDocument.model_validate(document)
+            document.revision += 1
+            document = self._validated_for_write(document)
             self._write_unlocked(iteration_yaml, document)
             return document, result
 

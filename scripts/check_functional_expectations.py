@@ -28,8 +28,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 DEFAULT_REGISTRY = REPO_ROOT / "shared" / "testdata" / "seed-registry.yaml"
 _CURRENCY = re.compile(
@@ -53,11 +53,17 @@ class Report:
 
 def load_seed_registry(registry_path: Path) -> dict[str, Any] | None:
     """The seed mapping when the registry exists, else None."""
+    _assert_safe_path(registry_path, label="seed registry", require_file=False)
+    if registry_path.is_symlink():
+        raise ValueError("seed registry must be a regular file")
     if not registry_path.exists():
         return None
-    document = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
-    seeds = document.get("seeds")
-    return seeds if isinstance(seeds, dict) else {}
+    if not registry_path.is_file():
+        raise ValueError("seed registry must be a regular file")
+    document = load_yaml(registry_path.read_bytes()) or {}
+    if not isinstance(document, dict) or not isinstance(document.get("seeds"), dict):
+        raise ValueError("seed registry must contain an object-valued seeds mapping")
+    return document["seeds"]
 
 
 def check_case(
@@ -81,8 +87,8 @@ def check_case(
         if _CURRENCY.search(step["expected"]):
             report.fail(
                 f"case {case_id} step {number}: unexplained currency/numeric literal "
-                f"in expectation {step['expected']!r} - describe the relationship and "
-                f"derive the concrete value from the seed context"
+                "in expectation - describe the relationship and derive the concrete "
+                "value from the seed context"
             )
         seed = derived_from["seed"]
         if seeds is None:
@@ -121,17 +127,18 @@ def main(argv: list[str] | None = None) -> int:
 
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
     cases_path = iteration_dir / "functional-cases.yaml"
-    if not cases_path.exists():
-        print(f"error: {cases_path} not found", file=sys.stderr)
+    if cases_path.is_symlink() or not cases_path.is_file():
+        print(f"error: {cases_path} not found or not a regular file", file=sys.stderr)
         return 1
     try:
         validate_path(cases_path)
-    except RegistryError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        cases: dict[str, Any] = load_yaml(cases_path.read_bytes()) or {}
+        if not isinstance(cases, dict) or not isinstance(cases.get("cases"), list):
+            raise ValueError("functional cases must contain a cases list")
+        seeds = load_seed_registry(args.registry)
+    except (OSError, UnicodeError, ValueError, RegistryError):
+        print("error: functional cases or seed registry is not safely parseable", file=sys.stderr)
         return 1
-    cases: dict[str, Any] = yaml.safe_load(cases_path.read_text(encoding="utf-8")) or {}
-
-    seeds = load_seed_registry(args.registry)
     report = Report()
     check_cases(cases, seeds, args.enforce_seeds, report)
 
