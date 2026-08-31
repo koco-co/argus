@@ -1,6 +1,6 @@
 # Environment Setup (Target-State)
 
-Prerequisites, initialization steps, and every operational command the framework exposes. **状态诚信**：截至 2026-08-28，Schema/状态/覆盖/边界/只读/密钥门禁、XMind/XLSX/Markdown 导出、Medusa 靶场、UI/API 生成样例、M9 自调试证据与 GitHub Actions 已实际运行；表中仍标为人工门禁的项目不得由这些机器证据代替。命令只有在真实运行并留下可复核结果后才标记“已运行”。
+Prerequisites, initialization steps, and every operational command the framework exposes. **状态诚信**：截至 2026-08-31，Schema/状态/覆盖/边界/只读/密钥门禁、XMind/XLSX/Markdown 导出、Medusa 靶场、UI/API 生成样例、M9 自调试证据与 GitHub Actions 已实际运行；表中仍标为人工门禁的项目不得由这些机器证据代替。命令只有在真实运行并留下可复核结果后才标记“已运行”。
 
 ## Prerequisites
 
@@ -67,7 +67,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 当前本地端点配置已通过；真实通知 Secret 仍未提供/验收 |
 | Export artifacts | root | `make export ID=<id>` | branch-aware byte-reproducible `.xmind` or `.xlsx`, plus `.md`, written under `exports/` | 已运行 2026-08-28（UI/API 各连续两次 SHA-256 一致；XLSX 的 ZIP 与 core modified 时间均固定） |
 | Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive iterations/<id>/runs/<rid> reports/allure-results reports/logs` | display reports copied into the named run without overwrite | 已运行 2026-08-28（Playwright trace 与五轮 JUnit 日志归档；重复目标拒绝覆盖） |
-| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已运行 2026-08-28（PR #1 的 static-checks/e2e 已真实通过；最新提交继续由同名必需检查验证） |
+| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已运行 2026-08-31（提交 `ca851aa` 的 static-checks run `33369318287`、手工 e2e run `33369360450` 均成功；e2e artifact `9749578091` 已上传，可信通知为零渠道） |
 | CI 对抗场景 | GitHub Actions | 手工调度 `static-checks(force_failure=true)`；手工调度 `e2e(acceptance_scenario=force_failure\|force_flaky)` | 失败分支执行失败通知且保持失败；flaky 首轮失败、仅重跑一次并分类 `flaky-suspect`；证据上传与 down 仍执行 | 本地控制探针已验证首轮失败/次轮通过及持续失败；远端调度在工作流提交后执行 |
 
 Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.

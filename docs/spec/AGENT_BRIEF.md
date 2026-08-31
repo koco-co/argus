@@ -14,7 +14,7 @@
 
 在被测代码提交 `1b822c92dc24487b03104171c0eeb7c2410a38e9` 上，真实 Medusa Compose 靶场经过 fresh reset 后完成 API `20/20` 与 UI `8/8` 精确 traceability nodeid 执行；UI 包含 Chromium 参数化 nodeid、桌面与移动视觉场景。API 补充 run 为 `run-20260831T070952Z-bc7c`，UI 补充 run 为 `run-20260831T072318Z-f0f7`；两次执行均由 `record-ci-auto --iteration` 写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要，执行后已 down 并清理容器、网络、数据卷和运行时凭据。框架测试当前为 `529 passed`，Schema、设计、coverage、静态门禁和 pre-commit 均通过。
 
-本轮新 run 是已接受 iteration 的补充执行证据：API 的 accepted aggregate 仍保留原 acceptance digest，未通过非法手写或终态后追加 approval 覆盖它；若要把新 API run 变成新的 acceptance mirror，必须先按 reopen 协议并重新取得用户 M1 requirements acceptance。当前本地证据不替代尚未在最新提交上运行的 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
+本轮新 run 是已接受 iteration 的补充执行证据：API 的 accepted aggregate 仍保留原 acceptance digest，未通过非法手写或终态后追加 approval 覆盖它；若要把新 API run 变成新的 acceptance mirror，必须先按 reopen 协议并重新取得用户 M1 requirements acceptance。随后在提交 `ca851aa0e810121c16e49323b8792748004c5368` 上的 GitHub push `static-checks` run `33369318287` 与 Compose-only 手工 `e2e` run `33369360450` 均成功，e2e artifact `9749578091` 中的 CI manifests 分别为 `run-20260831T074505Z-6ba7`（API 20/20）和 `run-20260831T074506Z-fca3`（UI 8/8）。可信通知 run `33369764953` 也成功执行，但日志明确为零渠道（无 notify 配置/Secret），不能视为真实送达；非作者 PR approval、受保护 `release` merge 仍未完成。
 
 ## 当前状态
 

@@ -30,7 +30,7 @@
 
 ## 当前复核收尾
 
-2026-08-31 当前复核已用真实 Docker 靶场完成 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8；执行后已 `target-app-down`，容器、网络和数据卷均已清理。最新补充 manifest 分别为 `runs/run-20260831T070952Z-bc7c/` 与 `runs/run-20260831T072318Z-f0f7/`，均绑定被测代码 SHA `1b822c92dc24487b03104171c0eeb7c2410a38e9`，并保留精确 collection/outcome、JUnit/Allure 和环境摘要。后续仅补充文档与证据文件，不改变被测自动化代码。真实 GitHub CI、通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
+2026-08-31 当前复核已用真实 Docker 靶场完成 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8；执行后已 `target-app-down`，容器、网络和数据卷均已清理。最新本地补充 manifest 分别为 `runs/run-20260831T070952Z-bc7c/` 与 `runs/run-20260831T072318Z-f0f7/`，均绑定被测代码 SHA `1b822c92dc24487b03104171c0eeb7c2410a38e9`，并保留精确 collection/outcome、JUnit/Allure 和环境摘要；随后提交 `ca851aa` 的 GitHub static-checks run `33369318287` 与 e2e run `33369360450` 均成功，CI artifact `9749578091` 保留 API/UI manifest，trusted notification run `33369764953` 执行成功但为零渠道。后续仅补充文档与证据文件，不改变被测自动化代码。真实通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
 
 ## 不可伪造的外部事实
 
@@ -52,11 +52,11 @@
 
 | PRD §7 标准 | 当前证据 | 判定 |
 | --- | --- | --- |
-| 1. UI-led 与 API-led 两个独立 iteration 从原始需求到合并、可追踪自动化，且不手写 iteration 用例 | [UI iteration](../../../iterations/2026-08-medusa-ui-checkout/iteration.yaml) 与 [API iteration](../../../iterations/2026-08-medusa-api-checkout/iteration.yaml) 均为 accepted，分别有最新本地 UI 8/8、API 20/20 与 branch-specific traceability；[PR #1](https://github.com/koco-co/argus/pull/1) 与 [PR #9](https://github.com/koco-co/argus/pull/9) 已合并到 `main` | **未满足 release 条件**：当前本地提交尚未完成新的 GitHub CI 验证，且两者尚未合并到受保护 `release`，不能把 `main` 合并冒充 v1 退出 |
+| 1. UI-led 与 API-led 两个独立 iteration 从原始需求到合并、可追踪自动化，且不手写 iteration 用例 | [UI iteration](../../../iterations/2026-08-medusa-ui-checkout/iteration.yaml) 与 [API iteration](../../../iterations/2026-08-medusa-api-checkout/iteration.yaml) 均为 accepted，分别有最新本地 UI 8/8、API 20/20 与 branch-specific traceability；[PR #1](https://github.com/koco-co/argus/pull/1) 与 [PR #9](https://github.com/koco-co/argus/pull/9) 已合并到 `main` | **未满足 release 条件**：提交 `ca851aa` 的 GitHub static-checks/e2e 已成功，但两者尚未合并到受保护 `release`，不能把 `main` 合并冒充 v1 退出 |
 | 2. 所有确认门禁可从 iteration 目录重建 | 两个 `iteration.yaml` 的 `approvals[]`、`events[]`、`source_manifest[]` 与产物摘要完整；UI 用户 accepted、API requirements 用户 accepted 及后续 delegated 记录均由 `record_approval.py` 写入 | 通过（仓库内证据） |
 | 3. 两条分支的完整 coverage chain 与豁免原因 | `check_coverage.py --tier from-iteration`、`check_api_coverage.py`、`check_orphan_tests.py` 均通过；API 的 R→A→nodeid 与 UI 的 R→T→C→nodeid 均有 traceability | 通过（当前 iteration 证据） |
 | 4. attempts、diff、patch-scope、恢复检查点证明无中途用户接触且未修改冻结范围 | M9 四类证明 run、正式 UI/API run 的 `run-summary.yaml`、`check_patch_scope.py` 与恢复检查点测试均通过；PR #9 只改允许的 checkout POM 等待，不改断言/期望/测试点 | 通过（会话/仓库证据） |
-| 5. GitHub Actions static-checks 与目标靶场 e2e | [PR #9 e2e run](https://github.com/koco-co/argus/actions/runs/33236374652) 与 [合并后 main run](https://github.com/koco-co/argus/actions/runs/33236596449) 均为 `38 passed`、分类 `normal`；[PR #10](https://github.com/koco-co/argus/pull/10) 的 static-checks 通过，文档-only e2e 合法跳过 | 历史证据通过；本地最新 9 个提交尚未推送，需重新运行当前提交的 GitHub CI |
+| 5. GitHub Actions static-checks 与目标靶场 e2e | [本轮 static-checks](https://github.com/koco-co/argus/actions/runs/33369318287) 与 [本轮 e2e](https://github.com/koco-co/argus/actions/runs/33369360450) 均在提交 `ca851aa` 上成功；e2e 日志为 API 20/20 + UI 8/8、分类 `normal`，artifact `9749578091` 含 CI manifests；可信通知 run `33369764953` 执行成功但因无配置为零渠道 | 通过（当前提交的 GitHub 机器证据）；真实频道送达仍未验收 |
 
 该逐项复核显示可在仓库内完成的证据已齐备；Roadmap 7.2、7.6、9.2、9.3 仍分别受真实通知渠道、非作者审批及受保护 `release` 合并/收口约束，8.2 目前没有达到阈值的候选，因此 9.5 总体保持未勾选。
 
