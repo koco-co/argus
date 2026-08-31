@@ -1,6 +1,6 @@
 # 项目接续入口 / Agent Brief
 
-核对日期：2026-08-29
+核对日期：2026-08-31
 
 ## 最新执行覆盖：完整交付 Goal
 
@@ -9,6 +9,12 @@
 当前实现已覆盖六个项目级 Skill、v1 契约与唯一写入者、Medusa Compose 靶场、Web/API 代码生成、M9 自调试证据链、GitHub Actions 双门禁、通知适配器以及受保护分支收口脚本。clean-break `0.2.0` workspace 现已加入 `argus-core` 控制面、`argus-plugin-sdk` 来源契约/参考连接器和 `argus-medusa` 目标适配器；三者均可独立构建，且明确不实现 Agent/LLM Runtime。v1 资产仍由旧脚本维护，0.2 不读取或迁移 v1 iteration。
 
 历史基线机器验证（不代表本轮修改后的新验收）：`make lint` 通过；`uv run pytest scripts/tests -q` 为 **430 passed**；四个生成 Skill 的冻结输入/语义黄金基线通过；`uv run pre-commit run --all-files` 的 6 个钩子通过；正式 UI iteration 的 10/10 真实 Medusa 浏览器用例与正式 API iteration 的 20 个 case（连同既有 fixture 共 22/22）均有本地 run 证据；fresh reset 后完整 Web/API/fixture/靶场套件再通过 **38 passed in 122.71s**，POM 时序修复后的受影响 C0005 与完整套件也已通过。main 合并后复核同套件为 **38 passed in 125.82s**。本地 PostgreSQL SELECT-only 角色已真实读取权限并拒绝建表探针。正式 API 证据链位于 `iterations/2026-08-medusa-api-checkout/`，最新已归档 run 为 `run-20260828T182611Z-api3`，执行摘要为 fresh reset 后 22/22 通过，其中 A0018 缺少支付提供者时返回结构化 400。交付提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 及后续文档提交已推送；PR #1 已按用户指令改为 `main` 基线并由 GitHub 于 2026-08-29 真实合并，PR #9 的 Medusa 订单确认时序 POM 修复随后也已真实合并，代码 merge SHA 为 `88f2b6abce9dfa5ded57db3191609f891fd3eed4`；PR #10 文档更新已真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。PR #9 e2e run `33236374652` 与合并后 main 手工 e2e run `33236596449` 均为 38/38、分类 `normal`；后者耗时 82.15 秒，证据已上传并完成靶应用清理。当前仓库没有实际通知 Secret，因此真实外部送达仍未验收；受保护 `release` 仍未合并，不能据此执行 release 收口。验收证据见 [ACCEPTANCE_2026-08-28](./status/ACCEPTANCE_2026-08-28.md)。
+
+## 2026-08-31 本轮最新复核
+
+在提交 `42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f` 上，真实 Medusa Compose 靶场经过 fresh reset 后完成 API `20/20` 与 UI `8/8` 精确 traceability nodeid 执行；UI 包含 Chromium 参数化 nodeid、桌面与移动视觉场景。两次执行均由 `record-ci-auto --iteration` 写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要，执行后已 down 并清理容器、网络、数据卷和运行时凭据。框架测试当前为 `529 passed`，Schema、设计、coverage、静态门禁和 pre-commit 均通过。
+
+本轮新 run 是已接受 iteration 的补充执行证据：API 的 accepted aggregate 仍保留原 acceptance digest，未通过非法手写或终态后追加 approval 覆盖它；若要把新 API run 变成新的 acceptance mirror，必须先按 reopen 协议并重新取得用户 M1 requirements acceptance。当前本地证据不替代尚未在最新提交上运行的 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
 
 ## 当前状态
 

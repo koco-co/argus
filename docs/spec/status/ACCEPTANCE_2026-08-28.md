@@ -1,4 +1,4 @@
-# Argus v1 验收证据矩阵（2026-08-28，2026-08-29 更新）
+# Argus v1 验收证据矩阵（2026-08-28，2026-08-31 更新）
 
 本文件只登记实际执行结果；测试 fixture 的机器证据不冒充正式 iteration 的用户批准、外部通知或合并事实。
 
@@ -8,12 +8,12 @@
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 框架单元/集成测试 | 历史记录 430 项通过；当前复核 497 项通过 | `uv run pytest scripts/tests -q` |
+| 框架单元/集成测试 | 历史记录 430 项通过；2026-08-31 当前复核 529 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
-| UI 生成链 | 历史运行曾完成 10/10；当前复核使用真实本地靶场完成 10/10 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；历史 run `run-20260828T183412Z-ui03` |
-| API 生成链 | 历史运行曾完成 22/22；当前复核使用真实本地靶场完成 22/22 | `iterations/2026-08-medusa-api-checkout/`；历史 run `run-20260828T182611Z-api3` |
-| 全栈完整回归 | 当前复核分面完成：Web 10/10、API 22/22；另有框架靶场健康与 seed canary 通过 | API/Web 分面命令及真实靶场证据；完整合并套件未在本轮重复执行 |
+| UI 生成链 | 历史运行曾完成 10/10；2026-08-31 最新本地复核使用真实靶场完成 8/8 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；历史 run `run-20260828T183412Z-ui03`；最新 manifest `runs/run-20260831T061302Z-ad03/` |
+| API 生成链 | 历史运行曾完成 22/22；2026-08-31 最新本地复核使用真实靶场完成 20/20 | `iterations/2026-08-medusa-api-checkout/`；历史 run `run-20260828T182611Z-api3`；最新 manifest `runs/run-20260831T060726Z-8d7d/` |
+| 全栈完整回归 | 当前复核分面完成：Web 8/8、API 20/20；另有框架靶场健康与 seed canary 通过 | API/Web 分面命令及真实靶场证据；完整合并套件未在本轮重复执行 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | PR 覆盖范围 | iteration 工件变化只检查对应目录；自动化、共享代码或覆盖门禁变化检查全部；删除 iteration 明确失败；CI 取得完整 base 历史 | `check_coverage.py --changed-base <sha>`；`test_check_coverage.py` |
 | CI 对抗控制 | `force_failure` 远端连续两轮均为 1 失败/9 通过并以失败终止；`force_flaky` 首轮 1 失败/9 通过、第二轮 10 通过，被归类为 `flaky-suspect` 并以成功终止；两条路径均上传证据、执行汇总通知并清理容器/网络/卷 | Actions run `33167112680`、`33167439010`；artifact `9684097115`、`9684232762` |
@@ -30,7 +30,7 @@
 
 ## 当前复核收尾
 
-2026-08-29 当前复核已用真实 Docker 靶场完成健康检查、seed canary、API checkout 22/22 和 Web checkout 10/10。仍需执行最终 `target-app-reset`、`target-app-down` 并确认容器、网络和卷清理；真实通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
+2026-08-31 当前复核已用真实 Docker 靶场完成 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8；执行后已 `target-app-down`，容器、网络和数据卷均已清理。最新本地 execution manifest 已提交，但其代码 SHA 绑定的是执行时的代码提交；后续文档/证据提交不改变被测自动化代码。真实 GitHub CI、通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
 
 ## 不可伪造的外部事实
 
@@ -52,11 +52,11 @@
 
 | PRD §7 标准 | 当前证据 | 判定 |
 | --- | --- | --- |
-| 1. UI-led 与 API-led 两个独立 iteration 从原始需求到合并、可追踪自动化，且不手写 iteration 用例 | [UI iteration](../../../iterations/2026-08-medusa-ui-checkout/iteration.yaml) 与 [API iteration](../../../iterations/2026-08-medusa-api-checkout/iteration.yaml) 均为 accepted，分别有 UI 10/10、API 22/22 与 branch-specific traceability；[PR #1](https://github.com/koco-co/argus/pull/1) 与 [PR #9](https://github.com/koco-co/argus/pull/9) 已合并到 `main` | **未满足 release 条件**：两者尚未合并到受保护 `release`，不能把 `main` 合并冒充 v1 退出 |
+| 1. UI-led 与 API-led 两个独立 iteration 从原始需求到合并、可追踪自动化，且不手写 iteration 用例 | [UI iteration](../../../iterations/2026-08-medusa-ui-checkout/iteration.yaml) 与 [API iteration](../../../iterations/2026-08-medusa-api-checkout/iteration.yaml) 均为 accepted，分别有最新本地 UI 8/8、API 20/20 与 branch-specific traceability；[PR #1](https://github.com/koco-co/argus/pull/1) 与 [PR #9](https://github.com/koco-co/argus/pull/9) 已合并到 `main` | **未满足 release 条件**：当前本地提交尚未完成新的 GitHub CI 验证，且两者尚未合并到受保护 `release`，不能把 `main` 合并冒充 v1 退出 |
 | 2. 所有确认门禁可从 iteration 目录重建 | 两个 `iteration.yaml` 的 `approvals[]`、`events[]`、`source_manifest[]` 与产物摘要完整；UI 用户 accepted、API requirements 用户 accepted 及后续 delegated 记录均由 `record_approval.py` 写入 | 通过（仓库内证据） |
 | 3. 两条分支的完整 coverage chain 与豁免原因 | `check_coverage.py --tier from-iteration`、`check_api_coverage.py`、`check_orphan_tests.py` 均通过；API 的 R→A→nodeid 与 UI 的 R→T→C→nodeid 均有 traceability | 通过（当前 iteration 证据） |
 | 4. attempts、diff、patch-scope、恢复检查点证明无中途用户接触且未修改冻结范围 | M9 四类证明 run、正式 UI/API run 的 `run-summary.yaml`、`check_patch_scope.py` 与恢复检查点测试均通过；PR #9 只改允许的 checkout POM 等待，不改断言/期望/测试点 | 通过（会话/仓库证据） |
-| 5. GitHub Actions static-checks 与目标靶场 e2e | [PR #9 e2e run](https://github.com/koco-co/argus/actions/runs/33236374652) 与 [合并后 main run](https://github.com/koco-co/argus/actions/runs/33236596449) 均为 `38 passed`、分类 `normal`；[PR #10](https://github.com/koco-co/argus/pull/10) 的 static-checks 通过，文档-only e2e 合法跳过 | 通过（相关 PR/手工回归） |
+| 5. GitHub Actions static-checks 与目标靶场 e2e | [PR #9 e2e run](https://github.com/koco-co/argus/actions/runs/33236374652) 与 [合并后 main run](https://github.com/koco-co/argus/actions/runs/33236596449) 均为 `38 passed`、分类 `normal`；[PR #10](https://github.com/koco-co/argus/pull/10) 的 static-checks 通过，文档-only e2e 合法跳过 | 历史证据通过；本地最新 9 个提交尚未推送，需重新运行当前提交的 GitHub CI |
 
 该逐项复核显示可在仓库内完成的证据已齐备；Roadmap 7.2、7.6、9.2、9.3 仍分别受真实通知渠道、非作者审批及受保护 `release` 合并/收口约束，8.2 目前没有达到阈值的候选，因此 9.5 总体保持未勾选。
 
