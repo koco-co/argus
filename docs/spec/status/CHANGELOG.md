@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-08-31：PR #20（`main` → `release`）的 head `9f9357f760b10796f0cf7b291b7f3d120e24bd6f` 通过 static-checks run `33370230179` 与 Compose-only e2e run `33370230188`，artifact `9749874249` 已保存；随后文档收口提交 `9d5b51e6dee12cf654474a73c36bcfa9e740124f` 的 push static-checks `33370802735`、PR static-checks `33370807527` 与 e2e `33370807544` 也成功，最新 e2e artifact `9750091139` 已保存。trusted-notifications runs `33370867679`、`33370868898`、`33371166997` 均成功执行但记录零渠道；PR #20 仍无非作者 approval，未发生受保护 `release` merge。
+
 - 2026-08-31：完成测试设计与 CI 证据收口：functional/API cases 统一要求 case-level `side_effect`，API response 使用 typed `body_assertions` 与有真实输入/目标绑定的 `derived_oracles`；新增 ADR-015 记录 v1 发布前 clean-break 版本策略。新增 execution manifest 1.1、精确 traceability nodeid collection/outcome 记录、first/retry JUnit/Allure 与 per-iteration `record-ci-auto --iteration`；retry 前强制真实 fresh reset。框架测试 `529 passed`，`make static-gates` 通过。
 
 - 2026-08-31：在提交 `42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f` 上对真实 Medusa Compose 靶场完成 fresh reset 后的精确执行：API `20/20`、UI `8/8`（含 Chromium `[chromium]` 参数化 nodeid）通过；`record-ci-auto --iteration` 已分别写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要。UI 随后完成 `execution_passed → acceptance_pending → accepted`，靶应用已 `down` 并清理数据卷；补充 self-debug 执行示例。该本地证据不替代 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
