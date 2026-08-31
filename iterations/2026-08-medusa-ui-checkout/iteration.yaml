@@ -1,6 +1,6 @@
 schema_version: '1.0'
 iteration_id: 2026-08-medusa-ui-checkout
-state: executing
+state: accepted
 blocked_reason: null
 branches:
   ui: true
@@ -31,8 +31,8 @@ artifacts:
     status: not_started
     input_sha256: null
   execution:
-    status: stale
-    input_sha256: d67622e1f6cfb58c0d680427f7e700b4553c5a2866569ef2e7a41610b97d0085
+    status: passed
+    input_sha256: a9bc15c13f249197787d409630bf13460a41eca0e0719dbcd8cfc898d46ddee5
 approvals:
 - stage: requirements
   action: accepted
@@ -117,6 +117,15 @@ approvals:
   artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
   note: 依据用户持续授权，agent 已运行 settings.py check；local Web/API 端点、凭据和 SELECT-only PostgreSQL
     DSN 均通过机械环境门禁，真实靶场已由 Compose 启动并将在执行后清理。
+  delegation_id: delegation-argus-ui-v1
+- stage: acceptance
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-31T06:13:38Z'
+  artifact_sha256: a9bc15c13f249197787d409630bf13460a41eca0e0719dbcd8cfc898d46ddee5
+  note: 依据用户持续授权，agent 已审查本轮 execution-manifest.json 1.1、完整 collection/outcomes、JUnit
+    与 Allure 摘要；8/8 个 UI traceability nodeid 在真实 Chromium + Medusa Compose 上通过，包含桌面/移动视觉证据，未发生
+    retry，接受本轮执行证据。
   delegation_id: delegation-argus-ui-v1
 events:
 - from_state: created
@@ -268,8 +277,20 @@ events:
   to_state: executing
   timestamp: '2026-08-31T05:55:40Z'
   triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-31T06:13:27Z'
+  triggered_by: agent
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-31T06:13:27Z'
+  triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-31T06:13:44Z'
+  triggered_by: agent
 source_manifest: []
-updated_at: '2026-08-31T05:55:40Z'
+updated_at: '2026-08-31T06:13:44Z'
 delegation:
   id: delegation-argus-ui-v1
   granted_by: user

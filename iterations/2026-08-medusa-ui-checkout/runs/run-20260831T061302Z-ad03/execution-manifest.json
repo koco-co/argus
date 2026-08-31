@@ -1,0 +1,103 @@
+{
+  "attempts": [
+    {
+      "allure": {
+        "available": true,
+        "path": "reports/ui-allure-first",
+        "sha256": "652fab3d3d42d1ddec06e5a25a8d2be8202dc2f2515605ef0e99b4608d3e0cf6"
+      },
+      "attempt_number": 1,
+      "collected_nodeids": [
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]"
+      ],
+      "executed_nodeids": [
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]"
+      ],
+      "expected_nodeids": [
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]"
+      ],
+      "junit": {
+        "errors": 0,
+        "failures": 0,
+        "path": "reports/ui-junit-first.xml",
+        "sha256": "ec523be909a2707ae61aac34b010a598b6990ead3a2a076ccf6d1269d2886871",
+        "skipped": 0,
+        "tests": 8
+      },
+      "outcomes": {
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]": "passed",
+        "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]": "passed"
+      },
+      "result": "pass"
+    }
+  ],
+  "code_sha": "42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f",
+  "collected_nodeids": [
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]"
+  ],
+  "command": "TEST_ENV=local ARGUS_EXECUTED_NODEIDS=reports/ui-executed-first.json uv run pytest <8 traceability nodeids> -p scripts.pytest_execution_evidence --junitxml=reports/ui-junit-first.xml --alluredir=reports/ui-allure-first",
+  "env": "local",
+  "environment_summary": {
+    "name": "local",
+    "path": "config/env.local.yaml",
+    "sha256": "0d372a62b3d158acb69548e1ec1a824588fd56c0d82fc53c538cc85306a57947"
+  },
+  "expected_nodeids": [
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0001_add_tshirt.py::test_add_tshirt[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0002_keep_single_line.py::test_keep_single_line[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0003_apply_discount.py::test_apply_discount[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0004_reject_discount.py::test_reject_discount[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0005_place_order.py::test_place_order[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0006_block_missing_address.py::test_block_missing_address[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0007_verify_desktop.py::test_verify_desktop[chromium]",
+    "automation/web/tests/checkout/test_2026-08-medusa-ui-checkout_c0008_verify_mobile.py::test_verify_mobile[chromium]"
+  ],
+  "iteration_id": "2026-08-medusa-ui-checkout",
+  "run_id": "run-20260831T061302Z-ad03",
+  "schema_version": "1.1",
+  "scope": "full",
+  "seed_summary": {
+    "path": "shared/testdata/seed-registry.yaml",
+    "sha256": "38a125cc38aafe8a718f72b7488f14a8484faa403e9f9f22e5832fac809b6cf1"
+  },
+  "target_summary": {
+    "config_sha256": "da9278068225115f09f259a1a6016fada8b7598016e667ef9518ed69ac980451",
+    "image_ids": [
+      "unavailable"
+    ]
+  }
+}
