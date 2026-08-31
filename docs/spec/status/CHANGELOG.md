@@ -1,6 +1,8 @@
 # Changelog
 
-- 2026-08-31：完成测试设计与 CI 证据收口：functional/API cases 统一要求 case-level `side_effect`，API response 使用 typed `body_assertions` 与有真实输入/目标绑定的 `derived_oracles`；新增 ADR-015 记录 v1 发布前 clean-break 版本策略。新增 execution manifest 1.1、精确 traceability nodeid collection/outcome 记录、first/retry JUnit/Allure 与 per-iteration `record-ci-auto --iteration`；retry 前强制真实 fresh reset。框架测试 `528 passed`，`make static-gates` 通过；最新工作树未提交前的真实 Compose 回归为 API `20 passed`、UI `8 passed`，仅作为未绑定 commit SHA 的本地验证，不冒充 iteration acceptance。
+- 2026-08-31：完成测试设计与 CI 证据收口：functional/API cases 统一要求 case-level `side_effect`，API response 使用 typed `body_assertions` 与有真实输入/目标绑定的 `derived_oracles`；新增 ADR-015 记录 v1 发布前 clean-break 版本策略。新增 execution manifest 1.1、精确 traceability nodeid collection/outcome 记录、first/retry JUnit/Allure 与 per-iteration `record-ci-auto --iteration`；retry 前强制真实 fresh reset。框架测试 `529 passed`，`make static-gates` 通过。
+
+- 2026-08-31：在提交 `42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f` 上对真实 Medusa Compose 靶场完成 fresh reset 后的精确执行：API `20/20`、UI `8/8`（含 Chromium `[chromium]` 参数化 nodeid）通过；`record-ci-auto --iteration` 已分别写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要。UI 随后完成 `execution_passed → acceptance_pending → accepted`，靶应用已 `down` 并清理数据卷；补充 self-debug 执行示例。该本地证据不替代 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
 
 - 2026-08-29：完成不可信 YAML/JSON 严格解析迁移：`argus-core` 的 `load_yaml/load_json` 与 SDK 安全 JSON 解析统一拒绝重复键、非有限数字、YAML alias、过深/过大文档和不支持类型；文件、插件输出及 HTTP 响应的生产读取点同步收口，错误诊断不回显载荷。新增 `make static-gates` 汇总静态、Schema、语义、覆盖和边界门禁；当前框架测试为 497 passed，三份 0.2.0 workspace 包已完成 lock/build 复核。
 

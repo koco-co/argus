@@ -56,7 +56,7 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation；格式检查直接扫描工作树，包含尚未被 Git 跟踪的新 Python 文件 | 已运行 2026-08-28（ruff lint、ruff format check 与 pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：528 项通过；不代表 Web/API E2E 通过 |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：529 项通过；不代表 Web/API E2E 通过 |
 | Skill 黄金基线 | root | `make skill-golden` | 四个生成 Skill 的冻结输入 SHA、YAML Schema/结构语义与 Python AST 语义全部匹配 | 已运行 2026-08-28（4 份 1.0.0 baseline、10 项代表性产物通过；输入漂移、YAML 语义漂移和 Python AST 漂移反向测试通过） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
