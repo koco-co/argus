@@ -1,11 +1,9 @@
-"""Roadmap 1.3 acceptance tests for scripts/validate_iteration.py.
+"""scripts/validate_iteration.py 的 Roadmap 1.3 验收测试。
 
-Covers the DoD fixture list: legal UI/API route chains (incl.
-requirements_mapped on the API branch), explicit Hybrid rejection, illegal
-jumps, stale downgrade verdicts shown but unwritten (and written by --fix),
-stale-input consumption surfaced, attempt-ordering and passed-last-attempt
-violations, hand-edited state/events rejection, blocked(
-validation_budget_exhausted) acceptance, second-in-progress rejection.
+覆盖 DoD 夹具清单：合法 UI/API 路由链（含 API 分支的 requirements_mapped）、显式 Hybrid
+拒绝、非法跳转、只显示但不写入 stale 降级 verdict（以及由 --fix 写入）、stale 输入消费提示、
+attempt 排序与最后一次通过约束、手工编辑 state/events 拒绝、blocked(validation_budget_exhausted)
+接受和第二个进行中迭代拒绝。
 """
 
 from __future__ import annotations
@@ -15,12 +13,17 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-import pytest
-import yaml
+import pytest  # pyright: ignore[reportMissingImports]
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from conftest import FIXTURES_DIR, _load_script
 
 SCHEMA_FIXTURES = FIXTURES_DIR / "schemas"
 SHA = "a" * 64
+_APPROVAL_ARTIFACTS = {
+    "requirements": "requirements.yaml",
+    "exemptions": "exemptions.yaml",
+    "test_points": "test_points.yaml",
+}
 
 
 @pytest.fixture(scope="module")
@@ -53,6 +56,19 @@ def _approval(stage: str, action: str) -> dict:
         "actor": "user",
         "timestamp": "2026-08-28T09:59:00Z",
         "artifact_sha256": SHA,
+    }
+
+
+def _delegation() -> dict:
+    basis = "测试夹具中的用户持续授权"
+    return {
+        "id": "delegation-test-fixture",
+        "granted_by": "user",
+        "basis": basis,
+        "basis_sha256": hashlib.sha256(basis.encode("utf-8")).hexdigest(),
+        "scope": ["exemptions", "lifecycle_reopen"],
+        "granted_at": "2026-08-28T09:00:00Z",
+        "expires_at": "2026-12-31T23:59:59Z",
     }
 
 
@@ -93,15 +109,41 @@ def _scaffold(
 ) -> Path:
     iteration_dir = root / "iterations" / iteration_id
     iteration_dir.mkdir(parents=True, exist_ok=True)
-    (iteration_dir / "iteration.yaml").write_text(
-        yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
     if requirements_raw is not None:
         (iteration_dir / "requirements.yaml").write_text(requirements_raw, encoding="utf-8")
         upstream = iteration_dir / upstream_name
         upstream.parent.mkdir(parents=True, exist_ok=True)
         upstream.write_text("upstream content", encoding="utf-8")
+    # 门禁测试必须携带真实可散列的产物；不能用固定占位摘要掩盖验证缺陷。
+    for approval in doc.get("approvals", []):
+        artifact_name = _APPROVAL_ARTIFACTS.get(approval["stage"])
+        if artifact_name is None:
+            continue
+        artifact = iteration_dir / artifact_name
+        if not artifact.exists():
+            artifact.write_text(
+                f"schema_version: '1.0'\niteration_id: {iteration_id}\n",
+                encoding="utf-8",
+            )
+        approval["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    (iteration_dir / "iteration.yaml").write_text(
+        yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     return iteration_dir
+
+
+def _refresh_approval_digest(iteration_dir: Path, stage: str) -> None:
+    """测试修改门禁产物后，同步构造一条仍然有效的批准记录。"""
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    artifact = iteration_dir / _APPROVAL_ARTIFACTS[stage]
+    for approval in reversed(document["approvals"]):
+        if approval["stage"] == stage:
+            approval["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            break
+    iteration_yaml.write_text(
+        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
 
 
 def _ui_chain_events() -> tuple[list, list]:
@@ -118,7 +160,11 @@ def _ui_chain_events() -> tuple[list, list]:
         _event("requirements_accepted", "test_points_review"),
         _event("test_points_review", "test_points_accepted"),
     ]
-    approvals = [_approval("requirements", "accepted"), _approval("test_points", "accepted")]
+    approvals = [
+        _approval("requirements", "accepted"),
+        _approval("exemptions", "accepted"),
+        _approval("test_points", "accepted"),
+    ]
     return states, events or approvals
 
 
@@ -135,6 +181,7 @@ def test_legal_ui_route_chain_passes(validator: Any, tmp_path: Path) -> None:
         ],
         approvals=[
             _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
             _approval("test_points", "accepted"),
         ],
     )
@@ -152,10 +199,54 @@ def test_legal_api_route_chain_with_requirements_mapped(validator: Any, tmp_path
             _event("requirements_clarifying", "requirements_accepted"),
             _event("requirements_accepted", "requirements_mapped"),
         ],
-        approvals=[_approval("requirements", "accepted")],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
+        ],
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-api-ok", doc)
     assert validator.main([str(iteration_dir)]) == 0
+
+
+def test_delegated_approval_satisfies_artifact_gate(validator: Any, tmp_path: Path) -> None:
+    """用户持续授权下的 agent 审查决定可推进内部产物门禁。"""
+    delegated = _approval("exemptions", "delegated")
+    delegated["actor"] = "agent"
+    delegated["note"] = "依据用户持续授权，由 agent 审查当前豁免清单后推进。"
+    delegated["delegation_id"] = "delegation-test-fixture"
+    doc = _iteration_doc(
+        "2026-08-api-delegated",
+        ui=False,
+        state="requirements_mapped",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+        ],
+        approvals=[_approval("requirements", "accepted"), delegated],
+    )
+    doc["delegation"] = _delegation()
+    iteration_dir = _scaffold(tmp_path, "2026-08-api-delegated", doc)
+    assert validator.main([str(iteration_dir)]) == 0
+
+
+def test_whitespace_only_delegated_note_is_rejected(validator: Any, tmp_path: Path) -> None:
+    """delegated 记录必须携带可审计的非空说明，空白不能绕过门禁。"""
+    delegated = _approval("requirements", "delegated")
+    delegated["actor"] = "agent"
+    delegated["note"] = "   "
+    doc = _iteration_doc(
+        "2026-08-delegated-note",
+        ui=False,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[delegated],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-delegated-note", doc)
+    assert validator.main([str(iteration_dir)]) == 1
 
 
 def test_requirements_mapped_rejected_on_ui_branch(validator: Any, tmp_path: Path) -> None:
@@ -208,6 +299,127 @@ def test_missing_approval_gate_rejected(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(iteration_dir)]) == 1
 
 
+def test_approval_digest_must_match_current_artifact(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """批准字段存在但摘要不匹配时，门禁仍必须拒绝。"""
+    doc = _iteration_doc(
+        "2026-08-bad-approval-sha",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-bad-approval-sha", doc)
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    persisted = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    persisted["approvals"][0]["artifact_sha256"] = "0" * 64
+    iteration_yaml.write_text(yaml.safe_dump(persisted, sort_keys=False), encoding="utf-8")
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "artifact_sha256" in capsys.readouterr().err
+
+
+def test_latest_approval_for_stage_controls_gate(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """旧版 accepted 后出现 rejected 时，不能继续复用旧批准。"""
+    doc = _iteration_doc(
+        "2026-08-latest-rejected",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("requirements", "rejected"),
+        ],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-latest-rejected", doc)
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "latest approvals[] entry" in capsys.readouterr().err
+
+
+def test_approval_gate_requires_the_artifact_file(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """摘要无法对应到现存产物时，不能把门禁视为可审计。"""
+    doc = _iteration_doc(
+        "2026-08-missing-approved-artifact",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-missing-approved-artifact", doc)
+    (iteration_dir / "requirements.yaml").unlink()
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "requires requirements.yaml" in capsys.readouterr().err
+
+
+def test_approval_gate_requires_user_actor(validator: Any, tmp_path: Path, capsys: Any) -> None:
+    """Schema 允许的其他 actor 不能冒充用户批准。"""
+    doc = _iteration_doc(
+        "2026-08-non-user-approval",
+        ui=True,
+        state="requirements_accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+        ],
+        approvals=[_approval("requirements", "accepted")],
+    )
+    iteration_dir = _scaffold(tmp_path, "2026-08-non-user-approval", doc)
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    persisted = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    persisted["approvals"][0]["actor"] = "agent"
+    iteration_yaml.write_text(yaml.safe_dump(persisted, sort_keys=False), encoding="utf-8")
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "'user' was expected" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("ui", [True, False])
+def test_missing_exemptions_approval_gate_rejected(
+    validator: Any, tmp_path: Path, ui: bool
+) -> None:
+    """UI 与 API 分支都不能绕过需求豁免签收。"""
+    if ui:
+        state = "test_points_accepted"
+        events = [
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "test_points_review"),
+            _event("test_points_review", "test_points_accepted"),
+        ]
+        approvals = [
+            _approval("requirements", "accepted"),
+            _approval("test_points", "accepted"),
+        ]
+    else:
+        state = "requirements_mapped"
+        events = [
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+        ]
+        approvals = [_approval("requirements", "accepted")]
+    iteration_id = f"2026-08-no-exemption-{'ui' if ui else 'api'}"
+    doc = _iteration_doc(iteration_id, ui=ui, state=state, events=events, approvals=approvals)
+    iteration_dir = _scaffold(tmp_path, iteration_id, doc)
+    assert validator.main([str(iteration_dir)]) == 1
+
+
 def test_hand_edited_state_rejected(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-hand-edit",
@@ -237,9 +449,7 @@ def test_hand_edited_event_chain_rejected(validator: Any, tmp_path: Path) -> Non
     assert validator.main([str(iteration_dir)]) == 1
 
 
-def test_blocked_with_budget_reason_accepted_and_user_unblock(
-    validator: Any, tmp_path: Path
-) -> None:
+def test_blocked_can_only_be_resumed_to_created(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-budget",
         ui=True,
@@ -256,8 +466,8 @@ def test_blocked_with_budget_reason_accepted_and_user_unblock(
     )
     doc["blocked_reason"] = None  # unblocked again
     iteration_dir = _scaffold(tmp_path, "2026-08-budget", doc)
-    # the blocked hop lacks a reason only while IN blocked; we left it, so OK
-    assert validator.main([str(iteration_dir)]) == 0
+    # A user may resume a blocked iteration, but only through the created state.
+    assert validator.main([str(iteration_dir)]) == 1
 
 
 def test_blocked_without_reason_rejected(validator: Any, tmp_path: Path) -> None:
@@ -289,7 +499,7 @@ def test_non_user_unblock_rejected(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(iteration_dir)]) == 1
 
 
-def test_reopen_edge_is_user_only(validator: Any, tmp_path: Path) -> None:
+def test_reopen_agent_requires_structured_delegation(validator: Any, tmp_path: Path) -> None:
     doc = _iteration_doc(
         "2026-08-reopen",
         ui=True,
@@ -305,6 +515,46 @@ def test_reopen_edge_is_user_only(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(iteration_dir)]) == 1
 
 
+def test_acceptance_approval_after_terminal_event_is_rejected(
+    validator: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """终态之后追加 acceptance 不能伪造新的验收链。"""
+    doc = _iteration_doc(
+        "2026-08-late-acceptance",
+        ui=False,
+        state="accepted",
+        events=[
+            _event("created", "requirements_clarifying"),
+            _event("requirements_clarifying", "requirements_accepted"),
+            _event("requirements_accepted", "requirements_mapped"),
+            _event("requirements_mapped", "spec_normalizing"),
+            _event("spec_normalizing", "spec_valid"),
+            _event("spec_valid", "api_cases_generating"),
+            _event("api_cases_generating", "api_cases_exported"),
+            _event("api_cases_exported", "api_automation_generating"),
+            _event("api_automation_generating", "api_automation_generated"),
+            _event("api_automation_generated", "env_pending"),
+            _event("env_pending", "env_configured"),
+            _event("env_configured", "executing"),
+            _event("executing", "execution_passed"),
+            _event("execution_passed", "acceptance_pending"),
+            _event("acceptance_pending", "accepted"),
+        ],
+        approvals=[
+            _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
+            _approval("acceptance", "accepted"),
+        ],
+    )
+    late = _approval("acceptance", "accepted")
+    late["timestamp"] = "2026-08-28T10:01:00Z"
+    doc["approvals"].append(late)
+    iteration_dir = _scaffold(tmp_path, "2026-08-late-acceptance", doc)
+
+    assert validator.main([str(iteration_dir)]) == 1
+    assert "appended after the terminal accepted event" in capsys.readouterr().err
+
+
 def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, capsys: Any) -> None:
     requirements_raw = _raw("requirements--accepted.valid.yaml")
     doc = _iteration_doc(
@@ -318,7 +568,7 @@ def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, cap
         approvals=[_approval("requirements", "accepted")],
     )
     iteration_dir = _scaffold(tmp_path, "2026-08-stale", doc, requirements_raw)
-    # point generated_from at a live upstream, then tamper with the file
+    # 先让 generated_from 指向现存上游，再篡改该文件。
     requirements = iteration_dir / "requirements.yaml"
     document = yaml.safe_load(requirements.read_text(encoding="utf-8"))
     document["generated_from"] = {
@@ -326,6 +576,7 @@ def test_stale_verdict_shown_but_not_written(validator: Any, tmp_path: Path, cap
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     upstream = iteration_dir / "00-raw" / "requirements-dump.md"
     upstream.write_text("tampered upstream", encoding="utf-8")
 
@@ -359,6 +610,7 @@ def test_fix_writes_stale_status_and_rerun_is_clean(
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     (iteration_dir / "00-raw" / "requirements-dump.md").write_text("tampered")
 
     assert validator.main([str(iteration_dir), "--fix"]) == 0
@@ -381,6 +633,7 @@ def test_stale_input_consumption_is_surfaced(validator: Any, tmp_path: Path, cap
         ],
         approvals=[
             _approval("requirements", "accepted"),
+            _approval("exemptions", "accepted"),
             _approval("test_points", "accepted"),
         ],
     )
@@ -394,6 +647,7 @@ def test_stale_input_consumption_is_surfaced(validator: Any, tmp_path: Path, cap
         "sha256": _sha("upstream content"),
     }
     requirements.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    _refresh_approval_digest(iteration_dir, "requirements")
     (iteration_dir / "00-raw" / "requirements-dump.md").write_text("tampered")
 
     assert validator.main([str(iteration_dir), "--fix"]) == 1
@@ -414,6 +668,74 @@ def test_second_in_progress_iteration_rejected(validator: Any, tmp_path: Path) -
     _scaffold(tmp_path, "2026-08-one", first)
     iteration_two = _scaffold(tmp_path, "2026-08-two", second)
     assert validator.main([str(iteration_two)]) == 1
+
+
+def test_terminal_iteration_does_not_report_live_sibling_conflict(
+    validator: Any, tmp_path: Path
+) -> None:
+    live = _iteration_doc(
+        "2026-08-live-terminal-check",
+        ui=True,
+        state="created",
+        events=[],
+        approvals=[],
+    )
+    terminal = _iteration_doc(
+        "2026-08-terminal-check",
+        ui=True,
+        state="accepted",
+        events=[],
+        approvals=[],
+    )
+    _scaffold(tmp_path, "2026-08-live-terminal-check", live)
+    terminal_dir = _scaffold(tmp_path, "2026-08-terminal-check", terminal)
+
+    report = validator.IterationReport()
+    validator.check_iteration(
+        terminal_dir,
+        report,
+        in_progress_elsewhere="2026-08-live-terminal-check",
+    )
+    assert not any("single-in-progress violation" in error for error in report.errors)
+
+
+def test_precommit_can_validate_multiple_iteration_yaml_paths(
+    validator: Any, tmp_path: Path
+) -> None:
+    """pre-commit 会把同次提交中的多个 iteration.yaml 一并传入。"""
+    first = _iteration_doc(
+        "test-fixture-multi-a", ui=True, state="created", events=[], approvals=[]
+    )
+    second = _iteration_doc(
+        "test-fixture-multi-b", ui=False, state="created", events=[], approvals=[]
+    )
+    first_dir = _scaffold(tmp_path, "test-fixture-multi-a", first)
+    second_dir = _scaffold(tmp_path, "test-fixture-multi-b", second)
+    assert (
+        validator.main([str(first_dir / "iteration.yaml"), str(second_dir / "iteration.yaml")]) == 0
+    )
+
+
+def test_permanent_fixture_does_not_conflict_with_live_iteration(
+    validator: Any, tmp_path: Path
+) -> None:
+    """永久夹具在真实非终态 iteration 存在时仍须可由同一钩子校验。"""
+    live = _iteration_doc(
+        "2026-08-live",
+        ui=True,
+        state="requirements_clarifying",
+        events=[_event("created", "requirements_clarifying")],
+        approvals=[],
+    )
+    fixture = _iteration_doc(
+        "test-fixture-alongside-live", ui=False, state="created", events=[], approvals=[]
+    )
+    live_dir = _scaffold(tmp_path, "2026-08-live", live)
+    fixture_dir = _scaffold(tmp_path, "test-fixture-alongside-live", fixture)
+
+    assert (
+        validator.main([str(live_dir / "iteration.yaml"), str(fixture_dir / "iteration.yaml")]) == 0
+    )
 
 
 def _run_summary_doc(status: str, attempts: list, **extra: Any) -> dict:
@@ -492,3 +814,24 @@ def test_run_summary_unresolvable_diff_ref(validator: Any, tmp_path: Path) -> No
     )
     (run_dir / "run-summary.yaml").write_text(yaml.safe_dump(bad, sort_keys=False))
     assert validator.main([str(iteration_dir)]) == 1
+
+
+def test_run_summary_resolves_diff_ref_from_its_run_directory(
+    validator: Any, tmp_path: Path
+) -> None:
+    """记录器接受的相对 patch 路径必须也能通过迭代校验器。"""
+    doc = _iteration_doc("2026-08-runs4", ui=True, state="created", events=[], approvals=[])
+    iteration_dir = _scaffold(tmp_path, "2026-08-runs4", doc)
+    run_dir = iteration_dir / "runs" / "run-20260828T101500Z-a3f2"
+    run_dir.mkdir(parents=True)
+    summary = _run_summary_doc(
+        "passed",
+        [_attempt(1, "pass", diff_ref="attempt-1.patch")],
+        started_at="2026-08-28T10:15:00Z",
+        finished_at="2026-08-28T10:16:00Z",
+        env="local",
+        scope="module_set",
+    )
+    (run_dir / "attempt-1.patch").write_text("diff --git a/a b/a\n", encoding="utf-8")
+    (run_dir / "run-summary.yaml").write_text(yaml.safe_dump(summary, sort_keys=False))
+    assert validator.main([str(iteration_dir)]) == 0

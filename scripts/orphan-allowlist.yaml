@@ -1,0 +1,3 @@
+# 仅允许框架基础设施烟测绕过迭代反向追溯；业务用例不得加入此清单。
+exempt:
+  - automation/**/tests/harness/**

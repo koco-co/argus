@@ -1,0 +1,218 @@
+name: e2e
+
+permissions: {}
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      acceptance_scenario:
+        description: "CI 验收场景"
+        required: true
+        default: normal
+        type: choice
+        options:
+          - normal
+          - force_failure
+          - force_flaky
+  schedule:
+    - cron: "17 3 * * 1"
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      e2e: ${{ steps.scope.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'schedule' && 'release' || github.sha }}
+          persist-credentials: false
+      - id: scope
+        shell: bash
+        env:
+          ARGUS_EVENT_NAME: ${{ github.event_name }}
+          ARGUS_BASE_REF: ${{ github.base_ref }}
+          ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          ARGUS_HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$ARGUS_EVENT_NAME" != "pull_request" ]] || [[ "$ARGUS_BASE_REF" == "release" ]]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$ARGUS_BASE_SHA" "$ARGUS_HEAD_SHA" | grep -Eq '^(automation|iterations|shared|target-app|config)/|^(Makefile|pyproject.toml|uv.lock)$|^scripts/(_target_app|target_app_).*\.py$'; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      ARGUS_BASE_URL: http://localhost:8000
+      ARGUS_API_BASE_URL: http://localhost:9000
+      ARGUS_CI_ACCEPTANCE_SCENARIO: ${{ inputs.acceptance_scenario || 'normal' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'release' || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv sync --locked --group dev
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run python scripts/target_app_up.py
+      - run: uv run python scripts/target_app_healthcheck.py
+      - run: uv run python -m shared.config.settings assemble --env ci
+      - id: regression
+        shell: bash
+        run: |
+          set +e
+          overall=0
+          classification="normal"
+          # expected-nodeids validates the iteration's traceability.yaml and returns exact IDs.
+          select_nodeids() {
+            uv run python scripts/self_debug_helper.py expected-nodeids "$1"
+          }
+          for spec in \
+            "2026-08-medusa-api-checkout:api" \
+            "2026-08-medusa-ui-checkout:web"; do
+            IFS=: read -r iteration label <<< "$spec"
+            first_report="reports/${label}-junit-first.xml"
+            first_execution="reports/${label}-executed-first.json"
+            first_allure="reports/${label}-allure-first"
+            retry_report="reports/${label}-junit-retry.xml"
+            retry_execution="reports/${label}-executed-retry.json"
+            retry_allure="reports/${label}-allure-retry"
+            selection="$(select_nodeids "iterations/${iteration}")" || {
+              echo "${iteration} 无法从 traceability 生成精确 nodeid 选择" >&2
+              overall=1
+              classification="failed"
+              continue
+            }
+            nodeids=()
+            while IFS= read -r nodeid; do
+              [[ -n "$nodeid" ]] && nodeids+=("$nodeid")
+            done <<< "$selection"
+            uv run python scripts/target_app_reset.py
+            reset_status=$?
+            if [[ $reset_status -ne 0 ]]; then
+              echo "${iteration} 首次执行前 fresh reset 失败" >&2
+              overall=1
+              classification="failed"
+              continue
+            fi
+            pytest_args=("${nodeids[@]}" -p scripts.pytest_execution_evidence --junitxml="$first_report" --alluredir="$first_allure")
+            ARGUS_EXECUTED_NODEIDS="$first_execution" TEST_ENV=ci uv run pytest "${pytest_args[@]}"
+            first=$?
+            if [[ $first -ne 0 ]]; then
+              # 这些 iteration 的用例包含 creates/updates side effect；retry 前必须恢复并重播真实 seed。
+              uv run python scripts/target_app_reset.py
+              reset_status=$?
+              if [[ $reset_status -ne 0 ]]; then
+                echo "${iteration} retry 前 fresh reset 失败，拒绝重跑" >&2
+                classification="failed"
+                overall=1
+                continue
+              fi
+              retry_args=("${nodeids[@]}" -p scripts.pytest_execution_evidence --junitxml="$retry_report" --alluredir="$retry_allure")
+              ARGUS_EXECUTED_NODEIDS="$retry_execution" TEST_ENV=ci uv run pytest "${retry_args[@]}"
+              second=$?
+              if [[ $second -eq 0 ]]; then
+                classification="flaky-suspect"
+              else
+                classification="failed"
+                overall=1
+              fi
+            else
+              second=0
+            fi
+          done
+          echo "classification=$classification" >> "$GITHUB_OUTPUT"
+          exit "$overall"
+      - if: ${{ always() }}
+        name: 记录最终回归证据
+        shell: bash
+        run: |
+          set -euo pipefail
+          # expected-nodeids validates the iteration's traceability.yaml and returns exact IDs.
+          select_nodeids() {
+            uv run python scripts/self_debug_helper.py expected-nodeids "$1"
+          }
+          for spec in \
+            "2026-08-medusa-api-checkout:api" \
+            "2026-08-medusa-ui-checkout:web"; do
+            IFS=: read -r iteration label <<< "$spec"
+            first_report="reports/${label}-junit-first.xml"
+            first_execution="reports/${label}-executed-first.json"
+            first_allure="reports/${label}-allure-first"
+            selection="$(select_nodeids "iterations/${iteration}")" || {
+              echo "${iteration} 无法从 traceability 生成精确 nodeid 选择"
+              exit 1
+            }
+            nodeids=()
+            while IFS= read -r nodeid; do
+              [[ -n "$nodeid" ]] && nodeids+=("$nodeid")
+            done <<< "$selection"
+            printf -v nodeid_args ' %q' "${nodeids[@]}"
+            printf -v execution_arg '%q' "$first_execution"
+            printf -v report_arg '%q' "$first_report"
+            printf -v allure_arg '%q' "$first_allure"
+            command_text="ARGUS_EXECUTED_NODEIDS=${execution_arg} TEST_ENV=ci uv run pytest${nodeid_args} -p scripts.pytest_execution_evidence --junitxml=${report_arg} --alluredir=${allure_arg}"
+            if [[ -f "reports/${label}-junit-retry.xml" ]]; then
+              junit="reports/${label}-junit-retry.xml"
+              allure="reports/${label}-allure-retry"
+              retry_args=(--retry-junit "reports/${label}-junit-retry.xml" --retry-executed-nodeids "reports/${label}-executed-retry.json" --retry-alluredir "reports/${label}-allure-retry")
+            elif [[ -f "$first_report" ]]; then
+              junit="$first_report"
+              allure="$first_allure"
+              retry_args=()
+            else
+              echo "${iteration} 未生成 JUnit 证据，拒绝写入不完整汇总"
+              exit 1
+            fi
+            uv run python scripts/self_debug_helper.py record-ci-auto \
+              --iterations iterations \
+              --iteration "iterations/${iteration}" \
+              --junit "$junit" \
+              --first-junit "$first_report" \
+              --first-executed-nodeids "$first_execution" \
+              --alluredir "$allure" \
+              --first-alluredir "$first_allure" \
+              --commit-sha "$(git rev-parse HEAD)" \
+              --command "$command_text" \
+              --environment-file config/env.ci.yaml \
+              --seed-registry shared/testdata/seed-registry.yaml \
+              "${retry_args[@]}"
+          done
+      - name: 保存受限通知分类
+        if: ${{ always() && steps.regression.outputs.classification != '' }}
+        env:
+          ARGUS_CLASSIFICATION: ${{ steps.regression.outputs.classification }}
+        run: |
+          mkdir -p reports/notification
+          printf '%s\n' "$ARGUS_CLASSIFICATION" > reports/notification/classification
+      - if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: run-evidence-${{ github.run_id }}
+          path: |
+            reports/
+            iterations/*/runs/
+          retention-days: 14
+      - if: ${{ always() }}
+        name: 清理靶场
+        run: uv run python scripts/target_app_down.py

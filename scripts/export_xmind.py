@@ -28,8 +28,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
+from lint_test_design import lint_iteration
 
 PROJECT = REPO_ROOT.name
 FIXED_DATE = (1980, 1, 1, 0, 0, 0)
@@ -120,8 +121,11 @@ def render_support_files() -> tuple[str, str]:
 
 
 def write_xmind(destination: Path, content_json: str) -> None:
+    _assert_safe_path(destination, label="XMind destination")
+    if destination.is_symlink() or destination.exists():
+        raise RegistryError(f"XMind destination already exists: {destination}")
     metadata_json, manifest_json = render_support_files()
-    with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(destination, "x", zipfile.ZIP_DEFLATED) as archive:
         for name, data in (
             ("content.json", content_json),
             ("metadata.json", metadata_json),
@@ -137,9 +141,14 @@ def next_version(exports_dir: Path) -> int:
     highest = 0
     if exports_dir.is_dir():
         for existing in exports_dir.glob(f"{PROJECT}_v*_Cases.xmind"):
+            _assert_safe_path(existing, label="existing XMind export")
             match = FILENAME_PATTERN.match(existing.name)
             if match:
-                highest = max(highest, int(match.group(1)))
+                try:
+                    version = int(match.group(1))
+                except ValueError:
+                    continue
+                highest = max(highest, version)
     return highest + 1
 
 
@@ -147,10 +156,26 @@ def load_tree_sources(iteration_dir: Path) -> dict[str, Any]:
     sources: dict[str, Any] = {}
     for name in ("requirements.yaml", "test_points.yaml", "functional-cases.yaml"):
         path = iteration_dir / name
-        if not path.exists():
+        if path.is_symlink() or not path.exists():
             raise RegistryError(f"missing source for export: {path}")
         validate_path(path)
-        sources[name] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        try:
+            sources[name] = load_yaml(path.read_bytes())
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(f"source is not safely parseable: {path}") from exc
+    lint_dependencies = (iteration_dir / "exemptions.yaml",)
+    if all(path.is_file() and not path.is_symlink() for path in lint_dependencies):
+        design_errors = [
+            diagnostic
+            for diagnostic in lint_iteration(iteration_dir, "functional_cases")
+            if diagnostic.severity == "error"
+        ]
+        if design_errors:
+            detail = "; ".join(
+                f"{diagnostic.rule_id} {diagnostic.location}: {diagnostic.message}"
+                for diagnostic in design_errors[:5]
+            )
+            raise RegistryError(f"test-design lint failed before export: {detail}")
     cases_status = sources["functional-cases.yaml"]["status"]
     if cases_status not in CASES_READY:
         raise RegistryError(
@@ -161,36 +186,48 @@ def load_tree_sources(iteration_dir: Path) -> dict[str, Any]:
 
 
 def verify_structure(xmind_path: Path) -> dict[str, Any]:
-    """Re-open the written file and assert the zip→content.json layout plus
-    the iteration→module→R→T→C→step hierarchy. Returns the parsed sheet."""
-    with zipfile.ZipFile(xmind_path) as archive:
-        names = set(archive.namelist())
-        assert {"content.json", "metadata.json", "manifest.json"} <= names
-        sheet = json.loads(archive.read("content.json"))[0]
-    root = sheet["rootTopic"]
+    """重新打开文件并显式校验 ZIP 与 iteration→module→R→T→C→step 层级。"""
+    try:
+        with zipfile.ZipFile(xmind_path) as archive:
+            names = set(archive.namelist())
+            if not {"content.json", "metadata.json", "manifest.json"} <= names:
+                raise RegistryError("XMind 导出缺少必需的 ZIP 成员")
+            sheet = load_json(archive.read("content.json"))[0]
+        root = sheet["rootTopic"]
 
-    def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
-        return node.get("children", {}).get("attached", [])
+        def children_of(node: dict[str, Any]) -> list[dict[str, Any]]:
+            return node.get("children", {}).get("attached", [])
 
-    modules = children_of(root)
-    assert modules, "no module level under the iteration root"
-    for module_node in modules:
-        requirements = children_of(module_node)
-        assert requirements, f"module {module_node['title']} has no requirement level"
-        for requirement_node in requirements:
-            assert re.match(r"^req-R[0-9]{4}$", requirement_node["id"])
-            points = children_of(requirement_node)
-            assert points, f"requirement {requirement_node['id']} has no test point level"
-            for point_node in points:
-                cases = children_of(point_node)
-                assert cases, f"test point {point_node['id']} has no case level"
-                for case_node in cases:
-                    steps = children_of(case_node)
-                    assert steps, f"case {case_node['id']} has no step level"
-    return sheet
+        modules = children_of(root)
+        if not modules:
+            raise RegistryError("XMind 导出缺少 module 层")
+        for module_node in modules:
+            requirements = children_of(module_node)
+            if not requirements:
+                raise RegistryError(f"module {module_node['title']} 缺少 requirement 层")
+            for requirement_node in requirements:
+                if not re.match(r"^req-R[0-9]{4}$", requirement_node["id"]):
+                    raise RegistryError(f"requirement 节点 ID 非法：{requirement_node.get('id')!r}")
+                points = children_of(requirement_node)
+                if not points:
+                    raise RegistryError(f"requirement {requirement_node['id']} 缺少 test point 层")
+                for point_node in points:
+                    cases = children_of(point_node)
+                    if not cases:
+                        raise RegistryError(f"test point {point_node['id']} 缺少 case 层")
+                    for case_node in cases:
+                        steps = children_of(case_node)
+                        if not steps:
+                            raise RegistryError(f"case {case_node['id']} 缺少 step 层")
+        return sheet
+    except (KeyError, IndexError, TypeError, ValueError, zipfile.BadZipFile) as exc:
+        raise RegistryError(f"XMind 导出结构无法解析：{exc}") from exc
 
 
 def export(iteration_dir: Path) -> Path:
+    _assert_safe_path(iteration_dir, label="iteration")
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
+        raise RegistryError(f"iteration must be a safe directory: {iteration_dir}")
     sources = load_tree_sources(iteration_dir)
     sheet = build_tree(
         sources["requirements.yaml"],
@@ -198,6 +235,9 @@ def export(iteration_dir: Path) -> Path:
         sources["functional-cases.yaml"],
     )
     exports_dir = iteration_dir / "exports"
+    _assert_safe_path(exports_dir, label="exports directory")
+    if exports_dir.is_symlink() or (exports_dir.exists() and not exports_dir.is_dir()):
+        raise RegistryError(f"exports directory is not safe: {exports_dir}")
     exports_dir.mkdir(exist_ok=True)
     version = next_version(exports_dir)
     destination = exports_dir / f"{PROJECT}_v{version}_Cases.xmind"
@@ -221,5 +261,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-    print(f"export_xmind: wrote {destination.relative_to(REPO_ROOT).as_posix()} (sha256 {digest})")
+    try:
+        display_path = destination.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        display_path = destination.as_posix()
+    print(f"export_xmind: wrote {display_path} (sha256 {digest})")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

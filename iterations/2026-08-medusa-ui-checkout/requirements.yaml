@@ -1,0 +1,32 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-ui-checkout
+status: accepted
+generated_from:
+  artifact: iterations/2026-08-medusa-ui-checkout/00-raw/requirements-dump.md
+  sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
+requirements:
+  - requirement_id: R0001
+    title: 游客选择种子商品并加入购物车
+    description: 游客在 Medusa 商店选择黑色 S 码 T 恤并加入购物车；商品、库存、地区和币种均来自已锁定的真实种子。
+    priority: 1
+    source: docs/spec/product/ROADMAP.md 9.2
+  - requirement_id: R0002
+    title: 使用 ARGUS10 并验证实时派生总额
+    description: 游客在购物车应用 ARGUS10；页面展示的原价、折扣和总额必须由运行时种子价格与折扣比例推导，不得复制固定金额作为预言机。
+    priority: 1
+    source: docs/spec/product/ROADMAP.md 9.2
+  - requirement_id: R0003
+    title: 完成游客结账并创建订单
+    description: 从已应用折扣的购物车填写纯虚构游客地址，选择标准配送与隔离测试用 Manual Payment，提交订单后断言订单确认页、订单号、商品/配送/支付摘要和归零购物车可见。
+    priority: 1
+    source: iterations/2026-08-medusa-ui-checkout/00-raw/requirements-dump.md
+  - requirement_id: R0004
+    title: 验证桌面与移动关键状态
+    description: 在 Chromium 中验证 1440×900 与 390×844 下商品、折扣、总额、结账入口和订单确认关键状态的可见性、布局与可操作性。
+    priority: 2
+    source: iterations/2026-08-medusa-ui-checkout/00-raw/requirements-dump.md
+ambiguities:
+  - question: 本轮“游客结账成功”应以订单创建成功为边界，还是以进入结账并确认折扣后购物车总额为边界？推荐完成到订单创建成功，以符合 Roadmap 9.2 的完整结账含义。
+    asked_at: "2026-08-28T11:50:18Z"
+    resolved: true
+    resolution: 用户明确要求实现 docs 全部需求；PRD §7 要求 UI iteration 端到端，Roadmap 9.2 明确为 guest checkout w/ discount，因此采用订单创建成功边界。2026-08-28 在锁定 Medusa 靶场已实际到达订单确认页并验证购物车归零。

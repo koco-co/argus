@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import FIXTURES_DIR, SCRIPTS_DIR, _load_script
 
@@ -65,6 +65,8 @@ def test_unknown_plugin_cli_exits_nonzero_with_actionable_message() -> None:
         ("api_source_payload--error.valid.yaml", 1),
         ("requirement_source_payload--error-with-content.invalid.yaml", 1),
         ("api_source_payload--error-with-content.invalid.yaml", 1),
+        ("requirement_source_payload--empty.invalid.yaml", 1),
+        ("api_source_payload--empty.invalid.yaml", 1),
         ("requirement_source_payload--bad-date-time.invalid.yaml", 1),
         # 此样本仅对 API Schema 非法；其 jira 类型仍是合法需求信封。
         ("api_source_payload--wrong-source-type.invalid.yaml", 0),

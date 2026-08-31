@@ -1,5 +1,69 @@
 # Changelog
 
+- 2026-08-31：PR #20（`main` → `release`）的 head `9f9357f760b10796f0cf7b291b7f3d120e24bd6f` 通过 static-checks run `33370230179` 与 Compose-only e2e run `33370230188`，artifact `9749874249` 已保存；随后文档收口提交 `9d5b51e6dee12cf654474a73c36bcfa9e740124f` 的 push static-checks `33370802735`、PR static-checks `33370807527` 与 e2e `33370807544` 也成功，最新 e2e artifact `9750091139` 已保存。trusted-notifications runs `33370867679`、`33370868898`、`33371166997` 均成功执行但记录零渠道；PR #20 仍无非作者 approval，未发生受保护 `release` merge。
+
+- 2026-08-31：完成测试设计与 CI 证据收口：functional/API cases 统一要求 case-level `side_effect`，API response 使用 typed `body_assertions` 与有真实输入/目标绑定的 `derived_oracles`；新增 ADR-015 记录 v1 发布前 clean-break 版本策略。新增 execution manifest 1.1、精确 traceability nodeid collection/outcome 记录、first/retry JUnit/Allure 与 per-iteration `record-ci-auto --iteration`；retry 前强制真实 fresh reset。框架测试 `529 passed`，`make static-gates` 通过。
+
+- 2026-08-31：在提交 `42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f` 上对真实 Medusa Compose 靶场完成 fresh reset 后的精确执行：API `20/20`、UI `8/8`（含 Chromium `[chromium]` 参数化 nodeid）通过；`record-ci-auto --iteration` 已分别写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要。UI 随后完成 `execution_passed → acceptance_pending → accepted`，靶应用已 `down` 并清理数据卷；补充 self-debug 执行示例。该本地证据不替代 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
+
+- 2026-08-31：在已提交代码 `1b822c92dc24487b03104171c0eeb7c2410a38e9` 上重新 fresh reset 真实 Medusa Compose 靶场，API `20/20`、UI `8/8` 精确 traceability nodeid 均通过；补充 run `run-20260831T070952Z-bc7c` / `run-20260831T072318Z-f0f7` 各自保存 manifest 1.1、精确 outcomes、JUnit/Allure 摘要和环境绑定。执行完成后已 down 并删除容器、网络、数据卷和运行时凭据；该证据为已接受 iteration 的 supplemental run，不改写 acceptance aggregate。
+
+- 2026-08-31：提交 `ca851aa0e810121c16e49323b8792748004c5368` 的 GitHub push `static-checks` run `33369318287` 与 Compose-only 手工 `e2e` run `33369360450` 均成功；e2e 以 API 20/20 + UI 8/8、分类 `normal` 完成并上传 artifact `9749578091`，其中包含 CI manifest `run-20260831T074505Z-6ba7` / `run-20260831T074506Z-fca3`。trusted notification run `33369764953` 成功执行但记录成功 0、失败 0（无通知配置/Secret），不构成真实频道送达。
+
+- 2026-08-29：完成不可信 YAML/JSON 严格解析迁移：`argus-core` 的 `load_yaml/load_json` 与 SDK 安全 JSON 解析统一拒绝重复键、非有限数字、YAML alias、过深/过大文档和不支持类型；文件、插件输出及 HTTP 响应的生产读取点同步收口，错误诊断不回显载荷。新增 `make static-gates` 汇总静态、Schema、语义、覆盖和边界门禁；当前框架测试为 497 passed，三份 0.2.0 workspace 包已完成 lock/build 复核。
+
+- 2026-08-29：补齐 `scripts/validate_readme.py --strict`，将 README 标题、UTF-8 编码、本地链接和仓库越界链接纳入可执行校验；新增 `make validate-readme` 并接入 `make lint`/static-checks，框架测试更新为 481 passed。
+
+- 2026-08-29：启动并完成 Argus `0.2.0` clean-break workspace 基础实现。新增 `packages/argus-core`（Pydantic 控制面模型、最新审批规则、workstream 状态机、POSIX 锁内原子 Store、promotion 事实和中文 CLI）、`packages/argus-plugin-sdk`（严格二选一 source envelope、凭据序列化隔离、SSRF/大小/超时边界、显式注册表、GitHub Issues/OpenAPI 参考连接器）和 `adapters/medusa`（Web/API 路由及非秘密配置）。新增静态 Schema、registry、0.2 架构/PRD/数据模型和 ADR-013；四个 workspace 包可独立构建，未实现 Agent/LLM Runtime、Skill 执行或 v1 迁移。新增 16 项核心/SDK/适配器回归后框架测试为 479 passed；未将 mock、fixture、零渠道日志或本地判断冒充真实外部通知、review、protected merge 或 SHA。
+
+- 2026-08-29：修复 Medusa 结算下单后的服务端重定向/流式渲染时序：`CheckoutPage.place_order()` 在点击下单后先等待确认路由，再等待既有精确成功标题；未改动冻结断言、需求或测试点。PR #9 已由 GitHub 真实合并到 `main`（代码 merge SHA `88f2b6abce9dfa5ded57db3191609f891fd3eed4`），其 e2e run `33236374652` 通过并分类 `normal`；合并后 main 手工 run `33236596449` 为 `38 passed in 82.15s`、分类 `normal`，证据已上传且靶应用已清理。随后 PR #10 文档更新真实合并，当前 `main` HEAD 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。
+- 2026-08-29：修复前 main 手工 run `33234802753` 的 C0005 首轮时序失败及唯一重试通过（`flaky-suspect`）继续保留为历史事实；本次以 POM 等待修复后的独立运行证明该失败模式已消除，但无通知 Secret 时仍只记录零渠道，不能冒充真实外部送达。
+- 2026-08-29：PR #11 的 Phase 9 证据逐项复核文档已由 GitHub 真实合并到 `main`，merge SHA 为 `dd5dacf62d92c528afedaab6f021cbbb9a535d45`；此前 PR #10 的文档 merge SHA 为 `aec57829a3fecd57b77d59c1ca73a175346c6215`。文档只记录不可变的 PR 合并事实，不使用会被后续文档 PR 改写的“当前 HEAD”表述。
+- 2026-08-29：`main` 合并后再次执行真实 Compose-only 回归。手工 Actions run `33234802753` 首轮 C0005 在订单确认标题等待处失败，唯一重试 38/38 通过并按工作流规则标记 `flaky-suspect`；随后本地 fresh reset 后独立重放 C0005 三次均通过，完整 Web/API/fixture/靶场套件为 38/38（125.82 秒）。未修改冻结断言或伪装该次 CI 为稳定全绿。
+- 2026-08-29：按用户明确要求将 PR #1 的目标从 `release` 改为 `main` 并真实合并；GitHub 返回 merge SHA `f7fb82a5196aa665f47cdf22928b5bd7c2887f07`，合并后 `main` 的 static-checks run `33234492727` 成功。受保护 `release` 保持原 SHA 与审批门禁，未把 `main` 合并冒充 release 收口。
+- 2026-08-29：提交 `be7f421702fee51890ab2d1b9a0b9c9df5653262` 已推送到 PR #1；该 head 的 GitHub `static-checks`（run `33202248757`）与 Compose-only `e2e`（run `33202248717`）均通过，e2e 日志为 38 passed，通知步骤实际执行但因无 Secret 保持零渠道。PR 仍等待非作者审批，受保护 `release` 合并与真实通知送达继续保持未验收。
+- 2026-08-29：交付前终检在 fresh reset 后执行完整 Web/API/fixture/靶场套件，38 条全部通过（122.71 秒）；`finalize_merge.py` 新增 accepted 终态与当前分支完整覆盖链复核，覆盖失败时拒绝写入 merged。README、验收矩阵与接续简报记录了当时 430 项框架测试和 38 条全栈回归证据；后续回归计数以各自日期条目为准。
+
+- 2026-08-29：针对审计复核重建 API iteration 的真实验收链。新增结构化、限时用户 delegation（basis_sha256、scope、有效期和 delegation_id 语义校验），禁止终态后追加 acceptance 记录，并要求 agent reopen 具备 lifecycle_reopen scope；API 来源信封改为严格 Schema 并补充有效/无效夹具。Medusa 真实负向响应统一按已探测的 400/404 声明，A0018 缺少 provider 改为 400，整个 setup 链副作用改为 creates；fresh reset 后新 run `run-20260828T182611Z-api3` 为 22/22，通过新的 endpoint/status/模型/孤儿闭包门禁。
+
+- 2026-08-29：fresh reset 后重新执行正式 UI checkout，10/10 Chromium 用例通过并归档为 `run-20260828T183412Z-ui03`；此前的 locator/timing 证据保留为历史 attempt，不被新 run 覆盖。
+
+- 2026-08-29：完成正式 Medusa API checkout 迭代的 M4–M9 机器验收。固定 2.19.0 Store API 来源与 live probe，保留 10 个 endpoint 的参数、组件 `$ref` 及真实错误响应；生成 20 个带 `requirement_ids`、可回放变量和副作用声明的 API case、XLSX v4、R→A→nodeid traceability，以及增量 `FullStoreClient`/Pydantic 模型/pytest 用例。fresh reset 后真实 API 回归为 22/22 通过；`validate_iteration`、`check_api_coverage`、模型/marker/layering/orphan 门禁和黄金基线均通过。正式 iteration 的 delegated 审查由唯一批准写入器留痕；真实通知、非作者 PR 批准和受保护合并仍未伪造或宣称完成。
+
+- 2026-08-29：将六个项目 Skill 升级到 1.1.0，并把原 1.0.0 入口保存到各自 `versions/1.0.0.md`；批准契约新增带非空审查说明的 `action: delegated, actor: agent`，仅覆盖当前任务中可审计的仓库产物和本地执行。新增 Medusa 来源 schema registry 绑定，并让 API 模型检查器支持间接继承的 Pydantic 基类；同时拒绝空白 delegated note、允许视觉运行时报告目录；框架回归后续补充治理夹具后为 427 passed。
+
+- 2026-08-28：修复共享 POM 增量生成与 Skill 黄金基线的冲突。`python_ast_compatible` 保持冻结样例中的既有类、函数和方法 AST 不变，同时允许新 iteration 复用同一路由对象并新增 import/方法；旧方法被删除或改写仍会失败，禁止用覆盖 expected 快照掩盖漂移。
+
+- 2026-08-28：补齐 CI 通知 Secrets 的环境变量装配契约。`shared/notify/dispatcher.py` 现在可在不生成携密文件的前提下从 Actions Secrets 映射装配钉钉、飞书、企业微信或邮件渠道；不完整邮件配置会明确失败，空值仍保持零渠道兼容。两条工作流、示例配置与回归测试同步覆盖。
+
+- 2026-08-28：补齐 Roadmap 8.2 的可执行黄金基线基础设施。四个生成 Skill 各保存一份 1.0.0 冻结输入与代表性期望；`check_skill_golden.py` 校验输入 SHA-256、YAML Schema/解析后结构语义和 Python AST 语义，明确允许排版/注释变化而拒绝行为漂移。M13 的候选阈值、具体 proposal 展示与用户批准门禁保持未完成、未伪造。
+- 2026-08-28：真实 CI 发现 `pre-commit --all-files` 不枚举尚未跟踪的新文件，本地曾因此漏过新脚本的格式检查；`make lint` 现直接执行 `ruff format --check .`，并由回归测试固定该入口，避免生成后提交前的同类假绿。
+
+- 修复批准门禁只匹配 `stage/action`、未核对实际产物的问题：`validate_iteration.py` 现在以该阶段最后一条决定为准，并对 requirements/test-points/exemptions 强制校验当前文件 SHA-256；`record_event.py` 在持久化前复用同一门禁，三个唯一写入器还会拒绝 Schema 合法但生命周期链断裂的文件；reopen 的 stale 传播与事件改为一次写入，失败不再留下半写状态。新增批准主体、摘要不匹配、后续拒绝、产物缺失、无批准事件写入、断链写入与 reopen 字节不变回归，永久测试夹具通过唯一批准写入器校正。
+- 正式 UI iteration 首次接入提交钩子时发现永久 `test-fixture-*` 会反向把真实非终态 iteration 误报为兄弟冲突；单迭代规则现对夹具双向豁免，新增“真实 iteration + 永久夹具同批校验”回归。框架全量回归增至 405 项。
+
+## 2026-08-28 — Phase 5 靶场、环境门禁与只读防线落地
+
+- 补齐数据库能力边界：靶场迁移后幂等创建 `argus_readonly`，仅授予全表 SELECT，并用 `default_transaction_read_only` 和实际建表拒绝探针双重验证；宿主机只通过 `127.0.0.1:15432` 访问。`settings.py assemble` 在注入数据库 DSN 时保留机械可识别的只读声明，真实 UI/API 本地配置检查均通过且文件权限为 `0600`。
+- 根据 Actions 原始日志修复两个脚本路径入口：`notify.py` 与 `record_approval.py` 现在能在 `python scripts/<name>.py` 形态导入仓库根包；通知配置缺失时明确记录零渠道而非 traceback。CLI 子进程回归覆盖两种入口，并验证飞书、钉钉、企业微信与 SMTP 的渠道信封和业务错误；真实外部频道送达仍保持未验收。
+- 修复 CI 通知事实源：本轮没有 JUnit 时不再选择历史 iteration 摘要，改发当前 job 状态；鉴于 GitHub runner 实测把 `job.status` 展开为空，工作流改用 `failure()`/`cancelled()` 推导非空状态，CLI 同时拒绝空状态，防止“通知步骤通过但消息状态为空”的假阳性。
+- 为组合 UI/API 执行增加可选 `api_base_url` 与 `ARGUS_API_BASE_URL`，生成 API 夹具不再硬编码 Medusa 后端地址；配置校验、CI 注入和文档示例同步覆盖。
+- 完成 Roadmap 7.4 的 PR 上下文覆盖路由：`--changed-base` 只选择变更 iteration，自动化、共享代码或覆盖工具变化会检查全部历史链，删除 iteration 不得静默跳过；CI 完整拉取历史并传入 base SHA。框架全量回归增至 396 项。
+- 为 Roadmap 7.1 增加只在 `workflow_dispatch` 暴露的对抗验收场景：static-checks 可强制进入失败通知分支，e2e 可稳定持续失败或仅首轮失败；常规 PR/定时运行始终为 normal。本地已证明退出序列 `1` 与 `1→0`，框架全量回归增至 398 项，远端调度证据将在提交后执行。
+
+- 固定并容器化 Medusa 2.19.0 开源靶场，提供 build/up/seed/reset/healthcheck/canary/down 生命周期；Admin API 种子覆盖区域与货币、商品库存、配送、手工支付、客户、促销、publishable key，并以私有运行时文件保存凭据。
+- 两次 reset 的种子状态字节一致；实时金丝雀验证 EUR 10.00、ARGUS10 10% 与 EUR 9.00 的派生关系，故意破坏价格时按预期失败；完整 down 后未残留 Argus 容器、网络或卷，重新全新启动通过。
+- 新增 `settings.py` 的 CLI/TEST_ENV/local 优先级、空 YAML 防护、CI 环境变量注入、`check`/`assemble` 命令，以及 `record_approval(stage=environment)` 的强制前置检查；审批摘要继续只记录脱敏结构。
+- 根 conftest 在 PROD 环境机械剔除非 `read_only` 用例，并以每个 xdist worker 独立 HTTP 会话和命名空间隔离状态；真实 harness 模块连续三轮 `pytest -n 2` 通过，PROD dry collect 显示 4/5 收集、1 项非只读探针被剔除。
+- 新增运行时 `ReadOnlyDBClient`：语句头白名单、多语句阻断、WITH/EXPLAIN 的 DML/ANALYZE 扫描和共享数据库断言。框架全量测试增至 331 项通过，Ruff、Pyright、DB/marker/orphan 静态门禁通过；这些证据不替代后续生成迭代与最终 UI/API E2E 验收。
+- 新增 M9 故障分类器与唯一证据记录器：run 目录不可覆盖、attempt 连续编号、预算计算、diff 引用解析、终态 Schema 校验、恢复检查点强制先验验证组合、patch-scope 调用及 AST import closure 受影响模块选择均已机械测试；升级类证据不能被细分为可修复类。
+- 新增钉钉、飞书、企业微信与 SMTP 通知适配器及统一 dispatcher；每个渠道独立按 1/2/4 秒退避重试，失败只记录不阻断兄弟渠道或测试终态；`notify.py --summary auto` 从 append-only run 证据树解析最新摘要，并支持 `flaky-suspect` 分类。
+- `self_debug_helper.py record-ci` 将 JUnit 绿/红结果写成唯一一条 `scope=full` attempt；报告归档拒绝覆盖既有 run 证据。真实外部渠道送达仍须在 7.2 DoD 单独验收，未用 mock 代替。
+- 新增 SHA 固定、最小权限、并发取消和超时约束的 `regression.yml`：release PR、自动化/迭代变更、手工与每周调度进入 Compose-only E2E；失败只自动复跑一次，重跑转绿标记 `flaky-suspect`；报告与通知使用 `always()`，靶场始终清理。Dependabot 每月更新 Actions/Python 依赖。
+- 新增 `finalize_merge.py`，只允许从 `accepted` 写入带 40 位真实 merge SHA 与正 PR number 的 `merged` 事件，并可仅在 `release` 分支创建 Emoji Conventional Commit；实际合并验收仍留在 7.6/9.2/9.3，未预写虚假 merge 事实。
+- 用本轮真实构建证据初始化 M12 知识：Medusa 容器 PostgreSQL SSL、SSR 内外 URL 分离、Skill 根目录命令路径和种子 oracle 反事实金丝雀；每条均含 tags/date/source，专项测试防止空来源和重复标题。
+- 在 GitHub 创建 `release` 并启用 strict `static-checks`/`e2e`、至少一名人工批准、last-push approval、管理员约束、线性历史及禁止强推/删除；真实直接推送返回 GH006 并被拒绝，证据记录于 `BRANCH_PROTECTION_2026-08-28.md`。
+
 ## 2026-08-28 — 完整交付 Goal 与 Phase 2 运行器实现
 
 - 按用户最新指令重设原生 Goal：持续实现全部剩余 v1 需求，以真实开源靶项目的完整 Web/API 自动化验收作为成功终点，不再沿用旧 Goal 在 2.1 处停止的开发安排。没有补造签收、审批或执行证据。
@@ -16,7 +80,7 @@
 
 ## 2026-08-28 — 按用户要求调整 Goal 的阻塞判断与汇总时机
 
-- 用户明确要求“不阻塞主流程的，在任务结束后通知”，并要求中文注释/备注。保存完整 [Goal 修订提示词](./GOAL_PROMPT.md)，同步 AGENT_BRIEF 和环境自检入口；旧自检结果保留为历史证据。
+- 用户明确要求“不阻塞主流程的，在任务结束后通知”，并要求中文注释/备注。Goal 修订提示词属于会话材料，未作为仓库文件保留；同步 AGENT_BRIEF 和环境自检入口，旧自检结果保留为历史证据。
 - 裁决：最新用户执行指令覆盖旧 Goal 的“任意缺项即停”。结合 ROADMAP 5.5 明确 Phase 7 前执行终态在会话内呈现，webhook 归为后续阶段待办；到 Phase 7 首个真实通知 DoD 时仍须真实配置和验证。未修改 PRD/ROADMAP 的 DoD、任务顺序、人工签收或最终验收标准，未将 mock 当成真实验收。
 - 当前应用 Goal 工具没有目标正文编辑参数，Computer Use 操作 Codex 界面被安全策略禁止；原生 Goal 正文尚未替换。没有手改应用内部存储、重建目标或伪报目标完成；仓库中的修订文本和当前用户补充指令可供后续接续。
 
@@ -24,13 +88,12 @@
 
 - Resumed from ROADMAP + AGENT_BRIEF and the current checkout, not a fresh scaffold. ROADMAP records 0.1–0.8 and Phase 1 complete, with 0.9 deferred to 7.5. Existing commit `c0212c2` contains the 2.1 contract draft; human sign-off remains pending. Corrected the stale “Phase 2 not started” / “local hooks are stubs” descriptions in AGENT_BRIEF without changing any task checkbox or approval/event artifact.
 - Current user instruction requires real dependencies and forbids mock substitution for acceptance. It supersedes the historical notification fallback recorded below; that history remains intact but is not current authorization to lower M11/7.2 or final acceptance. No PRD, DATA_MODEL, architecture, or DoD contract was changed.
-- Live checks confirmed Docker/Compose, uv/Python 3.12, actual project Chromium startup, GitHub repository/admin access, enabled Actions, and the successful Phase 1 static-checks run. A real webhook is unavailable in the checked local/repository configuration, so Step 0 is blocked and implementation stops. Commands, safe outputs, scope limits, and user actions are recorded in [STEP0_CHECK_2026-08-28](./STEP0_CHECK_2026-08-28.md).
+- Live checks confirmed Docker/Compose, uv/Python 3.12, actual project Chromium startup, GitHub repository/admin access, enabled Actions, and the successful Phase 1 static-checks run. A real webhook is unavailable in the checked local/repository configuration, so Step 0 is blocked and implementation stops. Commands, safe outputs, scope limits, and user actions were recorded in a session artifact that is not part of the repository.
 
 ## 2026-08-28 — Phase 1 task 1.1 implemented; spec defect fixed (rfc3339-validator)
 
 - **1.1** All DATA_MODEL schemas authored at their owning placements (requirements/test_points/functional_cases under `.agents/skills/functional-test-design/schemas/`; api_spec/api_cases under `.agents/skills/api-test-design/schemas/`; exemptions/traceability/run_summary under `scripts/schemas/`; two source payloads under `plugins/_interface/schemas/`). Every `generated_from` definition incorporates the documented optional `inputs[]` sibling (DATA_MODEL intro). Fixture pairs committed under `scripts/tests/fixtures/schemas/` covering the DoD list (missing required, bad enum/pattern, unresolved-ambiguity at `accepted`, missing `generated_from` at terminal states, invalid expectation kind, API case without `requirement_ids`, vacuous-conditional regressions, combinator preservation + `$ref` patterns, mutual-exclusion payloads, malformed `date-time`); `test_docs_schemas.py` extracts and parses every fenced JSON Schema block in DATA_MODEL (count pinned at 10).
 - **Spec defect fix (minimal revision, recorded)**: ENVIRONMENT_SETUP's closed core-dependency list could not satisfy DATA_MODEL's mandate "validators run with a FormatChecker enabled so `format: date-time` rejects malformed strings" — jsonschema's date-time checker is a silent no-op without `rfc3339-validator`. Added `rfc3339-validator>=0.1.4` to core deps (additive; proven necessary by the failing malformed-date-time fixture). Update of the dependency list in ENVIRONMENT_SETUP follows below with the next doc touch.
-
 
 ## 2026-08-28 — Phase 0 closed; owner decisions recorded
 
@@ -40,12 +103,12 @@
 - **Push policy**: one push per completed Phase (owner decision); Phase 0 pushed at close.
 - Phase 0 → Phase 1 transition: ROADMAP 0.6 checkbox flipped; Phase 1 (1.1–1.18) starts next per the one-task-at-a-time discipline.
 
-
 ## 2026-08-27 — Phase 0 infrastructure implemented & accepted (docs v1.6 → +code)
 
 First product code in the repo. ROADMAP Phase 0 executed task-by-task per its own discipline; every claimed DoD was mechanically verified in the same session. Scope decision delegated to the session by the owner's instruction ("自己设定一个goal，明确目标边界"): build directly in this repo (the `<target-app>-automation` alternative remains available post-hoc — the ARCHITECTURE §2 tree is relative).
 
 Implemented (Roadmap tasks):
+
 - **0.1** `uv python pin 3.12` → `.python-version`; fresh `uv sync` exits 0 on CPython 3.12.12.
 - **0.2** `pyproject.toml`: core deps exactly per spec; `[dependency-groups]` dev(ruff/pyright/pre-commit) + optional mobile/perf; pytest markers `module/case_id/iteration` with `--strict-markers`; ruff `E,F,I,UP,B,SIM` ll=100; pyright basic. Verified: ruff+pyright clean; `appium-python-client`/`locust` not installed by default; `uv.lock` committed; `pytest --collect-only scripts/tests` green with all plugins loading. `docs/` excluded from ruff so formatter churn never touches the spec baseline (caught live during setup).
 - **0.3** `.pre-commit-config.yaml`: remote ruff hooks (format check-only — no hook mutates tracked files) + four local hooks at their prescribed entries. Interpretation recorded: the local validator scripts exist as explicit **stubs naming their implementing task (1.2/1.3/1.9/1.13)** so hooks are no-op-clean on the skeleton while the file paths stay final; `check-secrets` scoped to `^iterations/.+/` (keeper files excluded). Verified: `pre-commit install` + `run --all-files` green.
@@ -59,12 +122,12 @@ Not done / deferred: **0.9** branch protection — `release` first materializes 
 
 Acceptance evidence: fresh `git clone` → `make setup` → `make new-iteration ID=2026-08-acceptance-check BRANCH=ui` → `make lint` all green with zero manual steps (the Phase 0 exit condition); `uv run pytest scripts/tests` 43 passed; ruff/pyright clean; `pre-commit run --all-files` green. Environment note (host-specific, not a repo defect): the machine's system proxy breaks TLS to github.com/pypi/CDN intermittently — PyPI and the Playwright CDN need direct connections (`NO_PROXY=pypi.org,files.pythonhosted.org` / cleared proxy env for `playwright install`); recorded here because ENVIRONMENT_SETUP's statuses above were verified under that workaround.
 
-
 ## 2026-08-27 — v1.5 baseline review adoption (v1.5 → v1.6)
 
 Input: external review of the v1.5 tree (20 findings: P0×2 / P1×6 / P2×9 / P3×3). Adjudication table presented and confirmed before editing. Disposition: 10 adopted, 6 lightweight/partial, 4 rejected with recorded rationale.
 
 Adopted:
+
 - **Session-recovery protocol** (P0-1): `self_debug_helper.py` checkpoints resumable state (`attempt_number`, `patched_files[]`, `verification_pending`) into `runs/<run_id>/state.json` at attempt boundaries; a fresh session must consume it — pending verification runs before any new patch decision, budget resumes from the checkpoint. Recovery fixture added to Roadmap 5.3.
 - **CI secrets injection rule** (P0-2): secrets travel only via workflow `env:` mapping — never shell args or inline `echo` (the v1.4 skeleton's `echo > env.ci.yaml` replaced with in-process `settings.py assemble --env ci`); `settings.py` gains env-var overrides so most jobs need no secrets file at all.
 - Optimizer candidate registry `knowledge/optimization-candidates.yaml` (M12-maintained feed; 8.2 reads candidates from it, threshold counted by the registry).
@@ -90,6 +153,7 @@ Input: external GPT review of the v1.2 `spec.zip` snapshot (48 findings, P0×14 
 Already satisfied by ≤v1.3 (no change needed): API-led R→A lineage (#3), Hybrid explicitly forbidden in v1 rather than branch-sub-stated (#4), API status/env-enum/tier-count consistency (#14), GitHub Actions as sole CI authority with Jenkins post-v1 (#33), Performance removed from product title (#44), optimizer self-apply guardrails (#35 core concern), Postgres component retention / typed expectations groundwork (#7/#17 partials).
 
 Adopted as documentation-contract changes:
+
 - Schema fixes (DATA_MODEL §5–§10): `out_of_scope` conditional now carries explicit `required` (absent property can no longer vacuously demand a reason); unusable Draft-07 `maxContains` removed, exactly-one-module-tag demoted to semantic enforcement; source-payload envelope gains `schema_version` plus mutually-exclusive success/error variants; run-summary gains terminal-state conditionals (timing/env/scope/attempts required when terminal, escalation required when escalated); `input_sha256` gets hash pattern; schema_fragment preserves `format`; documented dialect rules (defaults are annotations, FormatChecker always on) and `generated_from.inputs[]` extension.
 - Per-run evidence layout: `iterations/<id>/runs/<run_id>/` with append-only summary/allure/logs ([ADR-010](../architecture/adr/adr-010-per-run-evidence-directories.md)); global `reports/` demoted to display scratch; CI archives/uploads run dirs.
 - Merge lifecycle truthfulness: PR requires `accepted`; `merged` is finalized post-merge onto release with real merge SHA/event via `scripts/finalize_merge.py` ([ADR-011](../architecture/adr/adr-011-post-merge-finalization.md)).

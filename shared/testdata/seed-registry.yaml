@@ -1,0 +1,54 @@
+schema_version: "1.0"
+target_app: medusa
+seeds:
+  region_europe:
+    type: region
+    selector: "name=Europe"
+    derivable_fields: [id, currency_code, countries]
+  currency_eur:
+    type: currency
+    value: eur
+    derivable_fields: [code]
+  currency_usd:
+    type: currency
+    value: usd
+    derivable_fields: [code]
+  product_tshirt:
+    type: product
+    selector: "handle=t-shirt"
+    derivable_fields: [id, handle, title, variants]
+  inventory_tshirt_s_black:
+    type: inventory
+    selector: "sku=SHIRT-S-BLACK"
+    derivable_fields: [inventory_item_id, stocked_quantity]
+  shipping_standard:
+    type: shipping_option
+    selector: "name=Standard Shipping"
+    derivable_fields: [id, amount, currency_code]
+  payment_manual:
+    type: payment_provider
+    value: pp_system_default
+    derivable_fields: [id]
+  customer_argus:
+    type: customer
+    value: "argus-customer@example.invalid"
+    derivable_fields: [id, email]
+  discount_argus10:
+    type: promotion_code
+    value: ARGUS10
+    percentage: 10
+    derivable_fields: [id, code, percentage]
+  product_price_eur:
+    type: money
+    value: 10
+    currency_code: eur
+    source: "product_tshirt.variant[sku=SHIRT-S-BLACK].prices[eur]"
+  product_price_usd:
+    type: money
+    value: 15
+    currency_code: usd
+    source: "product_tshirt.variant[sku=SHIRT-S-BLACK].prices[usd]"
+  discounted_total:
+    type: formula
+    expression: "product_price_eur * (100 - discount_argus10.percentage) / 100"
+    derivable_fields: [value, currency_code]

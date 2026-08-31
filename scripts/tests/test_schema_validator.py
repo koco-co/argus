@@ -40,6 +40,15 @@ def test_registered_artifact_exits_zero(validator: Any, tmp_path: Path) -> None:
     assert validator.main([str(requirements)]) == 0
 
 
+def test_iteration_directory_expands_to_registered_yaml_files(
+    validator: Any, tmp_path: Path
+) -> None:
+    """Makefile 传入迭代目录时应递归执行，而不是把目录当成 YAML 打开。"""
+    iteration = tmp_path / "iterations/2026-08-tree"
+    _write(iteration / "requirements.yaml", "requirements--accepted.valid.yaml")
+    assert validator.main([str(iteration)]) == 0
+
+
 def test_unregistered_yaml_exit_non_zero_naming_path(
     validator: Any, tmp_path: Path, capsys: Any
 ) -> None:

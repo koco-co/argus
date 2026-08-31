@@ -20,8 +20,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 
 def _fmt_priority(value: Any) -> str:
@@ -84,14 +84,27 @@ RENDERERS: dict[str, tuple[str, Callable[[dict[str, Any]], str]]] = {
 
 def render_iteration(iteration_dir: Path) -> list[Path]:
     """Render every present, registered source; returns written paths."""
+    _assert_safe_path(iteration_dir, label="iteration")
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
+        raise RegistryError(f"iteration directory is not safe: {iteration_dir}")
     written: list[Path] = []
     for source_name, (output_name, renderer) in RENDERERS.items():
         source = iteration_dir / source_name
+        if source.is_symlink():
+            raise RegistryError(f"source is not a safe regular file: {source}")
         if not source.exists():
             continue
         validate_path(source)  # schema-gated before any derived view is written
-        document = yaml.safe_load(source.read_text(encoding="utf-8"))
+        try:
+            document = load_yaml(source.read_bytes())
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(f"source is not safely parseable: {source}") from exc
         output = iteration_dir / output_name
+        _assert_safe_path(output, label="rendered output")
+        if output.is_symlink() or (output.exists() and not output.is_file()):
+            raise RegistryError(f"rendered output is not a safe regular file: {output}")
+        # The iteration directory and fixed output name are checked above.
+        # pi-lens-ignore: python-path-traversal
         output.write_text(renderer(document), encoding="utf-8")
         written.append(output)
     return written
@@ -108,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         written = render_iteration(iteration_dir)
-    except RegistryError as exc:
+    except (OSError, UnicodeError, ValueError, RegistryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if not written:

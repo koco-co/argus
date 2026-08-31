@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import FIXTURES_DIR as FIXTURE_DIR
 from conftest import _load_script
@@ -85,6 +85,7 @@ def _cases(root: Path, iteration_id: str, spec: list[tuple[str, str, tuple[str, 
             f"  - case_id: {cid}",
             f"    title: Case {cid}",
             "    priority: 1",
+            "    side_effect: none",
             "    precondition: none",
             "    steps:",
             "      - action: Do it.",
@@ -115,10 +116,16 @@ def _api_cases(root: Path, iteration_id: str, mapping: dict[str, tuple[str, ...]
             "    method: GET",
             f"    title: API case {aid}",
             "    case_type: happy_path",
+            "    side_effect: none",
             "    module: things",
             "    request: {}",
             "    expected_response:",
             "      status_code: 200",
+            "      body_assertions:",
+            "        - path: $.value",
+            "          operator: type",
+            "          value_type: number",
+            "          expected: number",
         ]
     _write(root / "api/cases.yaml", "\n".join(lines) + "\n")
 
@@ -190,6 +197,63 @@ def ui_iteration(tmp_path: Path) -> Path:
 def test_ui_fully_covered_passes(coverage: Any, ui_iteration: Path) -> None:
     assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 0
     assert coverage.main([str(ui_iteration), "--tier", "t-c"]) == 0
+
+
+def test_duplicate_test_point_ids_are_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    path = ui_iteration / "test_points.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("test_point_id: T0002", "test_point_id: T0001"),
+        encoding="utf-8",
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 1
+    assert "duplicate test point id: T0001" in capsys.readouterr().out
+
+
+def test_duplicate_functional_case_ids_are_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    _cases(
+        ui_iteration,
+        "2026-08-cov",
+        [("C0001", "checkout", ("T0001",)), ("C0001", "orders", ("T0002",))],
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "t-c"]) == 1
+    assert "duplicate functional case id: C0001" in capsys.readouterr().out
+
+
+def test_duplicate_api_case_ids_are_reported(coverage: Any, tmp_path: Path, capsys: Any) -> None:
+    root = tmp_path / "iterations" / "2026-08-cov"
+    _requirements(root, "2026-08-cov", ("R0001", "R0002"))
+    _api_cases(root, "2026-08-cov", {"A0001": ("R0001",), "A0002": ("R0002",)})
+    path = root / "api/cases.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("api_case_id: A0002", "api_case_id: A0001"),
+        encoding="utf-8",
+    )
+    assert coverage.main([str(root), "--tier", "r-a"]) == 1
+    assert "duplicate API case id: A0001" in capsys.readouterr().out
+
+
+def test_exemption_for_unknown_requirement_is_reported(
+    coverage: Any, ui_iteration: Path, capsys: Any
+) -> None:
+    _write(
+        ui_iteration / "exemptions.yaml",
+        'schema_version: "1.0"\n'
+        "iteration_id: 2026-08-cov\n"
+        "status: accepted\n"
+        "generated_from:\n"
+        "  artifact: iterations/2026-08-cov/requirements.yaml\n"
+        f"  sha256: {SHA}\n"
+        "exemptions:\n"
+        "  - requirement_id: R9999\n"
+        "    kind: not_testable\n"
+        "    reason: No such requirement.\n",
+    )
+    assert coverage.main([str(ui_iteration), "--tier", "r-t"]) == 1
+    assert "exemption cites unknown requirement R9999" in capsys.readouterr().out
 
 
 def test_ui_requirement_gap_fails_with_branch_message(
@@ -358,3 +422,67 @@ def test_from_iteration_merged_demands_complete_chain(
     (ui_iteration / "iteration.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
     code, _, _ = _run(coverage, tmp_path, capsys, "--tier", "from-iteration")
     assert code == 1  # c-auto unmet (no traceability) - complete chain demanded
+
+
+def test_changed_scope_selects_only_touched_iterations(coverage: Any, tmp_path: Path) -> None:
+    """只改 iteration 工件时，不应让历史 iteration 阻断当前草稿。"""
+    iterations = tmp_path / "iterations"
+    for iteration_id in ("order-ui", "order-api"):
+        (iterations / iteration_id).mkdir(parents=True)
+        (iterations / iteration_id / "iteration.yaml").write_text("state: created\n")
+
+    selected = coverage.select_changed_iteration_dirs(
+        iterations,
+        ["iterations/order-api/api/cases.yaml", "docs/spec/product/PRD.md"],
+    )
+    assert selected == [iterations / "order-api"]
+
+
+@pytest.mark.parametrize(
+    "changed_path",
+    [
+        "automation/api/tests/orders/test_order.py",
+        "shared/config/settings.py",
+        "scripts/check_coverage.py",
+    ],
+)
+def test_changed_scope_checks_all_iterations_for_shared_impact(
+    coverage: Any, tmp_path: Path, changed_path: str
+) -> None:
+    """自动化或共享门禁变化可能破坏任一历史链，必须检查全部 iteration。"""
+    iterations = tmp_path / "iterations"
+    expected = []
+    for iteration_id in ("order-ui", "order-api"):
+        path = iterations / iteration_id
+        path.mkdir(parents=True)
+        (path / "iteration.yaml").write_text("state: created\n")
+        expected.append(path)
+
+    assert coverage.select_changed_iteration_dirs(iterations, [changed_path]) == sorted(expected)
+
+
+def test_changed_scope_ignores_unrelated_paths(coverage: Any, tmp_path: Path) -> None:
+    """纯文档变化不需要重复执行 iteration 覆盖门禁。"""
+    iterations = tmp_path / "iterations"
+    iterations.mkdir()
+    assert coverage.select_changed_iteration_dirs(iterations, ["README.md"]) == []
+
+
+def test_changed_scope_rejects_deleted_iteration(coverage: Any, tmp_path: Path) -> None:
+    """删除 iteration 不能被范围筛选静默跳过。"""
+    iterations = tmp_path / "iterations"
+    iterations.mkdir()
+    with pytest.raises(coverage.CoverageError, match="已不存在"):
+        coverage.select_changed_iteration_dirs(
+            iterations,
+            ["iterations/deleted-one/iteration.yaml"],
+        )
+
+
+def test_static_ci_uses_pull_request_changed_scope() -> None:
+    """PR 覆盖门禁必须取得完整基线，并把 base SHA 交给范围选择器。"""
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "fetch-depth: 0" in workflow
+    assert "ARGUS_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert '--changed-base "$ARGUS_BASE_SHA"' in workflow

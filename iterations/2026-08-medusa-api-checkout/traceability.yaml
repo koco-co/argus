@@ -1,0 +1,23 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-api-checkout
+links:
+  - {requirement_id: R0001, api_case_id: A0001, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0001_list_products.py::test_list_products_contains_black_small_variant]}
+  - {requirement_id: R0001, api_case_id: A0002, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0002_reject_invalid_region.py::test_list_products_rejects_invalid_region]}
+  - {requirement_id: R0001, api_case_id: A0003, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0003_create_cart.py::test_create_cart_uses_seeded_region]}
+  - {requirement_id: R0001, api_case_id: A0004, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0004_reject_invalid_cart_region.py::test_create_cart_rejects_unknown_region]}
+  - {requirement_id: R0001, api_case_id: A0005, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0005_add_line_item.py::test_add_line_item_uses_runtime_variant]}
+  - {requirement_id: R0001, api_case_id: A0006, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0006_reject_missing_variant.py::test_add_line_item_rejects_missing_variant]}
+  - {requirement_id: R0002, api_case_id: A0007, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0007_apply_promotion.py::test_apply_argus10_calculates_discount_from_seed]}
+  - {requirement_id: R0004, api_case_id: A0008, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0008_reject_invalid_promotion.py::test_apply_invalid_promotion_returns_error]}
+  - {requirement_id: R0003, api_case_id: A0009, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0009_update_guest_cart.py::test_update_cart_persists_guest_contact_and_addresses]}
+  - {requirement_id: R0003, api_case_id: A0010, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0010_reject_invalid_email.py::test_update_cart_rejects_invalid_email]}
+  - {requirement_id: R0003, api_case_id: A0011, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0011_list_shipping_options.py::test_list_shipping_options_contains_seeded_standard_option]}
+  - {requirement_id: R0003, api_case_id: A0012, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0012_reject_missing_shipping_cart.py::test_list_shipping_options_rejects_missing_cart]}
+  - {requirement_id: R0003, api_case_id: A0013, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0013_add_standard_shipping.py::test_add_standard_shipping_updates_cart]}
+  - {requirement_id: R0003, api_case_id: A0014, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0014_reject_invalid_shipping.py::test_add_shipping_method_rejects_unknown_option]}
+  - {requirement_id: R0003, api_case_id: A0015, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0015_create_payment_collection.py::test_create_payment_collection_matches_cart_total]}
+  - {requirement_id: R0003, api_case_id: A0016, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0016_reject_missing_payment_cart.py::test_create_payment_collection_rejects_missing_cart]}
+  - {requirement_id: R0003, api_case_id: A0017, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0017_initialize_manual_payment.py::test_initialize_manual_payment_session]}
+  - {requirement_id: R0003, api_case_id: A0018, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0018_reject_missing_provider.py::test_initialize_payment_session_rejects_missing_provider]}
+  - {requirement_id: R0003, api_case_id: A0019, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0019_complete_order.py::test_complete_cart_creates_authorized_order]}
+  - {requirement_id: R0003, api_case_id: A0020, automation_test_ids: [automation/api/tests/checkout/test_2026-08-medusa-api-checkout_a0020_reject_missing_order_cart.py::test_complete_cart_rejects_unknown_cart]}

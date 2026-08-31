@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -96,3 +98,17 @@ def test_missing_test_points_source_refused(exporter: Any, iteration_dir: Path) 
     (iteration_dir / "test_points.yaml").unlink()
     with pytest.raises(Exception, match="missing source"):
         exporter.export(iteration_dir)
+
+
+def test_cli_entrypoint_writes_export(iteration_dir: Path) -> None:
+    """Makefile 调用脚本时必须真正执行 main，而不是静默空跑。"""
+    result = subprocess.run(
+        [sys.executable, "scripts/export_xmind.py", str(iteration_dir)],
+        cwd=Path(__file__).resolve().parents[2],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "export_xmind: wrote" in result.stdout
+    assert list((iteration_dir / "exports").glob("*.xmind"))

@@ -1,0 +1,47 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-ui-checkout
+status: accepted
+generated_from:
+  artifact: iterations/2026-08-medusa-ui-checkout/requirements.yaml
+  sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+test_points:
+  - test_point_id: T0001
+    requirement_ids: [R0001]
+    description: 游客从真实种子商品页选择黑色 S 码 T 恤并加入购物车后，购物车仅出现该变体且初始数量为 1。
+    type: happy
+    priority: 1
+  - test_point_id: T0002
+    requirement_ids: [R0001]
+    description: 在数量下界场景中，单次加入黑色 S 码不得产生重复购物车行、错误变体或大于 1 的初始数量。
+    type: boundary
+    priority: 1
+  - test_point_id: T0003
+    requirement_ids: [R0002]
+    description: 输入有效折扣码 ARGUS10 后，折扣与总额按照运行时种子价格和折扣比例实时派生，且总额关系一致。
+    type: happy
+    priority: 1
+  - test_point_id: T0004
+    requirement_ids: [R0002]
+    description: 输入无效折扣码时页面明确拒绝，购物车折扣和总额保持应用前数值，不得误用 ARGUS10 的优惠。
+    type: negative
+    priority: 1
+  - test_point_id: T0005
+    requirement_ids: [R0003]
+    description: 游客使用纯虚构地址、标准配送和隔离测试用 Manual Payment 提交订单后，订单确认页展示订单号、商品、配送、支付摘要且购物车归零。
+    type: happy
+    priority: 1
+  - test_point_id: T0006
+    requirement_ids: [R0003]
+    description: 游客缺少必填地址字段时不能进入可提交订单的终态，不得创建订单或展示成功确认页。
+    type: negative
+    priority: 1
+  - test_point_id: T0007
+    requirement_ids: [R0004]
+    description: 在 1440×900 Chromium 视口中，商品、折扣、总额、结账入口和订单确认关键状态均可见、布局无重叠且可操作。
+    type: happy
+    priority: 2
+  - test_point_id: T0008
+    requirement_ids: [R0004]
+    description: 在 390×844 Chromium 边界视口中，关键状态可通过合理滚动访问，无横向溢出、遮挡或不可点击控件。
+    type: boundary
+    priority: 2

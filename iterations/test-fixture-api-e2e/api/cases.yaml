@@ -1,0 +1,55 @@
+schema_version: "1.0"
+iteration_id: test-fixture-api-e2e
+status: cases_valid
+generated_from:
+  artifact: iterations/test-fixture-api-e2e/api/spec.normalized.yaml
+  sha256: 229f3bb64c3ab1fdb252f77c4621b46985ca0805baec8826270a44f1c45c8b7b
+cases:
+  - api_case_id: A0001
+    requirement_ids: [R0001]
+    operation_id: applyCartPromotions
+    endpoint: /store/carts/{id}/promotions
+    method: POST
+    title: 有效促销码返回派生总额
+    case_type: happy_path
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: { id: "${cart_id}" }
+      body: { promo_codes: [ARGUS10] }
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 200
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.total"
+          operator: type
+          value_type: number
+          expected: number
+  - api_case_id: A0002
+    requirement_ids: [R0001]
+    operation_id: applyCartPromotions
+    endpoint: /store/carts/{id}/promotions
+    method: POST
+    title: 缺少 promo_codes 返回 400
+    case_type: negative
+    side_effect: creates
+    module: checkout
+    request:
+      path_params: { id: "${cart_id}" }
+      body: { code: ARGUS10 }
+      variables:
+        - name: cart_id
+          source: prev_response
+          expression: $.cart.id
+    expected_response:
+      status_code: 400
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.message"
+          operator: type
+          value_type: string
+          expected: string

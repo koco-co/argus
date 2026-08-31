@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://argus.dev/schemas/0.2/source-envelope.schema.json",
+  "title": "Argus 0.2 SourceEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_type", "fetched_at"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "source_type": {"type": "string", "minLength": 1, "maxLength": 100},
+    "fetched_at": {"type": "string", "format": "date-time"},
+    "source_ref": {"type": ["string", "null"]},
+    "content": {},
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 100},
+        "message": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "required": ["content"],
+      "not": {"required": ["error"]}
+    },
+    {
+      "required": ["error"],
+      "not": {"required": ["content"]}
+    }
+  ]
+}

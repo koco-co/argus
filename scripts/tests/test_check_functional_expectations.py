@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
@@ -28,6 +28,7 @@ def _case(case_id: str, module_tags: list[str], steps: list[dict]) -> dict:
         "case_id": case_id,
         "title": f"Case {case_id}",
         "priority": 1,
+        "side_effect": "none",
         "precondition": "none",
         "steps": steps,
         "tags": module_tags,
@@ -122,7 +123,8 @@ def test_registry_absent_is_advisory_only(checker: Any, tmp_path: Path, capsys: 
             ),
         ],
     )
-    assert checker.main([str(root)]) == 0
+    missing_registry = tmp_path / "missing-seed-registry.yaml"
+    assert checker.main([str(root), "--registry", str(missing_registry)]) == 0
     captured = capsys.readouterr()
     assert "seed registry absent" in captured.err
 
@@ -140,7 +142,18 @@ def test_enforce_seeds_makes_missing_registry_hard(checker: Any, tmp_path: Path)
             ),
         ],
     )
-    assert checker.main([str(root), "--enforce-seeds"]) == 1
+    missing_registry = tmp_path / "missing-seed-registry.yaml"
+    assert (
+        checker.main(
+            [
+                str(root),
+                "--enforce-seeds",
+                "--registry",
+                str(missing_registry),
+            ]
+        )
+        == 1
+    )
 
 
 def test_literal_oracle_currency_fails(checker: Any, tmp_path: Path) -> None:

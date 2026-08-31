@@ -30,15 +30,17 @@ a recording plugin) - real collection, no shell, no string commands.
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 import re
+import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 _TIERS = ("r-t", "t-c", "c-auto", "r-a", "a-auto")
 _NODEID = re.compile(r"^automation/.+::[^:]+$")
@@ -57,37 +59,79 @@ class Report:
 
 
 def _load(path: Path) -> Any:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    _assert_safe_path(path, label="artifact", require_file=True)
+    return load_yaml(path.read_bytes())
 
 
 def _load_required(iteration_dir: Path, name: str, report: Report) -> Any:
     path = iteration_dir / name
+    if path.is_symlink():
+        report.fail(f"{path}: 必须是安全的普通文件")
+        return None
     if not path.exists():
         return None
     try:
         validate_path(path)
+        return _load(path)
     except RegistryError as exc:
         report.fail(str(exc))
-        return None
-    return _load(path)
+    except (OSError, UnicodeError, ValueError):
+        report.fail(f"{path}: 不是安全可解析的 YAML 文档")
+    return None
 
 
 # ---------------------------------------------------------------- exemptions
 
 
 def load_exemptions(iteration_dir: Path) -> dict[str, str]:
-    """requirement_id -> kind, for ACCEPTED exemptions with non-empty reasons."""
+    """返回已接受且带理由的 ``requirement_id -> kind`` 映射。"""
     path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     if not path.exists():
         return {}
+    if not path.is_file():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     document = _load(path)
-    if document.get("status") != "accepted":
+    if not isinstance(document, dict) or document.get("status") != "accepted":
         return {}  # draft/review exemptions are not yet honored
     honored: dict[str, str] = {}
     for entry in document.get("exemptions", []):
-        if entry.get("reason", "").strip():
+        if (
+            isinstance(entry, dict)
+            and isinstance(entry.get("requirement_id"), str)
+            and isinstance(entry.get("kind"), str)
+            and isinstance(entry.get("reason"), str)
+            and entry["reason"].strip()
+        ):
             honored[entry["requirement_id"]] = entry["kind"]
     return honored
+
+
+def load_exemption_document(iteration_dir: Path, report: Report) -> dict[str, Any] | None:
+    """读取豁免，供完整性检查同时检查未接受的条目。"""
+    path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        report.fail("exemptions.yaml 必须是安全的普通文件")
+        return None
+    if not path.exists():
+        return None
+    if not path.is_file():
+        report.fail("exemptions.yaml 必须是安全的普通文件")
+        return None
+    try:
+        document = _load(path)
+    except (OSError, UnicodeError, ValueError, RegistryError):
+        report.fail("无法读取安全的 exemptions.yaml")
+        return None
+    if not isinstance(document, dict):
+        report.fail("exemptions.yaml 顶层必须是映射")
+        return None
+    entries = document.get("exemptions", [])
+    if not isinstance(entries, list):
+        report.fail("exemptions.yaml 的 exemptions 必须是列表")
+        document["exemptions"] = []
+    return document
 
 
 # ------------------------------------------------------- referential integrity
@@ -106,18 +150,19 @@ def check_referential_integrity(
     api_cases: dict | None,
     traceability: dict | None,
     report: Report,
+    exemptions: dict | None = None,
 ) -> None:
     requirement_ids: set[str] = set()
     if requirements is not None:
-        requirement_ids = {r["requirement_id"] for r in requirements["requirements"]}
-        report.fail(
-            *_duplicates([r["requirement_id"] for r in requirements["requirements"]], "requirement")
-        )
+        requirement_values = [r["requirement_id"] for r in requirements["requirements"]]
+        requirement_ids = set(requirement_values)
+        report.fail(*_duplicates(requirement_values, "requirement"))
 
     point_ids: set[str] = set()
     if test_points is not None:
-        point_ids = {p["test_point_id"] for p in test_points["test_points"]}
-        report.fail(*_duplicates(sorted(point_ids), "test point"))
+        point_values = [p["test_point_id"] for p in test_points["test_points"]]
+        point_ids = set(point_values)
+        report.fail(*_duplicates(point_values, "test point"))
         for point in test_points["test_points"]:
             for dangling in set(point["requirement_ids"]) - requirement_ids:
                 report.fail(
@@ -126,16 +171,29 @@ def check_referential_integrity(
 
     case_ids: set[str] = set()
     if cases is not None:
-        case_ids = {c["case_id"] for c in cases["cases"]}
-        report.fail(*_duplicates(sorted(case_ids), "functional case"))
+        case_values = [c["case_id"] for c in cases["cases"]]
+        case_ids = set(case_values)
+        report.fail(*_duplicates(case_values, "functional case"))
         for case in cases["cases"]:
             for dangling in set(case["test_point_ids"]) - point_ids:
                 report.fail(f"case {case['case_id']} cites unknown test point {dangling}")
 
     api_ids: set[str] = set()
     if api_cases is not None:
-        api_ids = {c["api_case_id"] for c in api_cases["cases"]}
-        report.fail(*_duplicates(sorted(api_ids), "API case"))
+        api_values = [c["api_case_id"] for c in api_cases["cases"]]
+        api_ids = set(api_values)
+        report.fail(*_duplicates(api_values, "API case"))
+
+    if exemptions is not None:
+        exemption_ids = [
+            entry["requirement_id"]
+            for entry in exemptions.get("exemptions", [])
+            if isinstance(entry, dict) and isinstance(entry.get("requirement_id"), str)
+        ]
+        report.fail(*_duplicates(exemption_ids, "exemption requirement"))
+        for exemption_id in exemption_ids:
+            if exemption_id not in requirement_ids:
+                report.fail(f"exemption cites unknown requirement {exemption_id}")
 
     if traceability is not None:
         rows = traceability["links"]
@@ -172,10 +230,16 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     """Real pytest collection (``pytest.main --collect-only``) over the
     automation tree, recorded through ``pytest_collection_finish``."""
     root = Path(automation_dir)
+    try:
+        _assert_safe_path(root, label="automation directory")
+    except RegistryError as exc:
+        raise CoverageError(str(exc)) from exc
+    if root.is_symlink():
+        raise CoverageError(f"automation directory must not be a symlink: {root}")
     if not root.is_dir():
         return frozenset()
 
-    import pytest
+    pytest = importlib.import_module("pytest")
 
     class _Recorder:
         nodeids: list[str] = []
@@ -196,7 +260,7 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
     os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     os.chdir(root.parent)
     try:
-        pytest.main(
+        collection_status = pytest.main(
             [
                 "--collect-only",
                 "-q",
@@ -206,6 +270,10 @@ def collected_nodeids(automation_dir: str) -> frozenset[str]:
             ],
             plugins=[recorder],
         )
+        if collection_status != 0:
+            raise CoverageError(
+                f"pytest collection failed for {root_absolute} (exit={collection_status})"
+            )
     finally:
         os.chdir(previous_cwd)
         sys.path[:] = saved_path
@@ -421,6 +489,83 @@ def tiers_for_state(branches: dict, state: str) -> list[str]:
     return [tier for tier in complete if position >= order.index(unlocks[tier])]
 
 
+# ---------------------------------------------------------- PR 变更范围选择
+
+
+def _all_iteration_dirs(iterations_dir: Path) -> list[Path]:
+    selected: list[Path] = []
+    for child in sorted(iterations_dir.iterdir()):
+        if child.is_symlink():
+            raise CoverageError(f"iteration directory must not be a symlink: {child}")
+        if not child.is_dir():
+            continue
+        iteration_yaml = child / "iteration.yaml"
+        if iteration_yaml.is_symlink():
+            raise CoverageError(f"iteration.yaml must not be a symlink: {iteration_yaml}")
+        if iteration_yaml.is_file():
+            selected.append(child)
+    return selected
+
+
+def select_changed_iteration_dirs(iterations_dir: Path, changed_paths: list[str]) -> list[Path]:
+    """把 PR 变更映射到必须执行覆盖门禁的 iteration。
+
+    iteration 自身变化只检查对应目录；自动化、共享代码或覆盖门禁变化可能
+    破坏任何既有 nodeid/链路，因此保守检查全部 iteration。
+    """
+    shared_impacts = (
+        "automation/",
+        "shared/",
+        "scripts/check_coverage.py",
+        "scripts/check_api_coverage.py",
+        "scripts/check_orphan_tests.py",
+    )
+    if any(path.startswith(shared_impacts) for path in changed_paths):
+        return _all_iteration_dirs(iterations_dir)
+
+    iteration_ids = {
+        parts[1]
+        for path in changed_paths
+        if (parts := Path(path).parts) and len(parts) >= 3 and parts[0] == "iterations"
+    }
+    selected: list[Path] = []
+    for iteration_id in sorted(iteration_ids):
+        candidate = iterations_dir / iteration_id
+        iteration_yaml = candidate / "iteration.yaml"
+        if (
+            candidate.is_symlink()
+            or not candidate.is_dir()
+            or iteration_yaml.is_symlink()
+            or not iteration_yaml.is_file()
+        ):
+            raise CoverageError(f"变更的 iteration 已不存在或不是安全目录：{iteration_id}")
+        selected.append(candidate)
+    return selected
+
+
+def changed_paths_since(base_ref: str, repo_root: Path = REPO_ROOT) -> list[str]:
+    """读取 base 到当前 HEAD 的文件变化；Git 错误必须显式阻断。"""
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{base_ref}^{{commit}}"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if verify.returncode != 0:
+        raise CoverageError(f"无法解析覆盖比较基线 {base_ref}：{verify.stderr.strip()}")
+    diff = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_ref}...HEAD", "--"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff.returncode != 0:
+        raise CoverageError(f"无法读取 PR 变更范围：{diff.stderr.strip()}")
+    return [line for line in diff.stdout.splitlines() if line]
+
+
 # ------------------------------------------------------------------------ CLI
 
 
@@ -444,20 +589,45 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO_ROOT / "automation",
         help="automation tree for nodeid collection (tests override)",
     )
+    parser.add_argument(
+        "--changed-base",
+        help="只检查相对该 Git 基线受影响的 iteration；自动化/共享门禁变化检查全部",
+    )
     args = parser.parse_args(argv)
 
+    if args.changed_base and args.iteration is not None:
+        parser.error("--changed-base 不能与显式 iteration 路径同时使用")
     if args.iteration is None:
         args.iteration = REPO_ROOT / "iterations"
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
-    if not iteration_dir.is_dir():
+    try:
+        _assert_safe_path(iteration_dir, label="iteration directory")
+    except RegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if iteration_dir.is_symlink() or not iteration_dir.is_dir():
         print(f"error: iteration directory {iteration_dir} not found", file=sys.stderr)
         return 1
 
-    # Without an explicit iteration, evaluate every iteration directory
-    # (the CI shape in ARCHITECTURE §8 calls the checker without an id).
-    iteration_dirs = [
-        child for child in sorted(iteration_dir.iterdir()) if (child / "iteration.yaml").is_file()
-    ] or [iteration_dir]
+    if args.changed_base:
+        try:
+            iteration_dirs = select_changed_iteration_dirs(
+                iteration_dir,
+                changed_paths_since(args.changed_base),
+            )
+        except CoverageError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if not iteration_dirs:
+            print("check_coverage: 当前变更不影响 iteration 覆盖链")
+            return 0
+    else:
+        # 无显式 iteration 时评估全部；release push/定时任务使用此路径。
+        try:
+            iteration_dirs = _all_iteration_dirs(iteration_dir) or [iteration_dir]
+        except (OSError, CoverageError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
 
     overall = 0
     for single_dir in iteration_dirs:
@@ -471,23 +641,50 @@ def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> in
     iteration_yaml = iteration_dir / "iteration.yaml"
     branches: dict = {"ui": True, "api": False}
     state = "created"
-    if iteration_yaml.exists():
+    if iteration_yaml.is_symlink() or iteration_yaml.exists():
+        validated = True
         try:
             validate_path(iteration_yaml)
         except RegistryError as exc:
             report.fail(str(exc))
-        document = _load(iteration_yaml) or {}
-        branches = document.get("branches", branches)
-        state = document.get("state", state)
+            validated = False
+        document: Any = {}
+        if validated:
+            try:
+                document = _load(iteration_yaml) or {}
+            except (OSError, UnicodeError, ValueError, RegistryError):
+                report.fail(f"{iteration_yaml}: 不是安全可解析的 YAML 文档")
+        if isinstance(document, dict):
+            branches = document.get("branches", branches)
+            state = document.get("state", state)
 
     requirements = _load_required(iteration_dir, "requirements.yaml", report)
     test_points = _load_required(iteration_dir, "test_points.yaml", report)
     cases = _load_required(iteration_dir, "functional-cases.yaml", report)
     api_cases = _load_required(iteration_dir, "api/cases.yaml", report)
     traceability = _load_required(iteration_dir, "traceability.yaml", report)
-    exemptions = load_exemptions(iteration_dir)
+    exemption_document = load_exemption_document(iteration_dir, report)
+    exemptions: dict[str, str] = {}
+    if exemption_document is not None and exemption_document.get("status") == "accepted":
+        for entry in exemption_document.get("exemptions", []):
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("requirement_id"), str)
+                and isinstance(entry.get("kind"), str)
+                and isinstance(entry.get("reason"), str)
+                and entry["reason"].strip()
+            ):
+                exemptions[entry["requirement_id"]] = entry["kind"]
 
-    check_referential_integrity(requirements, test_points, cases, api_cases, traceability, report)
+    check_referential_integrity(
+        requirements,
+        test_points,
+        cases,
+        api_cases,
+        traceability,
+        report,
+        exemption_document,
+    )
 
     if tier_arg == "from-iteration":
         tiers = tiers_for_state(branches, state)
@@ -496,7 +693,11 @@ def evaluate_one(iteration_dir: Path, tier_arg: str, automation_dir: Path) -> in
     else:
         tiers = [tier_arg]
 
-    collected = collected_nodeids(str(automation_dir))
+    try:
+        collected = collected_nodeids(str(automation_dir))
+    except CoverageError as exc:
+        report.fail(f"automation collection unavailable: {exc}")
+        collected = frozenset()
     for tier in tiers:
         try:
             check_tier(

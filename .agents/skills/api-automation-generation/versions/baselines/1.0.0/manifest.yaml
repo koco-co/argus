@@ -1,0 +1,19 @@
+schema_version: "1.0"
+skill_name: api-automation-generation
+skill_version: "1.0.0"
+sample_id: medusa-api-promotions
+inputs:
+  - path: input/iterations/test-fixture-api-e2e/api/spec.normalized.yaml
+    sha256: 229f3bb64c3ab1fdb252f77c4621b46985ca0805baec8826270a44f1c45c8b7b
+  - path: input/iterations/test-fixture-api-e2e/api/cases.yaml
+    sha256: 567a6f4dc50f380d808fb7f2901425c8bbfe20dd9ba54695870defd3d85e6473
+artifacts:
+  - path: automation/api/models/checkout/store.py
+    comparison: python_ast_compatible
+  - path: automation/api/clients/checkout/store_client.py
+    comparison: python_ast_compatible
+  - path: automation/api/tests/checkout/test_test-fixture-api-e2e_a0001_apply_discount.py
+    comparison: python_ast
+  - path: iterations/test-fixture-api-e2e/traceability.yaml
+    comparison: yaml
+    schema: scripts/schemas/traceability.schema.json

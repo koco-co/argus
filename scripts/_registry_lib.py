@@ -15,13 +15,12 @@ rely on that fallback.
 from __future__ import annotations
 
 import fnmatch
-import json
 import os
 from pathlib import Path
 from typing import Any
 
-import yaml
-from jsonschema import Draft7Validator, FormatChecker
+from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
+from jsonschema import Draft7Validator, FormatChecker  # pyright: ignore[reportMissingModuleSource]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = REPO_ROOT / "scripts" / "schema_registry.yaml"
@@ -31,19 +30,69 @@ class RegistryError(Exception):
     """User-facing registry or validation failure."""
 
 
+def _assert_safe_path(path: Path, *, label: str, require_file: bool = False) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise RegistryError(f"{label} must not contain path traversal: {path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise RegistryError(f"{label} must not pass through a symlink: {path}")
+    if require_file and (candidate.is_symlink() or not candidate.is_file()):
+        raise RegistryError(f"{label} must be a regular file: {path}")
+
+
+def _validate_relative_reference(value: object, *, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or not value
+        or "\x00" in value
+        or "\\" in value
+        or Path(value).is_absolute()
+        or ".." in Path(value).parts
+    ):
+        raise RegistryError(f"{label} must be a safe repository-relative path")
+
+
 def load_registry(registry_path: Path = DEFAULT_REGISTRY) -> list[dict[str, Any]]:
-    data = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    _assert_safe_path(registry_path, label="schema registry", require_file=True)
+    try:
+        data = load_yaml(registry_path.read_bytes())
+    except (OSError, ValueError) as exc:
+        raise RegistryError(f"schema registry {registry_path} is not safely readable") from exc
     bindings = data.get("bindings") if isinstance(data, dict) else None
     if not isinstance(bindings, list) or not bindings:
         raise RegistryError(f"schema registry {registry_path} has no bindings")
     for binding in bindings:
+        if not isinstance(binding, dict):
+            raise RegistryError(f"registry binding must be an object: {binding!r}")
         if not isinstance(binding.get("artifact"), str) or not binding["artifact"]:
             raise RegistryError(f"registry binding missing 'artifact': {binding}")
         if not isinstance(binding.get("path_pattern"), str) or not binding["path_pattern"]:
             raise RegistryError(f"registry binding missing 'path_pattern': {binding}")
+        path_pattern = binding["path_pattern"]
+        if (
+            "\x00" in path_pattern
+            or "\\" in path_pattern
+            or Path(path_pattern).is_absolute()
+            or ".." in Path(path_pattern).parts
+        ):
+            raise RegistryError(
+                f"registry binding {binding['artifact']!r} has an unsafe path_pattern"
+            )
         has_single = isinstance(binding.get("schema"), str) and bool(binding["schema"])
         variants = binding.get("any_of")
         has_variants = isinstance(variants, list) and len(variants) >= 1
+        if has_single:
+            _validate_relative_reference(binding["schema"], label="schema reference")
+        if isinstance(variants, list) and any(
+            not isinstance(item, str) or not item for item in variants
+        ):
+            raise RegistryError(f"registry binding {binding['artifact']!r} has invalid any_of")
+        if isinstance(variants, list):
+            for item in variants:
+                _validate_relative_reference(item, label="schema reference")
         if has_single == has_variants:  # exactly one of the two forms
             raise RegistryError(
                 f"registry binding {binding['artifact']!r} needs exactly one of "
@@ -95,7 +144,11 @@ def schema_errors(binding: dict[str, Any], document: Any) -> list[str]:
     messages: list[str] = []
     for schema_ref in schema_refs:
         schema_path = Path(__file__).resolve().parent.parent / schema_ref
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        _assert_safe_path(schema_path, label="schema", require_file=True)
+        try:
+            schema = load_json(schema_path.read_bytes())
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(f"schema {schema_path} is not safely readable") from exc
         validator = Draft7Validator(schema, format_checker=FormatChecker())
         errors = sorted(validator.iter_errors(document), key=lambda e: list(e.absolute_path))
         for error in errors:
@@ -108,14 +161,15 @@ def schema_errors(binding: dict[str, Any], document: Any) -> list[str]:
 def validate_path(path: Path, registry_path: Path = DEFAULT_REGISTRY) -> dict[str, Any]:
     """Validate one YAML file through the registry. Raises RegistryError for
     unregistered paths or schema violations."""
+    _assert_safe_path(path, label="artifact", require_file=True)
     binding = binding_for_path(path, registry_path)
     if binding is None:
         relative = Path(os.path.relpath(path, REPO_ROOT)).as_posix()
         raise RegistryError(f"unregistered artifact path: {relative}")
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise RegistryError(f"{path} is not parseable YAML: {exc}") from exc
+        document = load_yaml(path.read_bytes())
+    except (OSError, ValueError) as exc:
+        raise RegistryError(f"{path} is not a safely parseable YAML document") from exc
     errors = schema_errors(binding, document)
     if errors:
         detail = "; ".join(errors)

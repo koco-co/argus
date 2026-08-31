@@ -8,6 +8,7 @@ cases:
   - case_id: C0001
     title: Apply valid discount at checkout
     priority: 1
+    side_effect: updates
     precondition: Storefront open, seeded product in cart.
     steps:
       - action: Open the discount code field.
@@ -21,6 +22,7 @@ cases:
   - case_id: C0002
     title: Session order appears in history
     priority: 2
+    side_effect: none
     precondition: One order placed this session.
     steps:
       - action: Open order history.
@@ -31,6 +33,7 @@ cases:
   - case_id: C0003
     title: Expired discount rejected at checkout
     priority: 1
+    side_effect: none
     precondition: Storefront open, seeded product in cart.
     steps:
       - action: Apply expired code QA-EXPIRED.

@@ -1,10 +1,10 @@
 # Environment Setup (Target-State)
 
-Prerequisites, initialization steps, and every operational command the framework will expose. **Status honesty**: this repo contained documentation only until 2026-08-27, when Roadmap Phase 0 (tasks 0.1–0.8) was implemented and verified — `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `.gitignore`, `.pre-commit-config.yaml`, the directory skeleton, `scripts/new_iteration.py` + `iteration.schema.json` + registry, and the four local pre-commit hook stubs now exist. Commands below flip from "已定义" to "已运行 (date)" only after an actual recorded run; later-phase scripts (`validate_schema.py` real logic, exporters, checkers, harness) are stubs or absent until their Roadmap tasks land.
+Prerequisites, initialization steps, and every operational command the framework exposes. **状态诚信**：截至 2026-08-31，Schema/状态/覆盖/边界/只读/密钥门禁、XMind/XLSX/Markdown 导出、Medusa 靶场、UI/API 生成样例、M9 自调试证据与 GitHub Actions 已实际运行；表中仍标为人工门禁的项目不得由这些机器证据代替。命令只有在真实运行并留下可复核结果后才标记“已运行”。
 
 ## Prerequisites
 
-最近真实自检见 [2026-08-28 Step 0 证据](../status/STEP0_CHECK_2026-08-28.md)：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。真实 webhook 尚无验证证据；按用户最新要求，该缺项在 Phase 7 首个实际依赖它的 DoD 前列为非阻塞待办，不提前阻塞开发。本次自检不等于靶应用启动、生成测试、M8 配置、通知送达或最终验收通过，也不改变下表历史命令状态。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
+历史自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。**2026-08-31 当前复核使用 gitignored 的本地端点配置及进程内凭据注入（`localhost:8000`/`localhost:9000`），真实靶场 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8 均通过；随后已执行 `target-app-down`，容器、网络、数据卷和运行时凭据均已清理。**真实 webhook 尚无验证证据；通知送达、外部合并和最终验收仍是独立门禁。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
 
 | Requirement | Version / note | Why |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Prerequisites, initialization steps, and every operational command the framework
 | Playwright browsers | **Chromium only** (v1 decision; Firefox/WebKit installs are not performed) | single validated browser matrix |
 | Network access to PyPI + GitHub Actions runners | build time only | dependency sync, CI |
 
-Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. **CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process.
+Secrets policy: real values (`config/env.local.yaml`, `notify.yaml`) are gitignored and provided by the user at M8; placeholders everywhere else use obvious fakes (`CHANGE_ME`). No credentials may appear in docs/examples. `base_url` 是浏览器站点地址；组合 UI/API 执行时可用 `api_base_url` 指定独立后端地址。**CI injection rule**: secrets travel as workflow `env:` variables mapped from `${{ secrets.* }}` — never as shell arguments, never via inline `echo` (command tracing would leak them). `settings.py` reads env-var overrides with the same shape as the YAML keys（包括 `ARGUS_BASE_URL` 与可选 `ARGUS_API_BASE_URL`）, so most CI jobs never need a secrets file; when one is required, `settings.py assemble --env ci` writes the gitignored `config/env.ci.yaml` in-process。PR/定时测试工作流不接触通知秘密或 `issues: write`；仅可信 `trusted-notifications.yml`（固定 checkout 默认分支）将 `ARGUS_NOTIFY_DINGTALK_WEBHOOK`、`ARGUS_NOTIFY_FEISHU_WEBHOOK`、`ARGUS_NOTIFY_WECOM_WEBHOOK` 或完整的 `ARGUS_NOTIFY_EMAIL_SMTP_HOST` / `ARGUS_NOTIFY_EMAIL_SMTP_PORT` / `ARGUS_NOTIFY_EMAIL_USERNAME` / `ARGUS_NOTIFY_EMAIL_PASSWORD` / `ARGUS_NOTIFY_EMAIL_TO` 映射给 dispatcher；多个邮件收件人以逗号分隔，空值表示该渠道未启用。
 
 ## Planned Base Configuration (authored in Phase 0)
 
@@ -27,13 +27,14 @@ Authoritative skeletons to be created verbatim-shaped in Phase 0 tasks:
 **Makefile targets** (v1.0 renames applied):
 
 ```makefile
-setup:            uv sync && pre-commit install && playwright install chromium
+setup:            uv sync --locked && pre-commit install && playwright install chromium
 new-iteration ID=:  uv run python scripts/new_iteration.py $(ID)
 validate-iteration ID=:  uv run python scripts/validate_schema.py iterations/$(ID)   # renamed from gen-cases
 export ID=:       export_xmind + export_xlsx + render_md for iterations/$(ID)
 web-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/web/tests/$(MODULE) --alluredir=reports/allure-results
 api-tests MODULE=:   TEST_ENV=$(ENV) uv run pytest automation/api/tests/$(MODULE) --alluredir=reports/allure-results
-lint:             uv run ruff check . && uv run pyright
+lint:             ruff/format/pyright/README strict checks
+static-gates:     lint + Skill golden + schema/semantic/coverage/boundary gates
 target-app-up/seed/reset/healthcheck/down:  harness scripts (policy: TESTING_STRATEGY harness section)
 ```
 
@@ -45,23 +46,28 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 
 | Step | Directory | Command | Precondition / effect | Status |
 | --- | --- | --- | --- | --- |
-| Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 已运行 2026-08-27（uv ✓；docker 未验证 — Phase 0 无靶应用步骤，Phase 5 前置） |
+| Clone + toolchain check | repo root | `uv --version && docker info` | both succeed | 已运行 2026-08-28（uv 与 Docker 均通过，Compose 靶场已完成全新 build/up/down/re-up） |
 | Project init | root | create `pyproject.toml`, `uv python pin 3.12` then `make setup` | creates `.venv`, installs deps + chromium + hooks | 已运行 2026-08-27（fresh-clone 验收通过；本机 playwright 下载需绕过系统代理，见 CHANGELOG） |
 | Scaffold iteration | root | `make new-iteration ID=test-fixture-001` | builds full `iterations/<id>/` tree incl. `iteration.yaml`; second same-ID call errors unless `--force` | 已运行 2026-08-27（BRANCH=ui\|api 声明分支；测试覆盖重复/ID/单迭代规则） |
-| Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 待实现 (harness task, pre-Phase-5) |
+| Target app up | root | `make target-app-up && make target-app-healthcheck` | pinned compose + version lockfile must exist first | 已运行 2026-08-28（全新 build/up、连续健康探测、down 清场与再次全新 up 均通过） |
 
 ## Development & Verification Commands
 
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
-| Lint | root | `make lint` | clean on skeleton and after generation | 已运行 2026-08-27（ruff + pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 已运行 2026-08-27（43 passed；Phase 0 范围 = scaffolder + 结构 diff；DATA_MODEL 块解析测试属 1.1） |
-| Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已定义 / 待实现（`validate_schema.py` 目前为 0.3 桩，1.2 落地） |
-| Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（1.17 验收；无参形态评估全部迭代，CI 采用） |
-| Static all-gates | root | `uv run pre-commit run --all-files` | green on compliant tree; red on any broken schema, state, boundary, or secret fixture (patch-scope fixtures run with framework tests) | 已运行 2026-08-27（骨架绿：ruff 实际执行；四个本地钩子按 0.3 为 no-op 桩） |
-| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 已定义 / 待实现 |
-| Export artifacts | root | `make export ID=<id>` | byte-reproducible `.xmind`/`.xlsx`/`.md` written under `exports/` | 已定义 / 待实现 |
-| Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive --run-id <rid>` | summary/allure/logs copied into `iterations/<id>/runs/<rid>/`, previous runs untouched | 已定义 / 待实现 |
-| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已定义 / 待实现 |
+| Lint | root | `make lint` | clean on skeleton and after generation；格式检查直接扫描工作树，包含尚未被 Git 跟踪的新 Python 文件 | 已运行 2026-08-28（ruff lint、ruff format check 与 pyright 零告警） |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：529 项通过；不代表 Web/API E2E 通过 |
+| Skill 黄金基线 | root | `make skill-golden` | 四个生成 Skill 的冻结输入 SHA、YAML Schema/结构语义与 Python AST 语义全部匹配 | 已运行 2026-08-28（4 份 1.0.0 baseline、10 项代表性产物通过；输入漂移、YAML 语义漂移和 Python AST 漂移反向测试通过） |
+| Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
+| Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
+| Static all-gates | root | `make static-gates`（提交前另运行 `uv run pre-commit run --all-files`） | green on compliant tree; red on any broken schema, state, boundary, or secret fixture | 当前复核已运行（Ruff/format/Pyright/README、四份 Skill golden、Schema/semantic/coverage、分层/POM/markers/DB/prod/orphan/API model gates 通过） |
+| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 当前复核已运行：8 passed against the real Medusa harness |
+| Generated regression (API) | root | `make api-tests MODULE=checkout ENV=local` | typed client/model suite green against healthy harness | 当前复核已运行：20 passed against the real Medusa harness |
+| Harness parallel smoke | root | `ARGUS_RUN_ID=smoke TEST_ENV=local uv run pytest -n 2 automation/web/tests/harness` | gw0/gw1 均执行，worker 会话和命名空间隔离 | 已运行 2026-08-28（连续三轮全绿；PROD collect 另验证 1 项非只读探针被剔除） |
+| Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 当前本地端点配置已通过；真实通知 Secret 仍未提供/验收 |
+| Export artifacts | root | `make export ID=<id>` | branch-aware byte-reproducible `.xmind` or `.xlsx`, plus `.md`, written under `exports/` | 已运行 2026-08-28（UI/API 各连续两次 SHA-256 一致；XLSX 的 ZIP 与 core modified 时间均固定） |
+| Run evidence archive | root | `uv run python scripts/self_debug_helper.py archive iterations/<id>/runs/<rid> reports/allure-results reports/logs` | display reports copied into the named run without overwrite | 已运行 2026-08-28（Playwright trace 与五轮 JUnit 日志归档；重复目标拒绝覆盖） |
+| CI equivalent | CI | static-checks on every PR; e2e on release PRs or `automation/**`/`iterations/**` changes; SHA-pinned actions, minimal permissions, timeouts/concurrency; both notify under `always()` and upload per-run evidence dirs | see ARCHITECTURE §8 | 已运行 2026-08-31（提交 `ca851aa` 的 static-checks run `33369318287`、手工 e2e run `33369360450` 均成功；e2e artifact `9749578091` 已上传，可信通知为零渠道） |
+| CI 对抗场景 | GitHub Actions | 手工调度 `static-checks(force_failure=true)`；手工调度 `e2e(acceptance_scenario=force_failure\|force_flaky)` | 失败分支执行失败通知且保持失败；flaky 首轮失败、仅重跑一次并分类 `flaky-suspect`；证据上传与 down 仍执行 | 本地控制探针已验证首轮失败/次轮通过及持续失败；远端调度在工作流提交后执行 |
 
 Verification discipline: each command flips its status to "已运行 (date + evidence link)" in this table only after an actual recorded run during development.

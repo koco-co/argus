@@ -1,6 +1,8 @@
 # --- environment & secrets (PRD §6; ENVIRONMENT_SETUP) ---
 # Real values are user-provided at M8; only *.example.yaml files are tracked.
 config/env.local.yaml
+target-app/runtime.env
+target-app/seed-state.yaml
 config/env.test.yaml
 config/env.prod.yaml
 config/env.ci.yaml
@@ -16,8 +18,12 @@ automation/api/har/**
 !automation/api/har/**/
 !automation/api/har/**/.gitkeep
 
-# --- per-run heavy evidence (ADR-012): run-summary.yaml + patch files stay
-# tracked; allure-results/, logs/, traces/ never enter git (keeper-free) ---
+# --- writer lock files (process-local coordination; never an iteration artifact) ---
+iterations/**/.iteration.yaml.lock
+.argus/iterations/**/.iteration.yaml.lock
+
+# --- per-run heavy evidence (ADR-012): run-summary.yaml + execution-manifest.json
+# + patch files stay tracked; allure-results/, logs/, traces/ never enter git ---
 iterations/*/runs/*/allure-results/**
 iterations/*/runs/*/logs/**
 iterations/*/runs/*/traces/**
@@ -44,6 +50,11 @@ iterations/*/00-raw/**/*.bin
 iterations/*/00-raw/**/*.xlsx
 iterations/*/00-raw/**/*.docx
 iterations/*/00-raw/**/*.pptx
+
+# --- package build outputs ---
+build/
+dist/
+*.egg-info/
 
 # --- python toolchain ---
 .venv/

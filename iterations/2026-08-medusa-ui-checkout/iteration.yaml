@@ -1,0 +1,307 @@
+schema_version: '1.0'
+iteration_id: 2026-08-medusa-ui-checkout
+state: accepted
+blocked_reason: null
+branches:
+  ui: true
+  api: false
+artifacts:
+  requirements:
+    status: accepted
+    input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
+  exemptions:
+    status: accepted
+    input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
+  test_points:
+    status: accepted
+    input_sha256: 7e139fe78b81372f13a7e6f8ede233253f1b154541b5bd1b01f13361b902d748
+  functional_cases:
+    status: exported
+    input_sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+  api_spec:
+    status: not_started
+    input_sha256: null
+  api_cases:
+    status: not_started
+    input_sha256: null
+  web_automation:
+    status: generated
+    input_sha256: 1ee7ac52ac64e36075300b9a96dd1a812317d9bcd143d851b0490285bc30e728
+  api_automation:
+    status: not_started
+    input_sha256: null
+  execution:
+    status: passed
+    input_sha256: a9bc15c13f249197787d409630bf13460a41eca0e0719dbcd8cfc898d46ddee5
+approvals:
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T13:39:42Z'
+  artifact_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+  note: 用户于 2026-08-28 明确回复：接受该 requirements.yaml
+- stage: test_points
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T13:50:02Z'
+  artifact_sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+  note: 用户明确回复：接受 test_points.yaml
+- stage: exemptions
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T13:50:02Z'
+  artifact_sha256: 277396e0fec3a97a9fc665d5d0e84aff486e841141e6be9581eaf2a6c0163f90
+  note: 用户明确回复：接受 exemptions.yaml
+- stage: environment
+  action: provided
+  actor: user
+  timestamp: '2026-08-28T14:08:14Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 用户于 2026-08-28 明确批准使用当前 local 环境配置执行 M9
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:26Z'
+  artifact_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+  note: 用户于 2026-08-28 重开时明确继续接受当前 requirements.yaml
+- stage: test_points
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:37Z'
+  artifact_sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+  note: 用户于 2026-08-28 重开时明确继续接受当前 test_points.yaml
+- stage: exemptions
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T14:20:37Z'
+  artifact_sha256: 277396e0fec3a97a9fc665d5d0e84aff486e841141e6be9581eaf2a6c0163f90
+  note: 用户于 2026-08-28 重开时明确继续接受当前 exemptions.yaml
+- stage: environment
+  action: provided
+  actor: user
+  timestamp: '2026-08-28T14:23:30Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 用户于 2026-08-28 重开时明确授权沿用当前 local 环境重新执行 M9
+- stage: acceptance
+  action: accepted
+  actor: user
+  timestamp: '2026-08-28T15:59:03Z'
+  artifact_sha256: d67622e1f6cfb58c0d680427f7e700b4553c5a2866569ef2e7a41610b97d0085
+  note: 用户明确回复：接受本次 UI M9 验收结果
+- stage: requirements
+  action: accepted
+  actor: user
+  timestamp: '2026-08-31T05:33:15Z'
+  artifact_sha256: 398fe181db0944db5be48999bbb0a4e79e0ce536b426b3cbbba3eb47464536d6
+  note: 用户明确确认：接受当前 UI iteration 的 requirements.yaml。
+- stage: exemptions
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-31T05:52:45Z'
+  artifact_sha256: 277396e0fec3a97a9fc665d5d0e84aff486e841141e6be9581eaf2a6c0163f90
+  note: 依据用户持续授权，agent 已审查当前 UI requirements 与既有真实靶应用事实；本 iteration 无新增豁免，exemptions.yaml
+    仍为显式空豁免产物。
+  delegation_id: delegation-argus-ui-v1
+- stage: test_points
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-31T05:52:45Z'
+  artifact_sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+  note: 依据用户持续授权，agent 已逐项审查 8 个 test point：R0001/R0002/R0003/R0004 均覆盖，P1 均含 happy
+    与 negative/boundary，且 UI 路由与边界条件明确。
+  delegation_id: delegation-argus-ui-v1
+- stage: environment
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-31T05:55:25Z'
+  artifact_sha256: 87690f504deb0495049219606bcb16461f5d92ddda5a123adefeb0e54af4cb18
+  note: 依据用户持续授权，agent 已运行 settings.py check；local Web/API 端点、凭据和 SELECT-only PostgreSQL
+    DSN 均通过机械环境门禁，真实靶场已由 Compose 启动并将在执行后清理。
+  delegation_id: delegation-argus-ui-v1
+- stage: acceptance
+  action: delegated
+  actor: agent
+  timestamp: '2026-08-31T06:13:38Z'
+  artifact_sha256: a9bc15c13f249197787d409630bf13460a41eca0e0719dbcd8cfc898d46ddee5
+  note: 依据用户持续授权，agent 已审查本轮 execution-manifest.json 1.1、完整 collection/outcomes、JUnit
+    与 Allure 摘要；8/8 个 UI traceability nodeid 在真实 Chromium + Medusa Compose 上通过，包含桌面/移动视觉证据，未发生
+    retry，接受本轮执行证据。
+  delegation_id: delegation-argus-ui-v1
+events:
+- from_state: created
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T11:50:49Z'
+  triggered_by: agent
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T13:39:42Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-28T13:39:58Z'
+  triggered_by: agent
+- from_state: test_points_review
+  to_state: test_points_accepted
+  timestamp: '2026-08-28T13:50:02Z'
+  triggered_by: user
+- from_state: test_points_accepted
+  to_state: functional_cases_generating
+  timestamp: '2026-08-28T13:50:23Z'
+  triggered_by: agent
+- from_state: functional_cases_generating
+  to_state: functional_cases_exported
+  timestamp: '2026-08-28T13:51:39Z'
+  triggered_by: agent
+- from_state: functional_cases_exported
+  to_state: web_automation_generating
+  timestamp: '2026-08-28T13:51:59Z'
+  triggered_by: agent
+- from_state: web_automation_generating
+  to_state: web_automation_generated
+  timestamp: '2026-08-28T13:55:42Z'
+  triggered_by: agent
+- from_state: web_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-28T13:55:43Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T14:08:14Z'
+  triggered_by: user
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T14:08:34Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: escalated
+  timestamp: '2026-08-28T14:15:30Z'
+  triggered_by: agent
+- from_state: escalated
+  to_state: requirements_clarifying
+  timestamp: '2026-08-28T14:20:15Z'
+  triggered_by: user
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-28T14:20:26Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-28T14:20:37Z'
+  triggered_by: agent
+- from_state: test_points_review
+  to_state: test_points_accepted
+  timestamp: '2026-08-28T14:20:49Z'
+  triggered_by: user
+- from_state: test_points_accepted
+  to_state: functional_cases_generating
+  timestamp: '2026-08-28T14:21:40Z'
+  triggered_by: agent
+- from_state: functional_cases_generating
+  to_state: functional_cases_exported
+  timestamp: '2026-08-28T14:22:15Z'
+  triggered_by: agent
+- from_state: functional_cases_exported
+  to_state: web_automation_generating
+  timestamp: '2026-08-28T14:22:25Z'
+  triggered_by: agent
+- from_state: web_automation_generating
+  to_state: web_automation_generated
+  timestamp: '2026-08-28T14:23:18Z'
+  triggered_by: agent
+- from_state: web_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-28T14:23:18Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-28T14:23:30Z'
+  triggered_by: user
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-28T14:24:03Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-28T15:12:08Z'
+  triggered_by: script
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-28T15:13:16Z'
+  triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-28T15:59:03Z'
+  triggered_by: user
+- from_state: accepted
+  to_state: requirements_clarifying
+  timestamp: '2026-08-31T05:29:38Z'
+  triggered_by: agent
+  delegation_id: delegation-argus-ui-v1
+- from_state: requirements_clarifying
+  to_state: requirements_accepted
+  timestamp: '2026-08-31T05:51:20Z'
+  triggered_by: user
+- from_state: requirements_accepted
+  to_state: test_points_review
+  timestamp: '2026-08-31T05:51:27Z'
+  triggered_by: agent
+- from_state: test_points_review
+  to_state: test_points_accepted
+  timestamp: '2026-08-31T05:52:50Z'
+  triggered_by: agent
+- from_state: test_points_accepted
+  to_state: functional_cases_generating
+  timestamp: '2026-08-31T05:52:57Z'
+  triggered_by: agent
+- from_state: functional_cases_generating
+  to_state: functional_cases_exported
+  timestamp: '2026-08-31T05:54:09Z'
+  triggered_by: agent
+- from_state: functional_cases_exported
+  to_state: web_automation_generating
+  timestamp: '2026-08-31T05:54:40Z'
+  triggered_by: agent
+- from_state: web_automation_generating
+  to_state: web_automation_generated
+  timestamp: '2026-08-31T05:55:03Z'
+  triggered_by: agent
+- from_state: web_automation_generated
+  to_state: env_pending
+  timestamp: '2026-08-31T05:55:19Z'
+  triggered_by: agent
+- from_state: env_pending
+  to_state: env_configured
+  timestamp: '2026-08-31T05:55:34Z'
+  triggered_by: agent
+- from_state: env_configured
+  to_state: executing
+  timestamp: '2026-08-31T05:55:40Z'
+  triggered_by: agent
+- from_state: executing
+  to_state: execution_passed
+  timestamp: '2026-08-31T06:13:27Z'
+  triggered_by: agent
+- from_state: execution_passed
+  to_state: acceptance_pending
+  timestamp: '2026-08-31T06:13:27Z'
+  triggered_by: agent
+- from_state: acceptance_pending
+  to_state: accepted
+  timestamp: '2026-08-31T06:13:44Z'
+  triggered_by: agent
+source_manifest: []
+updated_at: '2026-08-31T06:13:44Z'
+delegation:
+  id: delegation-argus-ui-v1
+  granted_by: user
+  basis: 用户明确要求自行处理当前剩余仓库工作；授权在可代理范围内完成合法 reopen、设计产物再生成、审批记录与本地执行验收，但不替代 M1 requirements
+    acceptance、真实外部通知、非作者 PR approval、受保护分支合并或真实 merge fact。
+  basis_sha256: cc26465dd5966446f5854d085f06d1f1db54c983925d992abb0aad20a13a14ce
+  scope:
+  - exemptions
+  - test_points
+  - environment
+  - acceptance
+  - lifecycle_reopen
+  granted_at: '2026-08-31T05:29:03Z'
+  expires_at: '2026-12-31T23:59:59Z'

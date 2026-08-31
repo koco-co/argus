@@ -29,6 +29,7 @@
         {"properties": {"ui": {"const": false}, "api": {"const": true}}}
       ]
     },
+    "delegation": {"$ref": "#/definitions/delegation"},
     "artifacts": {
       "type": "object", "additionalProperties": false,
       "required": ["requirements", "test_points", "functional_cases",
@@ -51,13 +52,25 @@
         "type": "object", "additionalProperties": false,
         "required": ["stage", "action", "actor", "timestamp", "artifact_sha256"],
         "properties": {
-          "stage": {"enum": ["requirements", "test_points", "environment", "skill_change", "acceptance"]},
-          "action": {"enum": ["accepted", "rejected", "provided", "approved"]},
-          "actor": {"enum": ["user"]},
+          "stage": {"enum": ["requirements", "exemptions", "test_points", "environment", "skill_change", "acceptance"]},
+          "action": {"enum": ["accepted", "rejected", "provided", "approved", "delegated"]},
+          "actor": {"enum": ["user", "agent"]},
           "timestamp": {"type": "string", "format": "date-time"},
           "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-          "note": {"type": "string"}
-        }
+          "note": {"type": "string"},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
+        },
+        "allOf": [{
+          "if": {"properties": {"action": {"const": "delegated"}}, "required": ["action"]},
+          "then": {
+            "properties": {"actor": {"const": "agent"}, "note": {"minLength": 1}},
+            "required": ["note", "delegation_id"]
+          },
+          "else": {
+            "properties": {"actor": {"const": "user"}},
+            "not": {"required": ["delegation_id"]}
+          }
+        }]
       }
     },
     "events": {
@@ -69,8 +82,15 @@
           "from_state": {"type": "string"},
           "to_state": {"type": "string"},
           "timestamp": {"type": "string", "format": "date-time"},
-          "triggered_by": {"enum": ["agent", "script", "user"]}
-        }
+          "triggered_by": {"enum": ["agent", "script", "user"]},
+          "merge_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+          "pr_number": {"type": "integer", "minimum": 1},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
+        },
+        "allOf": [{
+          "if": {"properties": {"to_state": {"const": "merged"}}, "required": ["to_state"]},
+          "then": {"required": ["merge_sha", "pr_number"]}
+        }]
       }
     },
     "source_manifest": {
@@ -89,6 +109,25 @@
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "definitions": {
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "granted_by", "basis", "basis_sha256", "scope", "granted_at", "expires_at"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"},
+        "granted_by": {"const": "user"},
+        "basis": {"type": "string", "minLength": 1},
+        "basis_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["exemptions", "test_points", "environment", "acceptance", "skill_change", "lifecycle_reopen"]}
+        },
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "artifact_status": {
       "type": "object", "additionalProperties": false,
       "required": ["status"],

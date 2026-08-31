@@ -1,0 +1,128 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-ui-checkout
+status: exported
+generated_from:
+  artifact: iterations/2026-08-medusa-ui-checkout/test_points.yaml
+  sha256: 772a1512cebffe9bd45c3f08e6866c4750556a4cabf46bedf20435aa0e17ec7e
+cases:
+  - case_id: C0001
+    title: 游客加入黑色 S 码 T 恤
+    priority: 1
+    side_effect: creates
+    precondition: Medusa 靶场健康、真实种子已装载且购物车已重置为空。
+    test_point_ids: [T0001]
+    tags: ["module:checkout"]
+    steps:
+      - action: 打开 Shirts 分类并进入 Medusa T-Shirt 商品页。
+        expected: 页面展示 Black 与 S 可选控件；未完成规格选择前不要求 Add to cart 可用。
+        expected_kind: ui_state
+      - action: 依次选择 Black 与 S，确认 Add to cart 可见且可用后单击，并打开购物车。
+        expected: 选择完成后 Add to cart 可操作；购物车展示 S / Black 商品行且数量为 1。
+        expected_kind: ui_state
+  - case_id: C0002
+    title: 单次加购保持一条初始商品行
+    priority: 1
+    side_effect: creates
+    precondition: Medusa 靶场健康、真实种子已装载且购物车已重置为空。
+    test_point_ids: [T0002]
+    tags: ["module:checkout"]
+    steps:
+      - action: 选择黑色 S 码并仅执行一次加入购物车。
+        expected: 购物车计数从 0 变为 1。
+        expected_kind: ui_state
+      - action: 打开购物车并检查所有商品行与数量。
+        expected: 仅存在一条 S / Black 商品行，初始数量恰好为 1，且不存在错误变体。
+        expected_kind: ui_state
+  - case_id: C0003
+    title: ARGUS10 按实时种子比例更新总额
+    priority: 1
+    side_effect: updates
+    precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且尚未应用促销。
+    test_point_ids: [T0003]
+    tags: ["module:checkout"]
+    steps:
+      - action: 展开促销码输入区域并提交 ARGUS10。
+        expected: 页面展示 ARGUS10 已应用及其运行时折扣比例。
+        expected_kind: ui_state
+      - action: 读取商品原价、折扣和总额。
+        expected: 折扣等于运行时商品价格乘以折扣比例，总额等于运行时商品价格乘以一减折扣比例。
+        expected_kind: derived_value
+        derived_from:
+          seed: discounted_total
+          rule: product_price_eur * (100 - discount_argus10.percentage) / 100
+  - case_id: C0004
+    title: 无效折扣码不改变购物车总额
+    priority: 1
+    side_effect: none
+    precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且尚未应用促销。
+    test_point_ids: [T0004]
+    tags: ["module:checkout"]
+    steps:
+      - action: 展开促销码输入区域并提交 INVALID10。
+        expected: 页面不展示已应用的 ARGUS10 促销，且结账入口仍可操作。
+        expected_kind: ui_state
+      - action: 比较提交无效码前后的总额。
+        expected: 两次总额均等于运行时商品价格，折扣保持为零。
+        expected_kind: derived_value
+        derived_from:
+          seed: product_price_eur
+          rule: total_after_invalid_code = product_price_eur
+  - case_id: C0005
+    title: 游客完成折扣结账并创建订单
+    priority: 1
+    side_effect: creates
+    precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且 ARGUS10 已成功应用。
+    test_point_ids: [T0005]
+    tags: ["module:checkout"]
+    steps:
+      - action: 进入结账页，填写纯虚构游客地址、邮箱和电话并继续。
+        expected: 地址被接受并进入配送步骤。
+        expected_kind: ui_state
+      - action: 选择 Standard Shipping 并继续到支付步骤。
+        expected: 配送摘要展示 Standard Shipping，Manual Payment 可选择。
+        expected_kind: ui_state
+      - action: 选择 Manual Payment，进入复核并单击 Place order。
+        expected: 订单确认页展示下单成功、订单号、商品、配送与支付摘要，导航购物车计数归零。
+        expected_kind: ui_state
+  - case_id: C0006
+    title: 缺少必填地址时阻止创建订单
+    priority: 1
+    side_effect: none
+    precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且已进入地址结账步骤。
+    test_point_ids: [T0006]
+    tags: ["module:checkout"]
+    steps:
+      - action: 保持至少一个必填地址字段为空并尝试继续。
+        expected: 页面仍停留在地址步骤并提示该字段无效或必填。
+        expected_kind: ui_state
+      - action: 检查当前路由、成功标题与购物车计数。
+        expected: 未进入订单确认路由、未展示下单成功标题，购物车仍包含原商品。
+        expected_kind: ui_state
+  - case_id: C0007
+    title: 桌面视口关键结账状态视觉验收
+    priority: 2
+    side_effect: creates
+    precondition: Medusa 靶场健康，Chromium 视口固定为 1440×900，视觉证据目录可写。
+    test_point_ids: [T0007]
+    tags: ["module:checkout", "visual"]
+    steps:
+      - action: 依次到达商品、已应用折扣的购物车和结账入口并保存截图。
+        expected: 商品、折扣、总额和结账入口可见，无重叠、截断或不可操作控件。
+        expected_kind: ui_state
+      - action: 完成游客结账并在订单确认页保存截图。
+        expected: 成功标题、订单号、商品、配送、支付摘要和归零购物车均可见且布局完整。
+        expected_kind: ui_state
+  - case_id: C0008
+    title: 移动边界视口关键结账状态视觉验收
+    priority: 2
+    side_effect: creates
+    precondition: Medusa 靶场健康，Chromium 视口固定为 390×844，视觉证据目录可写。
+    test_point_ids: [T0008]
+    tags: ["module:checkout", "visual"]
+    steps:
+      - action: 依次到达商品、已应用折扣的购物车和结账入口，滚动检查并保存截图。
+        expected: 关键状态可通过合理滚动访问，无横向溢出、遮挡或不可点击控件。
+        expected_kind: ui_state
+      - action: 完成游客结账并在订单确认页滚动检查与保存截图。
+        expected: 成功标题、订单号、商品、配送、支付摘要和归零购物车均可访问且移动布局稳定。
+        expected_kind: ui_state

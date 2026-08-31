@@ -1,0 +1,21 @@
+schema_version: '1.0'
+iteration_id: test-fixture-ui-e2e
+run_id: run-20260828T164100Z-ui01
+started_at: '2026-08-28T08:45:32Z'
+env: local
+scope: module_set
+modules:
+- checkout
+status: passed
+retry_budget: 5
+attempts:
+- attempt_number: 1
+  result: fail
+  failure_class: locator_drift
+  summary: 真实浏览器运行超时：Add Promotion Code(s) 控件不存在 button role，trace 显示为可点击文本。
+- attempt_number: 2
+  result: pass
+  failure_class: none
+  summary: 仅修复页对象 locator 后，双 worker 真实 UI 用例 2/2 通过。
+  diff_ref: attempt-2.patch
+finished_at: '2026-08-28T08:47:34Z'

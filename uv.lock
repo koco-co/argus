@@ -2,6 +2,14 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
+[manifest]
+members = [
+    "argus",
+    "argus-core",
+    "argus-medusa",
+    "argus-plugin-sdk",
+]
+
 [[package]]
 name = "allure-pytest"
 version = "2.16.0"
@@ -65,10 +73,13 @@ wheels = [
 
 [[package]]
 name = "argus"
-version = "0.1.0"
-source = { virtual = "." }
+version = "0.2.0"
+source = { editable = "." }
 dependencies = [
     { name = "allure-pytest" },
+    { name = "argus-core" },
+    { name = "argus-medusa" },
+    { name = "argus-plugin-sdk" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "openpyxl" },
@@ -97,14 +108,17 @@ perf = [
 [package.metadata]
 requires-dist = [
     { name = "allure-pytest", specifier = ">=2.15" },
+    { name = "argus-core", editable = "packages/argus-core" },
+    { name = "argus-medusa", editable = "adapters/medusa" },
+    { name = "argus-plugin-sdk", editable = "packages/argus-plugin-sdk" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.9" },
-    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-playwright", specifier = ">=0.5" },
     { name = "pytest-xdist", specifier = ">=3.6" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rfc3339-validator", specifier = ">=0.1.4" },
     { name = "rich", specifier = ">=13.9" },
 ]
@@ -113,10 +127,63 @@ requires-dist = [
 dev = [
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pyright", specifier = ">=1.1.390" },
-    { name = "ruff", specifier = ">=0.8" },
+    { name = "ruff", specifier = ">=0.16.4" },
 ]
-mobile = [{ name = "appium-python-client", specifier = ">=4.0" }]
-perf = [{ name = "locust", specifier = ">=2.29" }]
+mobile = [{ name = "appium-python-client", specifier = ">=6.0.0" }]
+perf = [{ name = "locust", specifier = ">=2.46.4" }]
+
+[[package]]
+name = "argus-core"
+version = "0.2.0"
+source = { editable = "packages/argus-core" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
+
+[[package]]
+name = "argus-medusa"
+version = "0.2.0"
+source = { editable = "adapters/medusa" }
+dependencies = [
+    { name = "argus-core" },
+    { name = "argus-plugin-sdk" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argus-core", editable = "packages/argus-core" },
+    { name = "argus-plugin-sdk", editable = "packages/argus-plugin-sdk" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+]
+
+[[package]]
+name = "argus-plugin-sdk"
+version = "0.2.0"
+source = { editable = "packages/argus-plugin-sdk" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
 
 [[package]]
 name = "attrs"

@@ -1,0 +1,117 @@
+# 可信通知工作流：不 checkout 或执行 PR head；只在默认分支代码上运行。
+# PR/e2e job 不持有通知 Secret 或 issues: write，避免 untrusted workflow 改动
+# 借助高权限步骤外传凭据。workflow_run 的结论和受 allowlist 约束的分类
+# 只作为通知数据，不作为 shell 代码执行。
+name: trusted-notifications
+
+permissions: {}
+
+on: # zizmor: ignore[dangerous-triggers] privileged code is default-branch only; artifact input is allowlisted data
+  workflow_run:
+    workflows: ["static-checks", "e2e"]
+    types: [completed]
+
+concurrency:
+  group: trusted-notifications-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    timeout-minutes: 15
+    if: >-
+      ${{
+        github.event.workflow_run.name == 'static-checks' ||
+        github.event.workflow_run.name == 'e2e'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    env:
+      ARGUS_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+      ARGUS_WORKFLOW_STATUS: ${{ github.event.workflow_run.conclusion || 'unknown' }}
+    steps:
+      # workflow_run 默认使用默认分支上下文；ref 仍显式固定，绝不使用 head_sha。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv sync --locked --group dev
+      - name: 下载 e2e 的受限分类证据
+        if: ${{ env.ARGUS_WORKFLOW_NAME == 'e2e' }}
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: run-evidence-${{ github.event.workflow_run.id }}
+          path: trusted-evidence
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - id: classification
+        name: 校验通知分类
+        shell: bash
+        run: |
+          value=""
+          path="trusted-evidence/reports/notification/classification"
+          if [[ -f "$path" && ! -L "$path" ]]; then
+            value=$(head -n 1 -- "$path")
+          fi
+          case "$value" in
+            normal|flaky-suspect|failed) ;;
+            *) value="" ;;
+          esac
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+      - name: 发送 CI 状态通知
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          ARGUS_NOTIFY_DINGTALK_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_DINGTALK_WEBHOOK }}
+          ARGUS_NOTIFY_FEISHU_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_FEISHU_WEBHOOK }}
+          ARGUS_NOTIFY_WECOM_WEBHOOK: ${{ secrets.ARGUS_NOTIFY_WECOM_WEBHOOK }}
+          ARGUS_NOTIFY_EMAIL_SMTP_HOST: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_HOST }}
+          ARGUS_NOTIFY_EMAIL_SMTP_PORT: ${{ secrets.ARGUS_NOTIFY_EMAIL_SMTP_PORT }}
+          ARGUS_NOTIFY_EMAIL_USERNAME: ${{ secrets.ARGUS_NOTIFY_EMAIL_USERNAME }}
+          ARGUS_NOTIFY_EMAIL_PASSWORD: ${{ secrets.ARGUS_NOTIFY_EMAIL_PASSWORD }}
+          ARGUS_NOTIFY_EMAIL_TO: ${{ secrets.ARGUS_NOTIFY_EMAIL_TO }}
+          ARGUS_CLASSIFICATION: ${{ steps.classification.outputs.value }}
+        run: >-
+          uv run python scripts/notify.py
+          --job "$ARGUS_WORKFLOW_NAME"
+          --status "$ARGUS_WORKFLOW_STATUS"
+          --classification "$ARGUS_CLASSIFICATION"
+
+  weekly-escalation:
+    timeout-minutes: 15
+    if: >-
+      ${{
+        github.event.workflow_run.name == 'e2e' &&
+        github.event.workflow_run.event == 'schedule' &&
+        github.event.workflow_run.conclusion == 'failure'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    env:
+      ARGUS_WEEKLY_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv sync --locked --group dev
+      - name: 升级周回归跟踪 issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          uv run python scripts/weekly_escalation.py
+          --classification failed
+          --run-id "$ARGUS_WEEKLY_RUN_ID"

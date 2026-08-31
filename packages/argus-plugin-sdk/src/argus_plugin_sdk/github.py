@@ -1,0 +1,173 @@
+"""只读 GitHub Issues 参考连接器。"""
+
+from __future__ import annotations
+
+import re
+from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlsplit
+
+import httpx  # pyright: ignore[reportMissingImports]
+
+from .contracts import (  # pyright: ignore[reportMissingImports]
+    PluginContext,
+    PluginManifest,
+    SourceEnvelope,
+    SourceError,
+)
+from .security import (  # pyright: ignore[reportMissingImports]
+    SourceSecurityError,
+    contains_secret,
+    load_json,
+    read_limited_response,
+    validate_public_url,
+    validate_response_peer,
+)
+
+# GitHub's canonical owner/repository path; reject query, fragments and
+# separators that could alter the API request path.
+_REPOSITORY = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})$")
+_MAX_PAGES = 10
+
+
+class GitHubIssuesConnector:
+    """读取 issues 作为不可信需求来源，不创建/修改 issue。"""
+
+    manifest = PluginManifest(
+        name="github-issues",
+        version="0.2.0",
+        source_types=["github-issues"],
+        capabilities=["requirements", "issues"],
+    )
+
+    def __init__(
+        self,
+        client: httpx.Client | None = None,
+        api_url: str = "https://api.github.com",
+    ) -> None:
+        self._client = client
+        if not isinstance(api_url, str):
+            raise ValueError("GitHub API URL must be the canonical HTTPS GitHub host")
+        self._api_url = api_url
+        self._validate_api_url()
+
+    def _validate_api_url(self) -> None:
+        try:
+            parts = urlsplit(self._api_url)
+            port = parts.port
+        except ValueError as exc:
+            raise ValueError("GitHub API URL is malformed") from exc
+        if (
+            self._api_url != "https://api.github.com"
+            or parts.scheme != "https"
+            or parts.hostname != "api.github.com"
+            or parts.username
+            or parts.password
+            or port is not None
+        ):
+            raise ValueError("GitHub API URL must be the canonical HTTPS GitHub host")
+        if parts.path not in {"", "/"} or parts.query or parts.fragment:
+            raise ValueError("GitHub API URL must not contain a path, query, or fragment")
+
+    def fetch(self, source_ref: str, *, context: PluginContext) -> SourceEnvelope:
+        fetched_at = datetime.now(UTC)
+        try:
+            repository = self._repository(source_ref)
+            token = context.credentials.get("token")
+            if not token:
+                raise ValueError("GitHub token is required")
+            issues = self._fetch_issues(repository, token, context)
+            content = {"repository": repository, "issues": issues}
+            if contains_secret(content, context):
+                raise ValueError("source document contains credential-shaped data")
+            return SourceEnvelope(
+                source_type="github-issues",
+                source_ref=source_ref,
+                fetched_at=fetched_at,
+                content=content,
+            )
+        except Exception:  # noqa: BLE001 - connector failures become stable envelopes
+            return SourceEnvelope(
+                source_type="github-issues",
+                source_ref=None,
+                fetched_at=fetched_at,
+                error=SourceError(
+                    code="source_unavailable",
+                    message="GitHub Issues 来源不可用或未通过安全校验",
+                ),
+            )
+
+    @staticmethod
+    def _repository(source_ref: str) -> str:
+        if not isinstance(source_ref, str):
+            raise ValueError("source_ref must be an owner/repository")
+        prefix = "https://github.com/"
+        repository = source_ref.removeprefix(prefix)
+        if repository != source_ref and repository != repository.strip("/"):
+            raise ValueError("source_ref must be an owner/repository")
+        if not _REPOSITORY.fullmatch(repository):
+            raise ValueError("source_ref must be an owner/repository")
+        return repository
+
+    def _fetch_issues(
+        self,
+        repository: str,
+        token: str,
+        context: PluginContext,
+    ) -> list[dict[str, Any]]:
+        validate_public_url(self._api_url)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        candidate_transport = getattr(self._client, "_transport", None) if self._client else None
+        # Only deterministic MockTransport injection is accepted.  Reusing a
+        # preconfigured HTTP transport could carry verify=False, proxy, cookie,
+        # or other settings that bypass this connector's policy.
+        transport = (
+            candidate_transport if isinstance(candidate_transport, httpx.MockTransport) else None
+        )
+        client = httpx.Client(
+            transport=transport,
+            base_url=self._api_url,
+            headers=headers,
+            timeout=httpx.Timeout(
+                connect=context.connect_timeout_seconds,
+                read=context.read_timeout_seconds,
+                write=context.read_timeout_seconds,
+                pool=context.connect_timeout_seconds,
+            ),
+            trust_env=False,
+        )
+        try:
+            result: list[dict[str, Any]] = []
+            consumed_bytes = 0
+            for page in range(1, _MAX_PAGES + 1):
+                with client.stream(
+                    "GET",
+                    f"/repos/{repository}/issues",
+                    headers=headers,
+                    params={"state": "all", "per_page": 100, "page": page},
+                ) as response:
+                    validate_response_peer(response)
+                    response.raise_for_status()
+                    remaining = context.max_bytes - consumed_bytes
+                    if remaining <= 0:
+                        raise SourceSecurityError("source response exceeds size limit")
+                    payload_bytes = read_limited_response(response, remaining)
+                consumed_bytes += len(payload_bytes)
+                try:
+                    payload = load_json(payload_bytes)
+                except (TypeError, ValueError, UnicodeDecodeError) as exc:
+                    raise ValueError("GitHub Issues response is not JSON") from exc
+                if not isinstance(payload, list):
+                    raise ValueError("GitHub Issues response must be a list")
+                for issue in payload:
+                    if isinstance(issue, dict) and "pull_request" not in issue:
+                        result.append(issue)
+                if len(payload) < 100 or len(result) >= 1000:
+                    break
+            return result[:1000]
+        finally:
+            client.close()

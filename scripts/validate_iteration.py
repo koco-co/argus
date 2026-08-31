@@ -1,30 +1,24 @@
 #!/usr/bin/env python
-"""Iteration state-machine + staleness validator (Roadmap 1.3).
+"""迭代状态机与 stale 校验器（Roadmap 1.3）。
 
-Pure check by contract (PRD §6 / Roadmap 1.3): prints verdicts and proposed
-`stale` status rewrites as a diff and exits non-zero; working-tree mutation
-happens only via explicit ``--fix`` (committed separately by the user or a
-bot). Pre-commit and CI always run in check mode.
+按契约执行纯检查（PRD §6、Roadmap 1.3）：打印 verdict 和拟议的 ``stale`` 状态差异并在
+发现问题时返回非零；只有显式 ``--fix``（由用户或机器人单独提交）才允许修改工作树。
+Pre-commit 和 CI 始终以检查模式运行。
 
-Enforced semantics (DATA_MODEL §11 / PRD §5):
-- transition legality against the branch-aware PRD §5 route graph, including
-  any→blocked (with blocked_reason) and user-only unblocking, plus the
-  user-triggered reopen edges;
-- ``requirements_mapped`` only on the API branch, ``test_points_review`` only
-  on the UI branch; the both-true Hybrid combination is rejected outright;
-- events[] chain consistency — ``state`` must equal the last event's
-  ``to_state`` (hand-editing either is a validation error; the writer is
-  scripts/record_event.py, Roadmap 1.15b);
-- approval completeness: gate states require a matching approvals[] entry;
-- single-in-progress rule across the repo (ARCHITECTURE §5.1);
-- staleness verdicts computed from the full ``generated_from`` chain: an
-  upstream hash mismatch downgrades the artifact to ``stale`` (check mode
-  shows the rewrite, ``--fix`` writes it); consuming stale inputs downstream
-  is reported;
-- run-summary invariants: attempt numbers consecutive from 1, unique;
-  ``passed`` ⇒ last attempt passes; ``failed`` ⇒ last attempt documents the
-  failure; ``escalated`` ⇒ escalation with a non-trivial reason class;
-  recorded ``diff_ref`` paths must resolve.
+强制语义（DATA_MODEL §11、PRD §5）：
+- 按分支检查 PRD §5 路由图的迁移合法性，包括任意状态→blocked（带 blocked_reason）、仅用户可
+  解阻以及用户触发的重开边；
+- ``requirements_mapped`` 仅允许 API 分支，``test_points_review`` 仅允许 UI 分支；两者同时为真
+  的 Hybrid 组合直接拒绝；
+- events[] 链一致性：``state`` 必须等于最后事件的 ``to_state``（手改任一字段都是校验错误，
+  唯一写入器为 scripts/record_event.py，Roadmap 1.15b）；
+- 批准完整性：门禁状态要求最新阶段批准带有预期显式 action 或真实 delegated 决定，且需求、
+  测试点、豁免的摘要必须匹配当前产物字节；
+- 仓库级单一进行中迭代规则（ARCHITECTURE §5.1）；
+- 基于完整 ``generated_from`` 链计算 stale verdict：上游摘要不匹配会将产物降级为 ``stale``
+  （检查模式只显示差异，``--fix`` 才写入），并报告下游消费 stale 输入；
+- run-summary 不变量：attempt 编号从 1 连续且唯一；``passed`` ⇒ 最后 attempt 通过；``failed``
+  ⇒ 最后 attempt 记录失败；``escalated`` ⇒ 带具体 reason class；记录的 ``diff_ref`` 必须可解析。
 """
 
 from __future__ import annotations
@@ -33,15 +27,22 @@ import argparse
 import hashlib
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-from _registry_lib import REPO_ROOT, RegistryError, binding_for_path, validate_path
+from _registry_lib import (
+    REPO_ROOT,
+    RegistryError,
+    _assert_safe_path,
+    binding_for_path,
+    validate_path,
+)
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 _REGISTRY = REPO_ROOT / "scripts" / "schema_registry.yaml"
 
-# PRD §5 routes. Front: shared prefix. Mid: branch-specific. Tail: shared.
+# PRD §5 路由：前段共享，中段按分支区分，尾段共享。
 _FRONT = {
     "created": {"requirements_clarifying"},
     "requirements_clarifying": {"requirements_accepted"},
@@ -77,13 +78,23 @@ _TAIL = {
     "accepted": {"merged"},
     "merged": set(),
 }
-# states that require a recorded user approval before the transition to them
-# is considered complete: to_state -> (approvals[].stage, approvals[].action)
+# 进入下列状态前必须具备对应阶段的最新决定；除 requirements 外，
+# 用户持续授权下的 agent 审查也可以满足门禁。M1 需求接受永远只认用户决定。
+# to_state -> ((approvals[].stage, approvals[].action), ...)
 _APPROVAL_GATES = {
-    "requirements_accepted": ("requirements", "accepted"),
-    "test_points_accepted": ("test_points", "accepted"),
-    "env_configured": ("environment", "provided"),
-    "accepted": ("acceptance", "accepted"),
+    "requirements_accepted": (("requirements", "accepted"),),
+    "requirements_mapped": (("exemptions", "accepted"),),
+    "test_points_accepted": (
+        ("test_points", "accepted"),
+        ("exemptions", "accepted"),
+    ),
+    "env_configured": (("environment", "provided"),),
+    "accepted": (("acceptance", "accepted"),),
+}
+_APPROVAL_ARTIFACTS = {
+    "requirements": "requirements.yaml",
+    "exemptions": "exemptions.yaml",
+    "test_points": "test_points.yaml",
 }
 
 
@@ -93,41 +104,42 @@ def successors(state: str, ui: bool) -> set[str]:
         for source, targets in layer.items():
             graph.setdefault(source, set()).update(targets)
     graph.setdefault("blocked", set())
-    # any state may become blocked; leaving blocked needs a user action but is
-    # otherwise unconstrained (return path is chosen by the user/agent pair)
+    # 任意状态都可以进入 blocked；只有用户才能恢复，且恢复边固定为 created。
     for source in list(graph):
         if source != "blocked":
             graph[source].add("blocked")
-        graph["blocked"].add(source)
+    graph["blocked"].add("created")
     return graph.get(state, set())
 
 
 def legal_transition(from_state: str, to_state: str, ui: bool, triggered_by: str) -> str | None:
-    """Return None when legal, else a human-readable reason."""
+    """合法时返回 None，否则返回可读的拒绝原因。"""
     if to_state == "blocked":
-        return None  # any state may block; blocked_reason completeness checked separately
-    if from_state == "blocked":
         return (
-            None
-            if triggered_by == "user"
-            else ("leaving blocked requires a user action (triggered_by=user)")
+            "iteration is already blocked"
+            if from_state == "blocked"
+            else None  # any other state may block; reason is checked separately
         )
+    if from_state == "blocked":
+        if triggered_by != "user":
+            return "leaving blocked requires a user action (triggered_by=user)"
+        if to_state != "created":
+            return "blocked may only be resumed to created"
+        return None
     if (
-        triggered_by == "user"
+        triggered_by in {"user", "agent"}
         and to_state == "requirements_clarifying"
         and from_state not in ("created", "requirements_clarifying")
     ):
-        # reopen protocol (PRD §5): a user-triggered reopen may return the
-        # iteration to requirement clarification from any downstream state;
-        # scripts/reopen_iteration.py records it and propagates staleness.
+        # 重开协议（PRD §5）：用户可直接重开；agent 必须由 record_event.py 携带有效持续授权。
         return None
     if to_state not in successors(from_state, ui):
         return f"illegal transition {from_state} -> {to_state}"
     if from_state == "requirements_accepted" and to_state == "requirements_clarifying":
         return (
             None
-            if triggered_by == "user"
-            else "reopen of accepted requirements requires triggered_by=user"
+            if triggered_by in {"user", "agent"}
+            else "reopen of accepted requirements requires triggered_by=user or delegated agent"
         )
     if from_state == "test_points_accepted" and to_state == "test_points_review":
         return (
@@ -139,20 +151,336 @@ def legal_transition(from_state: str, to_state: str, ui: bool, triggered_by: str
 
 
 def sha256_of(path: Path) -> str:
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise RegistryError(f"artifact must be a regular file: {path}")
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _parse_fact_time(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _latest_reopen_at(
+    document: dict[str, Any] | None,
+    before: datetime | None,
+) -> datetime | None:
+    if not document:
+        return None
+    events = document.get("events", [])
+    if not isinstance(events, list):
+        return None
+    latest: datetime | None = None
+    blocked_seen = False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        event_time = _parse_fact_time(event.get("timestamp"))
+        if before is not None and (event_time is None or event_time > before):
+            continue
+        if event.get("to_state") == "blocked":
+            blocked_seen = True
+        # An ordinary accepted-artifact reopen keeps the original M1 fact;
+        # only the blocked -> created recovery starts a fresh requirements
+        # approval window.
+        if (
+            event.get("from_state") == "created"
+            and event.get("to_state") == "requirements_clarifying"
+            and event_time is not None
+            and (before is None or event_time <= before)
+            and blocked_seen
+        ):
+            latest = event_time
+    return latest
+
+
+def _has_later_reopen(
+    document: dict[str, Any] | None,
+    before: datetime | None,
+) -> bool:
+    if document is None or before is None:
+        return False
+    events = document.get("events", [])
+    if not isinstance(events, list):
+        return False
+    return any(
+        isinstance(event, dict)
+        and event.get("to_state") == "requirements_clarifying"
+        and (event_time := _parse_fact_time(event.get("timestamp"))) is not None
+        and event_time > before
+        for event in events
+    )
+
+
+def approval_gate_violations(
+    to_state: str,
+    iteration_dir: Path,
+    approvals: list[dict[str, Any]],
+    document: dict[str, Any] | None = None,
+    before: object | None = None,
+) -> list[str]:
+    """返回进入状态前未满足的批准条件，供校验器与唯一事件写入器共用。"""
+    violations: list[str] = []
+    before_time = _parse_fact_time(before) if before is not None else None
+    reopen_at = _latest_reopen_at(document, before_time)
+    historical_reopen = _has_later_reopen(document, before_time)
+    for stage, action in _APPROVAL_GATES.get(to_state, ()):
+        latest = None
+        for approval in reversed(approvals):
+            if approval.get("stage") != stage:
+                continue
+            approval_time = _parse_fact_time(approval.get("timestamp"))
+            if approval_time is None:
+                continue
+            if before_time is not None and approval_time > before_time:
+                continue
+            if reopen_at is not None and approval_time < reopen_at:
+                continue
+            latest = approval
+            break
+        if latest is None:
+            violations.append(
+                f"transition to {to_state} requires an approvals[] entry "
+                f"(stage={stage}, action={action}) recorded by record_approval.py"
+            )
+            continue
+        if stage == "requirements":
+            if latest.get("action") != action or latest.get("actor") != "user":
+                violations.append(
+                    f"transition to {to_state} requires the latest approvals[] entry "
+                    f"for requirements to be action={action}, actor=user; got "
+                    f"action={latest.get('action')!r}, actor={latest.get('actor')!r}"
+                )
+                continue
+        elif latest.get("action") not in {action, "delegated"}:
+            violations.append(
+                f"transition to {to_state} requires the latest approvals[] entry "
+                f"for stage={stage} to use action={action} or delegated, "
+                f"got {latest.get('action')!r}"
+            )
+            continue
+        if latest.get("action") == "delegated":
+            from _writers import delegation_violations
+
+            delegated_errors = delegation_violations(document or {}, latest, required_scope=stage)
+            if delegated_errors:
+                violations.extend(
+                    f"transition to {to_state}: {error}" for error in delegated_errors
+                )
+                continue
+        artifact_name = _APPROVAL_ARTIFACTS.get(stage)
+        if artifact_name is None:
+            if stage == "acceptance":
+                execution_digest = (
+                    (document or {}).get("artifacts", {}).get("execution", {}).get("input_sha256")
+                )
+                later_acceptance = any(
+                    event.get("to_state") == "accepted"
+                    and (event_time := _parse_fact_time(event.get("timestamp"))) is not None
+                    and (before_time is None or event_time > before_time)
+                    for event in (document or {}).get("events", [])
+                    if isinstance(event, dict)
+                )
+                # A previous accepted event belongs to an earlier execution
+                # snapshot.  Only the latest accepted event can be checked
+                # against the current aggregate execution digest.
+                if (
+                    not later_acceptance
+                    and not historical_reopen
+                    and execution_digest
+                    and latest.get("artifact_sha256") != execution_digest
+                ):
+                    violations.append(
+                        "acceptance approval must reference the current execution evidence digest"
+                    )
+            continue
+        if historical_reopen:
+            # The artifact may have been intentionally changed by a later
+            # reopen; the old event is historical and has no stored snapshot.
+            continue
+        artifact_path = iteration_dir / artifact_name
+        if artifact_path.is_symlink() or not artifact_path.is_file():
+            violations.append(
+                f"transition to {to_state} requires {artifact_name} so the "
+                f"stage={stage} approval digest can be verified"
+            )
+            continue
+        try:
+            current_digest = sha256_of(artifact_path)
+        except (OSError, RegistryError):
+            violations.append(
+                f"transition to {to_state} requires a safe regular file for "
+                f"stage={stage}: {artifact_path}"
+            )
+            continue
+        if latest.get("artifact_sha256") != current_digest:
+            violations.append(
+                f"transition to {to_state} has stale or invalid "
+                f"artifact_sha256 for stage={stage}: recorded "
+                f"{latest.get('artifact_sha256')!r}, current {current_digest}; "
+                f"record the explicit decision through record_approval.py"
+            )
+    return violations
+
+
+def lifecycle_violations(document: dict[str, Any]) -> list[str]:
+    """校验当前生命周期链，不依赖磁盘产物或仓库级单迭代状态。"""
+    violations: list[str] = []
+    ui = document["branches"]["ui"]
+    state = document["state"]
+    for index, approval in enumerate(document.get("approvals", [])):
+        action = approval.get("action")
+        actor = approval.get("actor")
+        note = approval.get("note")
+        if action == "delegated" and (not isinstance(note, str) or not note.strip()):
+            violations.append(f"approvals[{index}]: delegated approval requires a non-empty note")
+        if action == "delegated" and approval.get("stage") == "requirements":
+            violations.append(
+                f"approvals[{index}]: requirements acceptance must be an explicit user decision"
+            )
+        if action == "delegated" and actor != "agent":
+            violations.append(f"approvals[{index}]: delegated approval must use actor=agent")
+        if action != "delegated" and actor != "user":
+            violations.append(f"approvals[{index}]: explicit approval actions must use actor=user")
+        if action == "delegated":
+            from _writers import delegation_violations
+
+            violations.extend(
+                f"approvals[{index}]: {error}"
+                for error in delegation_violations(
+                    document, approval, required_scope=approval.get("stage")
+                )
+            )
+    if state == "blocked" and not document.get("blocked_reason"):
+        violations.append("blocked state requires a non-empty blocked_reason")
+
+    previous = "created"
+    for index, event in enumerate(document.get("events", [])):
+        reason = legal_transition(event["from_state"], event["to_state"], ui, event["triggered_by"])
+        if reason:
+            violations.append(f"events[{index}]: {reason}")
+        is_delegated_reopen = (
+            event["triggered_by"] == "agent"
+            and event["to_state"] == "requirements_clarifying"
+            and event["from_state"] not in ("created", "requirements_clarifying")
+        )
+        if is_delegated_reopen:
+            from _writers import delegation_violations
+
+            if not event.get("delegation_id"):
+                violations.append(f"events[{index}]: delegated reopen requires delegation_id")
+            violations.extend(
+                f"events[{index}]: {error}"
+                for error in delegation_violations(
+                    document, event, required_scope="lifecycle_reopen"
+                )
+            )
+        elif event.get("delegation_id") is not None:
+            violations.append(
+                f"events[{index}]: delegation_id is only valid on a delegated reopen event"
+            )
+        if event["from_state"] != previous:
+            violations.append(
+                f"events[{index}]: chain broken (from_state {event['from_state']!r} "
+                f"but previous to_state was {previous!r}) — hand-edited events[]?"
+            )
+        previous = event["to_state"]
+    accepted_events = [
+        event for event in document.get("events", []) if event.get("to_state") == "accepted"
+    ]
+    if state == "accepted" and accepted_events:
+        accepted_at = accepted_events[-1].get("timestamp")
+        try:
+            accepted_time = datetime.fromisoformat(str(accepted_at).replace("Z", "+00:00"))
+            if accepted_time.tzinfo is None:
+                raise ValueError("accepted event timestamp lacks timezone")
+            accepted_time = accepted_time.astimezone(UTC)
+            acceptance_approvals = [
+                approval
+                for approval in document.get("approvals", [])
+                if approval.get("stage") == "acceptance"
+            ]
+            if not acceptance_approvals:
+                violations.append(
+                    "accepted state requires an acceptance approval before its accepted event"
+                )
+            for approval in acceptance_approvals:
+                approval_time = datetime.fromisoformat(
+                    str(approval.get("timestamp")).replace("Z", "+00:00")
+                )
+                if approval_time.tzinfo is None or approval_time.astimezone(UTC) > accepted_time:
+                    violations.append(
+                        "acceptance approval was appended after the terminal accepted event; "
+                        "reopen and execute a fresh chain before accepting again"
+                    )
+        except (TypeError, ValueError):
+            violations.append(
+                "accepted event and acceptance approval timestamps must be valid date-times"
+            )
+    if state != previous:
+        violations.append(
+            f"state {state!r} does not match the event chain (last to_state "
+            f"{previous!r}) — hand-editing state is a validation error; "
+            f"use scripts/record_event.py"
+        )
+    return violations
+
+
 def resolve_recorded(recorded: str, iterations_dir: Path) -> Path | None:
-    """A generated_from.artifact value is repo-relative by convention; sandbox
-    trees additionally resolve against the iterations root."""
-    for base in (REPO_ROOT, iterations_dir.parent):
-        candidate = base / recorded
-        if candidate.exists():
+    """解析记录路径，并将结果限制在仓库根目录内。"""
+    if (
+        not isinstance(recorded, str)
+        or not recorded
+        or "\x00" in recorded
+        or "\\" in recorded
+        or Path(recorded).is_absolute()
+    ):
+        return None
+
+    def within(base: Path, relative: str | Path = recorded) -> Path | None:
+        relative_path = Path(relative)
+        if ".." in relative_path.parts:
+            return None
+        base_candidate = base if base.is_absolute() else Path.cwd() / base
+        if ".." in base_candidate.parts:
+            return None
+        current_base = Path(base_candidate.anchor)
+        for part in base_candidate.parts:
+            current_base /= part
+            if current_base.is_symlink():
+                return None
+        root = base_candidate.resolve()
+        raw_candidate = root
+        for part in relative_path.parts:
+            raw_candidate /= part
+            if raw_candidate.is_symlink():
+                return None
+        candidate = raw_candidate.resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        return candidate if candidate.is_file() and not candidate.is_symlink() else None
+
+    for base in (REPO_ROOT, iterations_dir.parent, iterations_dir):
+        candidate = within(base)
+        if candidate is not None:
             return candidate
     suffix = Path(*Path(recorded).parts[1:]) if recorded.startswith("iterations/") else None
     if suffix is not None:
-        candidate = iterations_dir.parent / suffix
-        if candidate.exists():
+        candidate = within(iterations_dir.parent, suffix)
+        if candidate is not None:
             return candidate
     return None
 
@@ -171,7 +499,10 @@ class IterationReport:
 
 
 def _load_yaml(path: Path) -> Any:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    _assert_safe_path(path, label="artifact")
+    if path.is_symlink() or not path.is_file():
+        raise RegistryError(f"artifact must be a regular file: {path}")
+    return load_yaml(path.read_bytes())
 
 
 def check_iteration(
@@ -180,61 +511,49 @@ def check_iteration(
     in_progress_elsewhere: str | None = None,
 ) -> None:
     iteration_yaml = iteration_dir / "iteration.yaml"
-    # 0. schema gate (also rejects the post-v1 Hybrid combination via the
-    #    branches oneOf) and single-in-progress rule
+    # 0. Schema 门禁（通过 branches oneOf 同时拒绝 post-v1 Hybrid 组合）及单一进行中规则。
     try:
         validate_path(iteration_yaml, _REGISTRY)
     except RegistryError as exc:
         report.error(str(exc))
         return
-    document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
+    try:
+        document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
+    except (OSError, ValueError, RegistryError):
+        report.error(f"{iteration_yaml}: is not a safely parseable YAML document")
+        return
     iteration_id: str = document["iteration_id"]
-    ui: bool = document["branches"]["ui"]
     state: str = document["state"]
 
-    if in_progress_elsewhere and in_progress_elsewhere != iteration_id:
+    if (
+        in_progress_elsewhere
+        and in_progress_elsewhere != iteration_id
+        and state not in {"accepted", "merged"}
+    ):
         report.error(
             f"single-in-progress violation: iteration {in_progress_elsewhere!r} is "
             f"also non-terminal"
         )
 
-    if document["state"] == "blocked" and not document.get("blocked_reason"):
-        report.error("blocked state requires a non-empty blocked_reason")
-
-    # 1. events chain consistency + transition legality
+    # 1. events 链一致性与迁移合法性。
     events: list[dict[str, Any]] = document.get("events", [])
-    previous = "created"
-    for index, event in enumerate(events):
-        reason = legal_transition(event["from_state"], event["to_state"], ui, event["triggered_by"])
-        if reason:
-            report.error(f"events[{index}]: {reason}")
-        if event["from_state"] != previous:
-            report.error(
-                f"events[{index}]: chain broken (from_state {event['from_state']!r} "
-                f"but previous to_state was {previous!r}) — hand-edited events[]?"
-            )
-        previous = event["to_state"]
-    if state != previous:
-        report.error(
-            f"state {state!r} does not match the event chain (last to_state "
-            f"{previous!r}) — hand-editing state is a validation error; "
-            f"use scripts/record_event.py"
-        )
+    for violation in lifecycle_violations(document):
+        report.error(violation)
 
-    # 2. approval completeness for every gate state that was entered
+    # 2. 检查每个已进入门禁状态的批准完整性。只查“是否曾经 accepted”会让后续 rejected
+    # 或被改写的产物继续穿过门禁。
     approvals: list[dict[str, Any]] = document.get("approvals", [])
     for event in events:
-        gate = _APPROVAL_GATES.get(event["to_state"])
-        if gate is None:
-            continue
-        stage, action = gate
-        if not any(a.get("stage") == stage and a.get("action") == action for a in approvals):
-            report.error(
-                f"transition to {event['to_state']} requires an approvals[] entry "
-                f"(stage={stage}, action={action}) recorded by record_approval.py"
-            )
+        for violation in approval_gate_violations(
+            event["to_state"],
+            iteration_dir,
+            approvals,
+            document,
+            before=event.get("timestamp"),
+        ):
+            report.error(violation)
 
-    # 3. staleness over the full generated_from chain
+    # 3. 基于完整 generated_from 链检查 stale。
     proposed: dict[str, str] = {}
     for artifact_file in sorted(iteration_dir.rglob("*.yaml")):
         if artifact_file == iteration_yaml:
@@ -242,15 +561,31 @@ def check_iteration(
         artifact_binding = binding_for_path(artifact_file, _REGISTRY)
         if artifact_binding is None:
             continue
-        doc = _load_yaml(artifact_file)
+        try:
+            doc = _load_yaml(artifact_file)
+        except (OSError, ValueError, RegistryError):
+            report.error(f"{artifact_file}: is not a safely parseable YAML document")
+            continue
         if not isinstance(doc, dict):
             continue
         generated_from = doc.get("generated_from")
         if not isinstance(generated_from, dict):
             continue
-        upstream = resolve_recorded(generated_from["artifact"], iteration_dir)
-        current = sha256_of(upstream) if upstream else None
-        if current != generated_from["sha256"]:
+        recorded_artifact = generated_from.get("artifact")
+        recorded_sha = generated_from.get("sha256")
+        if (
+            not isinstance(recorded_artifact, str)
+            or not recorded_artifact
+            or not isinstance(recorded_sha, str)
+        ):
+            report.error(f"{artifact_file}: generated_from must contain artifact and sha256")
+            continue
+        upstream = resolve_recorded(recorded_artifact, iteration_dir)
+        try:
+            current = sha256_of(upstream) if upstream else None
+        except (OSError, RegistryError):
+            current = None
+        if current != recorded_sha:
             map_key = artifact_binding["artifact"]
             proposed[map_key] = "stale"
             detail = "upstream missing" if upstream is None else "upstream hash mismatch"
@@ -280,7 +615,7 @@ def check_iteration(
             f"or re-confirmed through the reopen protocol"
         )
 
-    # 4. run-summary invariants (DATA_MODEL §11)
+    # 4. run-summary 不变量（DATA_MODEL §11）。
     for run_summary in sorted(iteration_dir.glob("runs/*/run-summary.yaml")):
         check_run_summary(run_summary, report)
 
@@ -292,7 +627,11 @@ def check_run_summary(run_summary: Path, report: IterationReport) -> None:
     except RegistryError as exc:
         report.error(str(exc))
         return
-    doc: dict[str, Any] = _load_yaml(run_summary) or {}
+    try:
+        doc: dict[str, Any] = _load_yaml(run_summary) or {}
+    except (OSError, ValueError, RegistryError) as exc:
+        report.error(f"{label}: is not a safely parseable YAML document ({type(exc).__name__})")
+        return
     attempts: list[dict[str, Any]] = doc.get("attempts", [])
     numbers = [a["attempt_number"] for a in attempts]
     if numbers != list(range(1, len(numbers) + 1)):
@@ -313,7 +652,9 @@ def check_run_summary(run_summary: Path, report: IterationReport) -> None:
         if not diff_ref:
             continue
         if diff_ref.endswith(".patch") or "/" in diff_ref:
-            candidate = resolve_recorded(diff_ref, run_summary.parent.parent)
+            # self_debug_helper 以单次 run 目录为相对路径基准写入 diff_ref，
+            # 校验器必须使用同一契约，否则记录器生成的合法证据会被误判。
+            candidate = resolve_recorded(diff_ref, run_summary.parent)
             if candidate is None and not diff_ref.startswith("stash"):
                 report.error(f"{label}: attempts[{index}].diff_ref does not resolve: {diff_ref}")
 
@@ -326,7 +667,7 @@ def find_in_progress(iterations_dir: Path, exclude: str | None = None) -> str | 
             continue  # permanent script-test fixtures are exempt (Roadmap 1.16)
         try:
             document = _load_yaml(iteration_yaml)
-        except yaml.YAMLError:
+        except (OSError, ValueError, RegistryError):
             continue
         state = document.get("state") if isinstance(document, dict) else None
         if state not in {"accepted", "merged"} and iteration_yaml.parent.name != exclude:
@@ -335,78 +676,108 @@ def find_in_progress(iterations_dir: Path, exclude: str | None = None) -> str | 
 
 
 def apply_fixes(iteration_dir: Path, report: IterationReport) -> None:
+    """Apply stale proposals in one locked, atomic read/modify/write transaction."""
+    from _writers import _write_iteration_unlocked, iteration_lock, load_iteration
+
     iteration_yaml = iteration_dir / "iteration.yaml"
-    document: dict[str, Any] = _load_yaml(iteration_yaml) or {}
-    changed = False
-    for artifact_file in sorted(iteration_dir.rglob("*.yaml")):
-        if artifact_file == iteration_yaml:
-            continue
-        binding = binding_for_path(artifact_file, _REGISTRY)
-        if binding is None:
-            continue
-        doc = _load_yaml(artifact_file)
-        if not isinstance(doc, dict) or not isinstance(doc.get("generated_from"), dict):
-            continue
-        generated_from = doc["generated_from"]
-        upstream = resolve_recorded(generated_from["artifact"], iteration_dir)
-        current = sha256_of(upstream) if upstream else None
-        if current != generated_from["sha256"]:
-            map_key = binding["artifact"]
-            entry = document.setdefault("artifacts", {}).setdefault(
-                map_key, {"status": "not_started", "input_sha256": None}
-            )
-            if entry.get("status") != "stale":
-                entry["status"] = "stale"
-                changed = True
-    if changed:
-        iteration_yaml.write_text(
-            yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
-        )
-        report.verdict(f"--fix wrote stale statuses to {iteration_yaml}")
+    with iteration_lock(iteration_yaml):
+        iteration_yaml, document = load_iteration(iteration_dir)
+        changed = False
+        for artifact_file in sorted(iteration_dir.rglob("*.yaml")):
+            if artifact_file == iteration_yaml:
+                continue
+            binding = binding_for_path(artifact_file, _REGISTRY)
+            if binding is None:
+                continue
+            try:
+                doc = _load_yaml(artifact_file)
+            except (OSError, ValueError, RegistryError) as exc:
+                raise ValueError(f"{artifact_file} is not safely parseable") from exc
+            if not isinstance(doc, dict) or not isinstance(doc.get("generated_from"), dict):
+                continue
+            generated_from = doc["generated_from"]
+            recorded_artifact = generated_from.get("artifact")
+            recorded_sha = generated_from.get("sha256")
+            if (
+                not isinstance(recorded_artifact, str)
+                or not recorded_artifact
+                or not isinstance(recorded_sha, str)
+            ):
+                raise ValueError(f"{artifact_file} generated_from must contain artifact and sha256")
+            upstream = resolve_recorded(recorded_artifact, iteration_dir)
+            try:
+                current = sha256_of(upstream) if upstream else None
+            except (OSError, RegistryError):
+                current = None
+            if current != recorded_sha:
+                map_key = binding["artifact"]
+                entry = document.setdefault("artifacts", {}).setdefault(
+                    map_key, {"status": "not_started", "input_sha256": None}
+                )
+                if entry.get("status") != "stale":
+                    entry["status"] = "stale"
+                    changed = True
+        if changed:
+            _write_iteration_unlocked(iteration_yaml, document)
+            report.verdict(f"--fix wrote stale statuses to {iteration_yaml}")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("iteration", type=Path, help="iterations/<id> directory")
+    parser.add_argument(
+        "iterations",
+        nargs="+",
+        type=Path,
+        help="一个或多个 iterations/<id> 目录或 iteration.yaml 文件",
+    )
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="write proposed stale-status rewrites (user/bot commits them)",
+        help="写入拟议的 stale 状态差异（由用户或机器人另行提交）",
     )
     args = parser.parse_args(argv)
 
-    iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
-    if iteration_dir.is_file() and iteration_dir.name == "iteration.yaml":
-        iteration_dir = iteration_dir.parent  # pre-commit passes the file itself
-    if not (iteration_dir / "iteration.yaml").exists():
-        print(f"error: no iteration.yaml under {iteration_dir}", file=sys.stderr)
-        return 1
+    failed = False
+    for raw in args.iterations:
+        iteration_dir = raw if raw.is_absolute() else REPO_ROOT / raw
+        if iteration_dir.is_file() and iteration_dir.name == "iteration.yaml":
+            iteration_dir = iteration_dir.parent  # pre-commit passes each file itself
+        if not (iteration_dir / "iteration.yaml").exists():
+            print(f"error: no iteration.yaml under {iteration_dir}", file=sys.stderr)
+            failed = True
+            continue
 
-    report = IterationReport()
-    sibling = find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
-    check_iteration(iteration_dir, report, in_progress_elsewhere=sibling)
-
-    if args.fix and not report.errors:
-        apply_fixes(iteration_dir, report)
-
-    for verdict in report.verdicts:
-        print(verdict)
-    for error in report.errors:
-        print(f"error: {error}", file=sys.stderr)
-    if report.errors:
-        print(f"validate_iteration: {len(report.errors)} error(s)", file=sys.stderr)
-        return 1
-    if report.pending_stale and not args.fix:
-        print(
-            "validate_iteration: stale rewrites pending (run --fix to write them)",
-            file=sys.stderr,
+        report = IterationReport()
+        sibling = (
+            None
+            if iteration_dir.name.startswith("test-fixture-")
+            else find_in_progress(iteration_dir.parent, exclude=iteration_dir.name)
         )
-        return 1
-    if report.verdicts:
-        print(f"validate_iteration: {len(report.verdicts)} verdict(s)")
-    else:
-        print(f"validate_iteration: {iteration_dir.name} OK")
-    return 0
+        check_iteration(iteration_dir, report, in_progress_elsewhere=sibling)
+
+        if args.fix and not report.errors:
+            apply_fixes(iteration_dir, report)
+
+        for verdict in report.verdicts:
+            print(verdict)
+        for error in report.errors:
+            print(f"error: {error}", file=sys.stderr)
+        if report.errors:
+            print(f"validate_iteration: {len(report.errors)} error(s)", file=sys.stderr)
+            failed = True
+            continue
+        if report.pending_stale and not args.fix:
+            print(
+                "validate_iteration: stale rewrites pending (run --fix to write them)",
+                file=sys.stderr,
+            )
+            failed = True
+            continue
+        if report.verdicts:
+            print(f"validate_iteration: {len(report.verdicts)} verdict(s)")
+        else:
+            print(f"validate_iteration: {iteration_dir.name} OK")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

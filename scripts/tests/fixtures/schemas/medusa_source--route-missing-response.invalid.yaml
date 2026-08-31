@@ -1,0 +1,40 @@
+schema_version: "1.0"
+source_type: source_code_and_live_probe
+service_name: Medusa Store API
+package:
+  name: "@medusajs/medusa"
+  version: "2.19.0"
+  repository: https://github.com/medusajs/dtc-starter.git
+  commit: cb603dfda0a82e8bb5e81622f295e0ff90ac6913
+  container_path: /server/node_modules/medusa/dist/api/store
+captured_at: "2026-08-28T16:56:56Z"
+authentication:
+  header: x-publishable-api-key
+  value: redacted runtime value
+base_url: http://127.0.0.1:9000
+routes:
+  - operation_id: listStoreProducts
+    method: GET
+    path: /store/products
+    source_path: products/route.js
+    request:
+      query: [handle, region_id]
+observed_live_probe:
+  probe_date: "2026-08-28"
+  product_selector: handle=t-shirt
+  variant_selector: sku=SHIRT-S-BLACK
+  variant_title: S / Black
+  currency_code: eur
+  unit_amount: 10
+  promotion_code: ARGUS10
+  promotion_percentage: 10
+  invalid_promotion_status: 400
+  invalid_promotion_type: invalid_data
+  missing_payment_provider_status: 400
+  missing_payment_provider_type: invalid_data
+  shipping_selector: name=Standard Shipping
+  payment_provider: pp_system_default
+  complete_type: order
+  completed_order_variant_sku: SHIRT-S-BLACK
+  completed_order_payment_status: authorized
+notes: [缺少 response 结构]

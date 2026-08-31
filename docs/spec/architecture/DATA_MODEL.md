@@ -1,8 +1,8 @@
 # Data Model
 
-Version: 1.6 · Schema contracts updated after the Claude, Grok, GPT, and post-v1.5 review adoptions.
+Version: 1.7 · Schema contracts updated after the Claude, Grok, GPT, and post-v1.5 review adoptions.
 
-Authoritative machine contracts for every YAML artifact crossing a layer boundary. Architecture §1's validation layer enforces these; PRD §2–§5 defines their business meaning. Field-level rules not expressible in JSON Schema (cross-file references, ID uniqueness, staged coverage) live in the **semantic checks** listed in §11 and are enforced by scripts, not prose.
+Authoritative machine contracts for every YAML artifact crossing a layer boundary. Architecture §1's validation layer enforces these; PRD §2–§5 defines their business meaning. Field-level rules not expressible in JSON Schema (cross-file references, ID uniqueness, staged coverage) live in the **semantic checks** listed in §12 and are enforced by scripts, not prose.
 
 Conventions for all persisted artifacts:
 
@@ -11,8 +11,8 @@ Conventions for all persisted artifacts:
 - Unless stated otherwise, objects set `"additionalProperties": false` — unknown fields fail validation. This is deliberate drift protection.
 - IDs follow GLOSSARY formats. Uniqueness scopes differ per artifact; see each entity's "ID" line.
 - **Dialect honesty (Draft-07)**: `default` keywords are annotations, not value injection — producing tools (scaffolder/generators) materialize defaults; validators never assume them. Every conditional (`if`) carries an explicit `required` so absent properties cannot satisfy the condition vacuously. Validators run with a `FormatChecker` enabled so `format: date-time` rejects malformed strings.
-- **Evolution policy**: each artifact pins its `schema_version` (`const "1.0"` in v1). Additive extensions (new files, new registered artifacts) need no migration; changing or removing an existing definition requires a new schema version plus a registry entry and a migration note — none planned for v1 (debt recorded in RISKS_AND_KNOWN_ISSUES).
-- **`generated_from` depth**: the embedded schemas record the single *direct* parent (`artifact`, `sha256`). Generators producing from multiple inputs (requirements + user answers + spec) additionally emit an optional sibling field `inputs: [{artifact, sha256, role}, ...]`; staleness semantics compare every listed hash (single form reads as a one-element list). Producer attribution (skill version, model/session) lives in `events[].triggered_by` metadata and skill frontmatter versions, deliberately not duplicated into every artifact. Phase 1 authors `.schema.json` files incorporating everything on this page, including `inputs`.
+- **Evolution policy**: each artifact pins its `schema_version` (`const "1.0"` for the current YAML contracts). Additive extensions (new files, new registered artifacts) need no migration; changing or removing an existing definition normally requires a new schema version plus a registry entry and a migration note. ADR-015 records the explicit pre-release clean-break exception for the tightened functional/API test-design contracts; execution manifests are a new JSON contract at `1.1` under ADR-014.
+- **`generated_from` depth**: the embedded schemas record the single *direct* parent (`artifact`, `sha256`). Generators producing from multiple inputs (requirements + user answers + spec) additionally emit an optional `inputs: [{artifact, sha256, role}, ...]` field inside `generated_from`; staleness semantics compare every listed hash (single form reads as a one-element list). Producer attribution (skill version, model/session) lives in `events[].triggered_by` metadata and skill frontmatter versions, deliberately not duplicated into every artifact. The committed `.schema.json` files under the registry are the executable authority for this extension.
 
 Schema placement follows production ownership: `requirements/test_points/functional_cases` schemas under `.agents/skills/functional-test-design/schemas/`; `api_spec` + `api_cases` under `.agents/skills/api-test-design/schemas/`; `exemptions`, `iteration`, `traceability`, `run_summary` under `scripts/schemas/`; `*_source_payload` under `plugins/_interface/schemas/`. Filename↔artifact binding is an explicit registry table (`scripts/schema_registry.yaml`) — never inferred from filename similarity.
 
@@ -197,6 +197,9 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
         {"properties": {"ui": {"const": false}, "api": {"const": true}}}
       ]
     },
+    "delegation": {
+      "$ref": "#/definitions/delegation"
+    },
     "artifacts": {
       "type": "object", "additionalProperties": false,
       "required": ["requirements", "test_points", "functional_cases",
@@ -219,13 +222,25 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
         "type": "object", "additionalProperties": false,
         "required": ["stage", "action", "actor", "timestamp", "artifact_sha256"],
         "properties": {
-          "stage": {"enum": ["requirements", "test_points", "environment", "skill_change", "acceptance"]},
-          "action": {"enum": ["accepted", "rejected", "provided", "approved"]},
-          "actor": {"enum": ["user"]},
+          "stage": {"enum": ["requirements", "exemptions", "test_points", "environment", "skill_change", "acceptance"]},
+          "action": {"enum": ["accepted", "rejected", "provided", "approved", "delegated"]},
+          "actor": {"enum": ["user", "agent"]},
           "timestamp": {"type": "string", "format": "date-time"},
           "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-          "note": {"type": "string"}
-        }
+          "note": {"type": "string"},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
+        },
+        "allOf": [{
+          "if": {"properties": {"action": {"const": "delegated"}}, "required": ["action"]},
+          "then": {
+            "properties": {"actor": {"const": "agent"}, "note": {"minLength": 1}},
+            "required": ["note", "delegation_id"]
+          },
+          "else": {
+            "properties": {"actor": {"const": "user"}},
+            "not": {"required": ["delegation_id"]}
+          }
+        }]
       }
     },
     "events": {
@@ -237,7 +252,8 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
           "from_state": {"type": "string"},
           "to_state": {"type": "string"},
           "timestamp": {"type": "string", "format": "date-time"},
-          "triggered_by": {"enum": ["agent", "script", "user"]}
+          "triggered_by": {"enum": ["agent", "script", "user"]},
+          "delegation_id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"}
         }
       }
     },
@@ -257,6 +273,21 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "definitions": {
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "granted_by", "basis", "basis_sha256", "scope", "granted_at", "expires_at"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^delegation-[a-z0-9-]+$"},
+        "granted_by": {"const": "user"},
+        "basis": {"type": "string", "minLength": 1},
+        "basis_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "scope": {"type": "array", "minItems": 1, "uniqueItems": true,
+                  "items": {"enum": ["exemptions", "test_points", "environment", "acceptance", "skill_change", "lifecycle_reopen"]}},
+        "granted_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "artifact_status": {
       "type": "object", "additionalProperties": false,
       "required": ["status"],
@@ -273,7 +304,7 @@ Schema: `scripts/schemas/iteration.schema.json`. This is the persistence home fo
 }
 ```
 
-Semantic check (scripts, not schema): transitions follow PRD §5 routes (`requirements_mapped` applies to the API branch only); v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`. Writer convergence: `state` and `events[]` are written exclusively by `scripts/record_event.py` (called by skills after each legal transition); `approvals[]` exclusively by `scripts/record_approval.py`; hand edits to either namespace are validation errors. `exemptions` in `artifacts` is an optional aggregate mirror — the authoritative exemption state remains `exemptions.yaml` itself.
+Semantic check (scripts, not schema): transitions follow PRD §5 routes (`requirements_mapped` applies to the API branch only); v1 requires exactly one of `branches.ui` and `branches.api` to be true, while the both-true Hybrid route is reserved for post-v1; `blocked` clears only via user action; stale propagation rewrites artifact statuses to `stale`. Writer convergence: `state` and `events[]` are written exclusively by `scripts/record_event.py` (called by skills after each legal transition); regular `approvals[]` entries are written exclusively by `scripts/record_approval.py`; the structured `delegation` grant and its one-time legacy binding are written exclusively by `scripts/record_delegation.py`; hand edits to either namespace are validation errors. Explicit user decisions use `actor: user`; M1 `requirements` acceptance is always user-only and is not a delegation scope. A delegated decision for a later repository stage is valid only with `action: delegated`, `actor: agent`, a matching `delegation_id`, a non-empty note, and a delegation object whose issuer is `user`, basis hash, scope, and validity window all verify. An agent reopen additionally requires the `lifecycle_reopen` scope and stores the same delegation id on the event; delegation ids on unrelated events are invalid. Both decision types bind the current artifact digest and cannot replace environment mechanical checks, real execution evidence, notification delivery, non-author review, or a real merge SHA. `exemptions` in `artifacts` is an optional aggregate mirror — the authoritative exemption state remains `exemptions.yaml` itself.
 
 ## 4. `test_points.yaml`
 
@@ -325,7 +356,7 @@ Schema: `.agents/skills/functional-test-design/schemas/test_points.schema.json`.
 
 ## 5. `functional-cases.yaml`
 
-Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.json`. Now complete (v1.0 deferred to "as previously specified", which pointed nowhere — fixed).
+Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.json` (test-design clean-break rules: ADR-015). Now complete (v1.0 deferred to "as previously specified", which pointed nowhere — fixed).
 
 ```json
 {
@@ -402,7 +433,7 @@ Schema: `.agents/skills/functional-test-design/schemas/functional_cases.schema.j
 }
 ```
 
-The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required. Draft-07 has no usable `maxContains`, so `contains` enforces ≥1 at the schema layer and **tag uniqueness is enforced semantically** by `check_functional_expectations.py` (§11); a second `module:` tag fails validation even though raw JSON Schema would accept it. `derived_from.seed` values must resolve against the target app's seed registry (`shared/testdata/seed-registry.yaml`, produced with the harness per Roadmap 5.0.2): the check is advisory while no registry exists for the target app (early M3 dry-runs) and a hard gate from M6 generation onward, so hallucinated seed names are rejected before any code consumes them.
+The `module:` tag drives `automation/web/{pages,tests}/<module>/` placement downstream (PRD §4.5) — exactly one required. Draft-07 has no usable `maxContains`, so `contains` enforces ≥1 at the schema layer and **tag uniqueness is enforced semantically** by `check_functional_expectations.py` (§12); a second `module:` tag fails validation even though raw JSON Schema would accept it. `derived_from.seed` values must resolve against the target app's seed registry (`shared/testdata/seed-registry.yaml`, produced with the harness per Roadmap 5.0.2): the check is advisory while no registry exists for the target app (early M3 dry-runs) and a hard gate from M6 generation onward, so hallucinated seed names are rejected before any code consumes them.
 
 Export contract for `.xmind`: the root tree is `iteration → module → requirement (R####) → test point (T####) → functional case (C####) → step`. IDs and titles are preserved at each node; a case linked to multiple requirements/test points appears under each applicable source path without changing the source IDs. Golden fixtures assert this hierarchy, not only ZIP validity.
 
@@ -457,6 +488,8 @@ Schema: `.agents/skills/api-test-design/schemas/api_spec.schema.json`. **New in 
           "method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]},
           "summary": {"type": "string"},
           "module": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "requirement_ids": {"type": "array", "minItems": 1,
+            "items": {"type": "string", "pattern": "^R[0-9]{4}$"}},
           "authentication": {"type": "string"},
           "parameters": {"type": "array", "items": {"$ref": "#/definitions/param"}},
           "request_body": {
@@ -530,7 +563,7 @@ Semantic check: when an OpenAPI source uses `components.schemas`, the normalized
 
 ## 7. `api/cases.yaml`
 
-Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json`. Fixes vs v1.0: `iteration_id` declared in properties (was required-but-undefined), lifecycle status names align with the global state machine, `module` is mandatory (it determines generation paths), every case cites its `operation_id` and `requirement_ids[]`, and requests preserve replayable variable sources.
+Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json` (test-design clean-break rules: ADR-015). Fixes vs v1.0: `iteration_id` declared in properties (was required-but-undefined), lifecycle status names align with the global state machine, `module` is mandatory (it determines generation paths), every case cites its `operation_id` and `requirement_ids[]`, and requests preserve replayable variable sources.
 
 ```json
 {
@@ -586,7 +619,9 @@ Schema: `.agents/skills/api-test-design/schemas/api_cases.schema.json`. Fixes vs
             "required": ["status_code"],
             "properties": {"status_code": {"type": "integer"},
                             "body_schema": {"$ref": "#/definitions/schema_fragment"},
-                            "body_includes": {"type": "object"}}
+                            "body_includes": {"type": "object"},
+                            "body_assertions": {"type": "array", "minItems": 1},
+                            "derived_oracles": {"type": "array"}}
           }
         }
       }
@@ -653,11 +688,11 @@ Schema: `scripts/schemas/traceability.schema.json`. Redesign rationale (ADR-005)
           "api_case_id": {"type": "string", "pattern": "^A[0-9]{4}$"},
           "automation_test_ids": {
             "type": "array",
-            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+            "items": {"type": "string", "pattern": "^automation/[^\\x00\\\\\\r\\n]+::[^\\x00\\\\\\r\\n]+$"}
           },
           "retires_nodeids": {
             "type": "array",
-            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+            "items": {"type": "string", "pattern": "^automation/[^\\x00\\\\\\r\\n]+::[^\\x00\\\\\\r\\n]+$"}
           }
         },
         "oneOf": [
@@ -671,7 +706,7 @@ Schema: `scripts/schemas/traceability.schema.json`. Redesign rationale (ADR-005)
 }
 ```
 
-JSON Schema validates *shape*; `check_coverage.py` enforces semantics per branch and tier (§11). UI updates are idempotent upserts keyed on `(iteration_id, requirement_id, test_point_id?, functional_case_id?)`; API updates are keyed on `(iteration_id, requirement_id, api_case_id)`. Retired nodeids remain auditable in `retires_nodeids[]` and are excluded from active automation coverage. Concurrent-looking repeated writes converge to one row, no duplicates.
+JSON Schema validates *shape*; `check_coverage.py` enforces semantics per branch and tier (§12). UI updates are idempotent upserts keyed on `(iteration_id, requirement_id, test_point_id?, functional_case_id?)`; API updates are keyed on `(iteration_id, requirement_id, api_case_id)`. Retired nodeids remain auditable in `retires_nodeids[]` and are excluded from active automation coverage. Concurrent-looking repeated writes converge to one row, no duplicates.
 
 ## 9. `run-summary.yaml`
 
@@ -738,11 +773,15 @@ Schema: `scripts/schemas/run_summary.schema.json`. Adds the `run_id` promised by
 }
 ```
 
-## 10. Plugin source payloads
+## 10. `execution-manifest.json`
+
+Schema: `scripts/schemas/execution_manifest.schema.json`, version `1.1` (ADR-014). This JSON artifact is written beside `run-summary.yaml` under `iterations/<id>/runs/<run-id>/`; it is not a replacement for the run summary. It binds one iteration to the current code SHA, exact command, environment/seed/target summaries, and the expected/collected nodeids. Each attempt independently records its collection, executed nodeids, outcomes, JUnit digest/statistics and Allure digest. A manifest cannot be created from a combined multi-iteration execution: `record-ci-auto` requires `--iteration` and rejects executed nodeids outside that iteration, missing outcomes, skipped/xfailed target nodes, and non-exact JUnit counts. The 1.1 contract is new; no v1 accepted manifest is migrated or silently read as 1.1.
+
+## 11. Plugin source payloads
 
 Schemas: `plugins/_interface/schemas/requirement_source_payload.schema.json`, `plugins/_interface/schemas/api_source_payload.schema.json`.
 
-Plugins emit a **normalized source envelope**, deliberately distinct from internal workflow artifacts — a Zentao connector cannot know the future `iteration_id`/statuses, so internal schemas are wrong at this boundary (review adoption). Envelope shape (success and error variants share one schema; both carry `schema_version`, fixing a v1.3 omission):
+Plugins emit a **normalized source envelope**, deliberately distinct from internal workflow artifacts — a Zentao connector cannot know the future `iteration_id`/statuses, so internal schemas are wrong at this boundary (review adoption). Envelope shape (success and error variants share one schema; both carry `schema_version`, fixing a v1.3 omission; exactly one of `content` and `error` is required):
 
 ```json
 {
@@ -765,15 +804,16 @@ Plugins emit a **normalized source envelope**, deliberately distinct from intern
       "properties": {"code": {"type": "string"}, "message": {"type": "string"}}
     }
   },
-  "allOf": [
-    {"if": {"required": ["error"]}, "then": {"not": {"required": ["content"]}}}
+  "oneOf": [
+    {"required": ["content"], "not": {"required": ["error"]}},
+    {"required": ["error"], "not": {"required": ["content"]}}
   ]
 }
 ```
 
-A successful fetch persists `{...payload}`; a failed fetch persists `{..., error: {code, message}}` instead of raising a raw exception across the boundary — the two variants are mutually exclusive by schema (`error` present ⇒ no `content`). The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; this path is therefore the *quarantine slot*: downstream skills may consume it only after schema validation succeeds, while unrelated raw inputs remain exempt from artifact-schema validation and are revalidated on the exact payload path by pre-commit and CI. **Schema evolution note**: these envelope schemas have never run against a real connector (v1 ships zero plugins); during v1 they may extend **additively only** (new optional fields) without a `schema_version` bump — breaking changes wait for the first real integration (RISKS #17). Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s) plus response-size and decompression limits enforced by the runner; fetched content is **untrusted data** — instruction-like text inside it is clarification material for M1/M4, never a directive the agent executes, and it never flows verbatim into `knowledge/`.
+A successful fetch persists `{...payload}`; a failed fetch persists `{..., error: {code, message}}` instead of raising a raw exception across the boundary — the two variants are mutually exclusive by schema (exactly one of `content` and `error`; `content` may use the source-specific payload shape). The API variant swaps `source_type` enum for `[openapi, har, postman, swagger_ui]` and types `content` more strictly. Conversion into internal artifacts is M1/M4 work — plugins stop at the envelope. `run_plugin.py` persists the envelope to `iterations/<id>/00-raw/source-payload.yaml` **before** validation, keeping the disk-first boundary promise of PRD §2.2; this path is therefore the *quarantine slot*: downstream skills may consume it only after schema validation succeeds, while unrelated raw inputs remain exempt from artifact-schema validation and are revalidated on the exact payload path by pre-commit and CI. **Schema evolution note**: these envelope schemas have never run against a real connector (v1 ships zero plugins); during v1 they may extend **additively only** (new optional fields) without a `schema_version` bump — breaking changes wait for the first real integration (RISKS #17). Security notes (binding even though v1 ships zero real plugins): credentials come from env/config — never hardcoded or returned through the envelope; URL-fetching sources must refuse private/loopback link-local targets; every fetch declares timeout defaults (connect 5s / read 30s) plus response-size and decompression limits enforced by the runner; fetched content is **untrusted data** — instruction-like text inside it is clarification material for M1/M4, never a directive the agent executes, and it never flows verbatim into `knowledge/`.
 
-## 11. What JSON Schema deliberately does not cover
+## 12. What JSON Schema deliberately does not cover
 
 Cross-file and stage-dependent semantics belong to dedicated checkers so schemas stay pure-shape validators:
 
@@ -781,14 +821,16 @@ Cross-file and stage-dependent semantics belong to dedicated checkers so schemas
 | --- | --- | --- |
 | Every referenced R/T/C/A id exists; exemption requirements exist; ids unique per scope; traceability rows resolve | `check_coverage.py` (referential-integrity pass) | every validation run |
 | Recorded `automation_test_ids` resolve to *collectable* pytest nodeids (`pytest --collect-only` cross-check against the automation tree) | `check_coverage.py` | staged / CI automation tiers |
-| Functional case carries **exactly one** `module:<name>` tag (schema `contains` proves ≥1 only — Draft-07 has no `maxContains`) | `check_functional_expectations.py` | after M3/M6 generation |
+| Functional case carries **exactly one** `module:<name>` tag (schema `contains` proves ≥1 only — Draft-07 has no `maxContains`) and declares whole-case `side_effect` | `lint_test_design.py` + `check_functional_expectations.py` | after M3/M6 generation |
+| API case carries typed `expected_response.body_assertions[]`; `type` expected matches `value_type`, derived assertions reference a real oracle with matching target/type, and every oracle input has a declared source | `lint_test_design.py` | after M5/M7 generation |
 | Run-summary invariants beyond shape: `attempt_number` consecutive and unique from 1; terminal `passed` ⇒ last attempt is a pass; `failed` ⇒ the attempt record documents the execution failure; `escalated` ⇒ `escalation.reason_class` matches the taxonomy and its explanation cites evidence; every repair attempt's `diff_ref` resolves | `validate_iteration.py` semantic pass | pre-commit + CI |
+| Execution evidence is exact: one 1.1 manifest per iteration; collection contains expected nodes; executed nodeids and outcomes exactly cover expected nodes; first/retry attempts retain independent JUnit/Allure digests and environment/seed/target summaries | `self_debug_helper.py record-ci-auto --iteration` | E2E evidence write |
 | Branch-specific coverage: UI R→T / T→C / C→nodeid, or API R→A / A→nodeid; `manual_only` exemptions stop at the case tier | `check_coverage.py --tier from-iteration` | staged, per PRD §5.1 |
 | Endpoint coverage: happy + negative/edge per in-scope endpoint | `check_api_coverage.py` | after M5, PRD §4.4 |
 | Functional expectation kind/seed rule; no unexplained numeric or currency literal for `derived_value`; `derived_from.seed` resolves against the seed registry (advisory without one, hard gate from M6); exactly one `module:` tag per case | `check_functional_expectations.py` | after M3/M6 generation |
 | Collected automation nodeids are not orphans: every test's `(iteration, case_id)` markers resolve against the owning iteration's cases and its `traceability.yaml` rows (reverse closure — no untracked hand-written tests) | `check_orphan_tests.py` | static-checks + verification battery |
 | Client fields are a subset of source schema fields; variables resolve to seed/path/previous response | `check_api_models.py` + API semantic pass | after M5/M7 generation |
-| Legal iteration-state transitions; approval/event completeness; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
+| Legal iteration-state transitions; approval/event completeness; latest stage decision and current artifact SHA-256 match for requirements/test-points/exemptions gates; reopen/staleness (`stale` statuses computed from the full hash chain — every `generated_from` input listed on an artifact, scalar form counting as one) | `validate_iteration.py` + `record_approval.py` + `reopen_iteration.py` | pre-commit + CI |
 | Exported implies ≥1 case; `.xmind` tree is iteration→module→R→T→C→step; `.xlsx` columns match the API export contract | exporter round-trip tests + CI byte-repro check | CI |
 | Retired nodeids are not active coverage; at most one in-progress iteration exists in v1 | `check_coverage.py` + `validate_iteration.py` | every validation run |
 

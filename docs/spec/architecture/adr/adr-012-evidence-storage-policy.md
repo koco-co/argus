@@ -2,7 +2,7 @@
 
 - Date: 2026-08-27
 - Status: Accepted
-- Related: ADR-010, DATA_MODEL §9/§10, PRD §4.7/§6/§7.2, ARCHITECTURE §2/§8, ENVIRONMENT_SETUP gitignore
+- Related: ADR-010, ADR-014, DATA_MODEL §9/§10, PRD §4.7/§6/§7.2, ARCHITECTURE §2/§8, ENVIRONMENT_SETUP gitignore
 
 ## Background
 
@@ -12,12 +12,12 @@ ADR-010 placed every run's evidence under `iterations/<id>/runs/<run_id>/` but l
 
 Three tiers:
 
-1. **In git (minimum acceptance-closure set)**: `run-summary.yaml` (all `attempts[]` records) and the patch texts behind `attempts[].diff_ref`. Small, text, and exactly what terminal diff review needs.
+1. **In git (minimum acceptance-closure set)**: `run-summary.yaml`, `execution-manifest.json` (the 1.1 exact-nodeid/SHA/digest binding), and the patch texts behind `attempts[].diff_ref`. These are small, structured/text records and exactly what terminal diff review needs.
 2. **Gitignored, reviewed in-session**: `allure-results/`, `logs/`, `traces/` under a run directory, for locally produced evidence. Mandatory review happens inside the session before acceptance; after that they are reproducible-by-rerun and disposable.
-3. **CI artifacts only**: same heavy paths produced on CI are uploaded as workflow artifacts (retention configured) and linked from the PR; never committed.
+3. **CI artifacts only**: JUnit XML, Allure results, traces and logs produced by CI are uploaded as workflow artifacts (retention configured) and linked from the PR; their paths, digests and counts are recorded by the execution manifest, but the heavy files are never committed.
 
 Traces are added to the DATA_MODEL §10 redaction-boundary list: trace material never leaves the session/machine unsanitized.
 
 ## Consequences
 
-`.gitignore` carries explicit `iterations/*/runs/*/` rules (keep `run-summary.yaml` + patches, ignore the heavy subdirectories); CI's upload path lists them explicitly; acceptance reviewers rely on the summary + diffs in-repo plus the session transcript (local) or artifact link (CI).
+`.gitignore` carries explicit `iterations/*/runs/*/` rules (keep `run-summary.yaml`, `execution-manifest.json` and patches, ignore the heavy subdirectories); CI's upload path lists the report and run-evidence trees explicitly; acceptance reviewers rely on the summary + manifest + diffs in-repo plus the session transcript (local) or artifact link (CI).

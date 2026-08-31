@@ -7,11 +7,10 @@ committed; sources are schema-gated through the registry before rendering.
 from __future__ import annotations
 
 import hashlib
-import shutil
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 from conftest import FIXTURES_DIR as FIXTURE_DIR
 from conftest import _load_script
 
@@ -52,8 +51,7 @@ def test_golden_requirement_md_fixture(render_md: Any, tmp_path: Path) -> None:
     render_md.render_iteration(iteration_dir)
     rendered = (iteration_dir / "requirement.md").read_text(encoding="utf-8")
     golden = GOLDEN_DIR / "requirement.golden.md"
-    if not golden.exists():  # first generation records the golden
-        shutil.copyfile(iteration_dir / "requirement.md", golden)
+    assert golden.is_file(), "golden fixture is missing; regenerate it through an explicit update"
     assert rendered == golden.read_text(encoding="utf-8"), (
         "rendered requirement.md drifted from the golden fixture — update "
         "the fixture only together with an intentional renderer change"

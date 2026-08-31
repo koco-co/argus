@@ -1,19 +1,17 @@
 #!/usr/bin/env python
-"""API endpoint coverage checker (Roadmap 1.8 / PRD §4.4).
+"""API endpoint 覆盖检查器（Roadmap 1.8、PRD §4.4）。
 
-Checks ``api/spec.normalized.yaml`` against ``api/cases.yaml``:
+将 ``api/spec.normalized.yaml`` 与 ``api/cases.yaml`` 逐项比对：
 
-- every endpoint NOT marked ``out_of_scope`` has >=1 ``happy_path`` case and
-  >=1 ``negative``/``edge`` case (gaps are reported with the operation_id);
-- an endpoint marked ``out_of_scope: true`` must carry a non-empty
-  ``out_of_scope_reason`` (omitting the flag entirely stays legal - the
-  vacuous-conditional rule from DATA_MODEL §6);
-- every API case cites ``requirement_ids[]``; every requirement not removed
-  by an ACCEPTED ``not_testable`` exemption appears in >=1 API case's
-  ``requirement_ids[]`` (``manual_only`` does NOT remove the R->A demand -
-  DATA_MODEL §2.1: it only stops the automation tier).
+- 未标记 ``out_of_scope`` 的 endpoint 至少有一个 ``happy_path`` 和一个
+  ``negative``/``edge`` 用例，缺口报告对应的 operation_id；
+- 标记 ``out_of_scope: true`` 的 endpoint 必须带非空
+  ``out_of_scope_reason``（完全省略该字段仍合法，遵循 DATA_MODEL §6 的条件规则）；
+- 每个 API case 都引用 ``requirement_ids[]``；未被已接受 ``not_testable`` 豁免移除的需求，
+  至少出现在一个 API case 的 ``requirement_ids[]`` 中（``manual_only`` 不会移除 R→A 要求，
+  它只停止自动化层）。
 
-Sources are schema-gated through the shared registry before checking.
+检查前先通过共享注册表执行来源 Schema 门禁。
 """
 
 from __future__ import annotations
@@ -23,8 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
 from _registry_lib import REPO_ROOT, RegistryError, validate_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 HappyKinds = {"happy_path"}
 NegativeKinds = {"negative", "edge"}
@@ -41,22 +39,38 @@ class Report:
 def _load_validated(iteration_dir: Path, name: str) -> dict[str, Any]:
     path = iteration_dir / name
     validate_path(path)
-    document: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    document = load_yaml(path.read_bytes()) or {}
+    if not isinstance(document, dict):
+        raise ValueError(f"{path} 顶层必须是映射")
     return document
 
 
 def load_exemptions(iteration_dir: Path) -> dict[str, str]:
-    """requirement_id -> kind for ACCEPTED exemptions with non-empty reasons."""
+    """返回带非空理由且已接受豁免的 requirement_id -> kind 映射。"""
     path = iteration_dir / "exemptions.yaml"
+    if path.is_symlink():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
     if not path.exists():
         return {}
-    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not path.is_file():
+        raise ValueError("exemptions.yaml 必须是安全的普通文件")
+    validate_path(path)
+    document = load_yaml(path.read_bytes()) or {}
+    if not isinstance(document, dict):
+        raise ValueError("exemptions.yaml 顶层必须是映射")
     if document.get("status") != "accepted":
         return {}
     honored: dict[str, str] = {}
-    for entry in document.get("exemptions", []):
-        if entry.get("reason", "").strip():
-            honored[entry["requirement_id"]] = entry["kind"]
+    exemptions = document.get("exemptions", [])
+    if not isinstance(exemptions, list) or any(not isinstance(entry, dict) for entry in exemptions):
+        raise ValueError("exemptions.yaml 的 exemptions 必须是对象列表")
+    for entry in exemptions:
+        reason = entry.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            requirement_id = entry.get("requirement_id")
+            kind = entry.get("kind")
+            if isinstance(requirement_id, str) and isinstance(kind, str):
+                honored[requirement_id] = kind
     return honored
 
 
@@ -72,6 +86,20 @@ def check(
         rids = case.get("requirement_ids") or []
         if not rids:
             report.fail(f"API case {case['api_case_id']} has no requirement_ids")
+        # side_effect 描述整个可回放链（包括 setup），不是只描述目标请求。
+        # 任何依赖 prev_response 的 case 都已经执行过前置请求；标成 none
+        # 会让 M9 在失败重跑时跳过 fresh reset，产生重复资源或污染。
+        if (
+            any(
+                isinstance(variable, dict) and variable.get("source") == "prev_response"
+                for variable in (case.get("request", {}) or {}).get("variables", [])
+            )
+            and case.get("side_effect", "none") == "none"
+        ):
+            report.fail(
+                f"API case {case['api_case_id']} uses prev_response but declares "
+                "side_effect=none; declare the setup chain side effect"
+            )
         per_operation.setdefault(case["operation_id"], []).append(case)
 
     for endpoint in spec["endpoints"]:
@@ -85,6 +113,23 @@ def check(
             report.fail(f"endpoint {operation_id} lacks a happy_path case")
         if not (kinds & NegativeKinds):
             report.fail(f"endpoint {operation_id} lacks a negative/edge case")
+        declared_statuses = {
+            response.get("status_code")
+            for response in endpoint.get("responses", [])
+            if isinstance(response, dict)
+        }
+        for case in per_operation.get(operation_id, []):
+            status_code = (case.get("expected_response") or {}).get("status_code")
+            if isinstance(status_code, int) and status_code >= 500:
+                report.fail(
+                    f"API case {case['api_case_id']} expects HTTP {status_code}; "
+                    "backend_5xx is escalation-only and cannot be a passing oracle"
+                )
+            if status_code not in declared_statuses:
+                report.fail(
+                    f"API case {case['api_case_id']} expects HTTP {status_code}, "
+                    f"but endpoint {operation_id} does not declare that response"
+                )
 
     cited: set[str] = set()
     for case in cases["cases"]:
@@ -99,7 +144,7 @@ def check(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("iteration", type=Path, help="iterations/<id> directory")
+    parser.add_argument("iteration", type=Path, help="iterations/<id> 目录")
     args = parser.parse_args(argv)
 
     iteration_dir = args.iteration if args.iteration.is_absolute() else REPO_ROOT / args.iteration
@@ -113,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         cases = _load_validated(iteration_dir, "api/cases.yaml")
         requirements = _load_validated(iteration_dir, "requirements.yaml")
         exemptions = load_exemptions(iteration_dir)
-    except RegistryError as exc:
+    except (OSError, UnicodeError, ValueError, RegistryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

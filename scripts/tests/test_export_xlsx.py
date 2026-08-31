@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +49,15 @@ def test_two_runs_identical_bytes_and_version_increments(
     assert first.name == "argus_v1_API_Cases.xlsx"
     assert second.name == "argus_v2_API_Cases.xlsx"
     assert _sha(first) == _sha(second)
+
+
+def test_core_properties_modified_timestamp_is_pinned(exporter: Any, iteration_dir: Path) -> None:
+    """openpyxl 保存时会重写 modified，导出器必须在 ZIP 层再次固定。"""
+    destination = exporter.export(iteration_dir)
+    with zipfile.ZipFile(destination) as archive:
+        core = archive.read("docProps/core.xml").decode("utf-8")
+    assert "<dcterms:modified" in core
+    assert ">1980-01-01T00:00:00Z</dcterms:modified>" in core
 
 
 def test_round_trip_columns_and_populated_values(exporter: Any, iteration_dir: Path) -> None:
@@ -92,3 +104,17 @@ def test_missing_source_refused(exporter: Any, tmp_path: Path) -> None:
     iteration_dir.mkdir(parents=True)
     with pytest.raises(Exception, match="missing source"):
         exporter.export(iteration_dir)
+
+
+def test_cli_entrypoint_writes_export(iteration_dir: Path) -> None:
+    """Makefile 调用脚本时必须真正执行 main，而不是静默空跑。"""
+    result = subprocess.run(
+        [sys.executable, "scripts/export_xlsx.py", str(iteration_dir)],
+        cwd=Path(__file__).resolve().parents[2],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "export_xlsx: wrote" in result.stdout
+    assert list((iteration_dir / "exports").glob("*.xlsx"))

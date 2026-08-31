@@ -18,11 +18,11 @@
           "api_case_id": {"type": "string", "pattern": "^A[0-9]{4}$"},
           "automation_test_ids": {
             "type": "array",
-            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+            "items": {"type": "string", "pattern": "^automation/[^\\x00\\\\\\r\\n]+::[^\\x00\\\\\\r\\n]+$"}
           },
           "retires_nodeids": {
             "type": "array",
-            "items": {"type": "string", "pattern": "^automation/.+::[^:]+$"}
+            "items": {"type": "string", "pattern": "^automation/[^\\x00\\\\\\r\\n]+::[^\\x00\\\\\\r\\n]+$"}
           }
         },
         "oneOf": [

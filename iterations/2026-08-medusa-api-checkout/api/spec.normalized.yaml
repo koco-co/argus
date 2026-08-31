@@ -1,0 +1,416 @@
+schema_version: "1.0"
+iteration_id: 2026-08-medusa-api-checkout
+status: spec_valid
+generated_from:
+  artifact: iterations/2026-08-medusa-api-checkout/00-raw/medusa-store-api-source.yaml
+  sha256: 30acdcc118408fea519e0e2605007ea8491d47fdd21648b0d6aefa28a3eff2a0
+  inputs:
+    - artifact: iterations/2026-08-medusa-api-checkout/requirements.yaml
+      sha256: 3e0c273c1072c67003397967ed41e99261b92e9cdcddae6c072aaafa19391164
+      role: accepted_requirements
+    - artifact: iterations/2026-08-medusa-api-checkout/00-raw/medusa-store-api-source.yaml
+      sha256: 30acdcc118408fea519e0e2605007ea8491d47fdd21648b0d6aefa28a3eff2a0
+      role: pinned_source_and_live_probe
+service_name: Medusa Store API
+base_path: /store
+auth_model: x-publishable-api-key
+source_refs:
+  - kind: source_code
+    location: iterations/2026-08-medusa-api-checkout/00-raw/medusa-store-api-source.yaml
+  - kind: dev_docs
+    location: https://docs.medusajs.com/api/store
+components:
+  schemas:
+    ProductListResponse:
+      type: object
+      required: [products, count, offset, limit]
+      properties:
+        products: {type: array, items: {$ref: "#/components/schemas/Product"}}
+        count: {type: integer}
+        offset: {type: integer}
+        limit: {type: integer}
+    Product:
+      type: object
+      required: [id, handle, variants]
+      properties:
+        id: {type: string}
+        handle: {type: string}
+        variants: {type: array, items: {$ref: "#/components/schemas/ProductVariant"}}
+    ProductVariant:
+      type: object
+      required: [id, title, sku, calculated_price]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        sku: {type: string}
+        calculated_price: {$ref: "#/components/schemas/CalculatedPrice"}
+    CalculatedPrice:
+      type: object
+      required: [calculated_amount, currency_code]
+      properties:
+        calculated_amount: {type: number}
+        currency_code: {type: string}
+    Address:
+      type: object
+      required: [first_name, last_name, address_1, city, postal_code, country_code]
+      properties:
+        first_name: {type: string}
+        last_name: {type: string}
+        address_1: {type: string}
+        city: {type: string}
+        postal_code: {type: string}
+        country_code: {type: string}
+        phone: {type: string}
+    CreateCartRequest:
+      type: object
+      required: [region_id]
+      properties:
+        region_id: {type: string}
+    AddLineItemRequest:
+      type: object
+      required: [variant_id, quantity]
+      properties:
+        variant_id: {type: string}
+        quantity: {type: integer}
+    ApplyPromotionsRequest:
+      type: object
+      required: [promo_codes]
+      properties:
+        promo_codes: {type: array, items: {type: string}}
+    UpdateCartRequest:
+      type: object
+      required: [email, shipping_address, billing_address]
+      properties:
+        email: {type: string, format: email}
+        shipping_address: {$ref: "#/components/schemas/Address"}
+        billing_address: {$ref: "#/components/schemas/Address"}
+    AddShippingMethodRequest:
+      type: object
+      required: [option_id]
+      properties:
+        option_id: {type: string}
+        data: {type: object}
+    CreatePaymentCollectionRequest:
+      type: object
+      required: [cart_id]
+      properties:
+        cart_id: {type: string}
+    InitializePaymentSessionRequest:
+      type: object
+      required: [provider_id]
+      properties:
+        provider_id: {type: string}
+        data: {type: object}
+    CartItem:
+      type: object
+      required: [id, variant_id, quantity, unit_price]
+      properties:
+        id: {type: string}
+        variant_id: {type: string}
+        quantity: {type: integer}
+        unit_price: {type: number}
+        title: {type: string}
+    CartShippingMethod:
+      type: object
+      required: [id, shipping_option_id]
+      properties:
+        id: {type: string}
+        shipping_option_id: {type: string}
+    ShippingMethod:
+      type: object
+      required: [id, shipping_option_id, name]
+      properties:
+        id: {type: string}
+        shipping_option_id: {type: string}
+        name: {type: string}
+    Cart:
+      type: object
+      required: [id, region_id, currency_code, items, subtotal, discount_total, total]
+      properties:
+        id: {type: string}
+        region_id: {type: string}
+        currency_code: {type: string}
+        items: {type: array, items: {$ref: "#/components/schemas/CartItem"}}
+        subtotal: {type: number}
+        discount_total: {type: number}
+        shipping_total: {type: number}
+        total: {type: number}
+        email: {type: string}
+        shipping_address: {$ref: "#/components/schemas/Address"}
+        billing_address: {$ref: "#/components/schemas/Address"}
+        shipping_methods: {type: array, items: {$ref: "#/components/schemas/CartShippingMethod"}}
+    CartResponse:
+      type: object
+      required: [cart]
+      properties:
+        cart: {$ref: "#/components/schemas/Cart"}
+    ErrorResponse:
+      type: object
+      required: [type, message]
+      properties:
+        type: {type: string}
+        message: {type: string}
+    ShippingOption:
+      type: object
+      required: [id, name, amount, provider_id]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        amount: {type: number}
+        price_type: {type: string}
+        provider_id: {type: string}
+    ShippingOptionListResponse:
+      type: object
+      required: [shipping_options]
+      properties:
+        shipping_options: {type: array, items: {$ref: "#/components/schemas/ShippingOption"}}
+    PaymentSession:
+      type: object
+      required: [provider_id, status, amount, currency_code]
+      properties:
+        provider_id: {type: string}
+        status: {type: string}
+        amount: {type: number}
+        currency_code: {type: string}
+    PaymentCollection:
+      type: object
+      required: [id, amount, currency_code, payment_sessions]
+      properties:
+        id: {type: string}
+        amount: {type: number}
+        currency_code: {type: string}
+        payment_sessions: {type: array, items: {$ref: "#/components/schemas/PaymentSession"}}
+    PaymentCollectionResponse:
+      type: object
+      required: [payment_collection]
+      properties:
+        payment_collection: {$ref: "#/components/schemas/PaymentCollection"}
+    OrderPaymentCollection:
+      type: object
+      required: [id, status, amount, currency_code]
+      properties:
+        id: {type: string}
+        status: {type: string}
+        amount: {type: number}
+        currency_code: {type: string}
+    OrderItem:
+      type: object
+      required: [id, variant_id, variant_sku, quantity, unit_price, total]
+      properties:
+        id: {type: string}
+        variant_id: {type: string}
+        variant_sku: {type: string}
+        quantity: {type: integer}
+        unit_price: {type: number}
+        total: {type: number}
+    Order:
+      type: object
+      required: [id, status, email, items, shipping_methods, payment_collections, subtotal, discount_total, total]
+      properties:
+        id: {type: string}
+        status: {type: string}
+        email: {type: string}
+        items: {type: array, items: {$ref: "#/components/schemas/OrderItem"}}
+        shipping_methods: {type: array, items: {$ref: "#/components/schemas/ShippingMethod"}}
+        payment_collections: {type: array, items: {$ref: "#/components/schemas/OrderPaymentCollection"}}
+        subtotal: {type: number}
+        discount_total: {type: number}
+        total: {type: number}
+    OrderResponse:
+      type: object
+      required: [type, order]
+      properties:
+        type: {type: string, enum: [order]}
+        order: {$ref: "#/components/schemas/Order"}
+endpoints:
+  - operation_id: listStoreProducts
+    path: /store/products
+    method: GET
+    summary: 查询 T-Shirt 与运行时商品变体
+    module: checkout
+    requirement_ids: [R0001]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: handle
+        in: query
+        required: true
+        schema: {type: string}
+      - name: region_id
+        in: query
+        required: true
+        schema: {type: string}
+      - name: fields
+        in: query
+        required: false
+        schema: {type: string}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/ProductListResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: createStoreCart
+    path: /store/carts
+    method: POST
+    summary: 按运行时地区建立游客购物车
+    module: checkout
+    requirement_ids: [R0001]
+    authentication: x-publishable-api-key
+    parameters: []
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/CreateCartRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 404
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: addStoreCartLineItem
+    path: /store/carts/{id}/line-items
+    method: POST
+    summary: 向购物车加入黑色 S 码变体
+    module: checkout
+    requirement_ids: [R0001]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/AddLineItemRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: applyStoreCartPromotions
+    path: /store/carts/{id}/promotions
+    method: POST
+    summary: 应用 ARGUS10 促销码
+    module: checkout
+    requirement_ids: [R0002, R0004]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/ApplyPromotionsRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: updateStoreCart
+    path: /store/carts/{id}
+    method: POST
+    summary: 写入游客邮箱和配送地址
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/UpdateCartRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: listStoreShippingOptions
+    path: /store/shipping-options
+    method: GET
+    summary: 查询当前购物车可用配送方式
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: cart_id
+        in: query
+        required: true
+        schema: {type: string}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/ShippingOptionListResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: addStoreCartShippingMethod
+    path: /store/carts/{id}/shipping-methods
+    method: POST
+    summary: 选择 Standard Shipping
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/AddShippingMethodRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/CartResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: createStorePaymentCollection
+    path: /store/payment-collections
+    method: POST
+    summary: 为购物车初始化支付集合
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters: []
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/CreatePaymentCollectionRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: initializeStorePaymentSession
+    path: /store/payment-collections/{id}/payment-sessions
+    method: POST
+    summary: 选择隔离测试用 Manual Payment
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    request_body:
+      content_type: application/json
+      schema: {$ref: "#/components/schemas/InitializePaymentSessionRequest"}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+      - status_code: 400
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+  - operation_id: completeStoreCart
+    path: /store/carts/{id}/complete
+    method: POST
+    summary: 完成购物车并创建订单
+    module: checkout
+    requirement_ids: [R0003]
+    authentication: x-publishable-api-key
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    responses:
+      - status_code: 200
+        body_schema: {$ref: "#/components/schemas/OrderResponse"}
+      - status_code: 404
+        body_schema: {$ref: "#/components/schemas/ErrorResponse"}

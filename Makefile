@@ -5,34 +5,57 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration export web-tests api-tests lint \
-	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-down
+.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint test-design-lint static-gates skill-golden \
+	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
+	target-app-down
 
 setup:
-	uv sync
+	uv sync --locked
 	uv run pre-commit install
 	uv run playwright install chromium
 
 new-iteration:
-	uv run python scripts/new_iteration.py $(ID) --branch $(BRANCH)
+	uv run python scripts/new_iteration.py "$(ID)" --branch "$(BRANCH)"
 
 validate-iteration:
-	uv run python scripts/validate_schema.py iterations/$(ID)
+	uv run python scripts/validate_schema.py "iterations/$(ID)"
+
+validate-readme:
+	uv run python scripts/validate_readme.py --strict
 
 export:
-	uv run python scripts/export_xmind.py iterations/$(ID)
-	uv run python scripts/export_xlsx.py iterations/$(ID)
-	uv run python scripts/render_md.py iterations/$(ID)
+	if [ -f "iterations/$(ID)/functional-cases.yaml" ]; then uv run python scripts/export_xmind.py "iterations/$(ID)"; fi
+	if [ -f "iterations/$(ID)/api/cases.yaml" ]; then uv run python scripts/export_xlsx.py "iterations/$(ID)"; fi
+	uv run python scripts/render_md.py "iterations/$(ID)"
 
 web-tests:
-	TEST_ENV=$(ENV) uv run pytest automation/web/tests/$(MODULE) --alluredir=reports/allure-results
+	TEST_ENV="$(ENV)" uv run pytest "automation/web/tests/$(MODULE)" --alluredir="reports/allure-results"
 
 api-tests:
-	TEST_ENV=$(ENV) uv run pytest automation/api/tests/$(MODULE) --alluredir=reports/allure-results
+	TEST_ENV="$(ENV)" uv run pytest "automation/api/tests/$(MODULE)" --alluredir="reports/allure-results"
 
 lint:
 	uv run ruff check .
+	uv run ruff format --check .
 	uv run pyright
+	uv run python scripts/validate_readme.py --strict
+
+test-design-lint:
+	uv run python scripts/lint_test_design.py --all
+
+static-gates: lint test-design-lint skill-golden
+	uv run python scripts/check_layering.py --all
+	uv run python scripts/check_pom_boundary.py --all
+	uv run python scripts/check_test_markers.py --all
+	uv run python scripts/check_db_readonly.py --all
+	uv run python scripts/check_prod_scope.py --all
+	uv run python scripts/check_orphan_tests.py
+	uv run python scripts/check_api_models.py --all
+	uv run python scripts/check_coverage.py --tier from-iteration
+	uv run python scripts/check_iteration_gates.py
+
+skill-golden:
+	uv run python scripts/check_skill_golden.py --all --actual-root .
 
 target-app-up:
 	uv run python scripts/target_app_up.py
@@ -45,6 +68,9 @@ target-app-reset:
 
 target-app-healthcheck:
 	uv run python scripts/target_app_healthcheck.py
+
+target-app-canary:
+	uv run python scripts/target_app_canary.py
 
 target-app-down:
 	uv run python scripts/target_app_down.py

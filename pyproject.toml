@@ -1,34 +1,58 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "argus"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI-driven automation testing framework: requirement -> test design -> generated web/API automation with self-debug"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
-    "pytest>=8.3",
+    "pytest>=9.1.1",
     "pytest-playwright>=0.5",
     "pytest-xdist>=3.6",
     "allure-pytest>=2.15",
     "httpx>=0.27",
     "pydantic>=2.9",
     "rich>=13.9",
-    "pyyaml>=6.0",
+    "pyyaml>=6.0.3",
     "jsonschema>=4.23",
     "rfc3339-validator>=0.1.4",
     "openpyxl>=3.1",
+    "argus-core==0.2.0",
+    "argus-plugin-sdk==0.2.0",
+    "argus-medusa==0.2.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shared", "shared.*"]
+
+[project.scripts]
+argus = "argus_core.cli:main"
+
+[tool.uv.sources]
+argus-core = { workspace = true }
+argus-plugin-sdk = { workspace = true }
+argus-medusa = { workspace = true }
+
+[tool.uv.workspace]
+members = ["packages/argus-core", "packages/argus-plugin-sdk", "adapters/medusa"]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.8",
+    "ruff>=0.16.4",
     "pyright>=1.1.390",
     "pre-commit>=4.0",
 ]
 mobile = [
-    "appium-python-client>=4.0",
+    "appium-python-client>=6.0.0",
 ]
 perf = [
-    "locust>=2.29",
+    "locust>=2.46.4",
 ]
 
 [tool.pytest.ini_options]
@@ -36,11 +60,13 @@ perf = [
 # expressions (ENVIRONMENT_SETUP.md); markers are metadata checked by
 # scripts/check_test_markers.py (Phase 1).
 addopts = "--strict-markers"
+pythonpath = ["."]
 testpaths = ["scripts/tests"]
 markers = [
     "module(name): business module this test belongs to (metadata; run selection is by directory)",
     "case_id(id): owning functional/API case id within the iteration (e.g. C0012 / A0007)",
     "iteration(id): iteration_id this generated test belongs to",
+    "read_only: test does not mutate the target and may be collected for production runs",
 ]
 
 [tool.ruff]
@@ -55,5 +81,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pyright]
 typeCheckingMode = "basic"
-include = ["scripts", "shared", "automation", "plugins"]
+include = ["scripts", "shared", "automation", "plugins", "packages", "adapters"]
 exclude = ["**/__pycache__", ".venv"]

@@ -1,0 +1,6 @@
+结论：patch-scope 允许，但 POM 边界门禁拒绝
+允许范围：automation/web/pages/checkout/cart_page.py
+冻结范围改动：0
+POM 静态启发式违规：1
+剩余自动修复预算：5/5
+证据：traces/pom-boundary.txt

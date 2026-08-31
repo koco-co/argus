@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from jsonschema import Draft7Validator, FormatChecker
 
@@ -25,6 +25,7 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "schemas"
 _FTD = REPO_ROOT / ".agents/skills/functional-test-design/schemas"
 _ATD = REPO_ROOT / ".agents/skills/api-test-design/schemas"
 _PAYLOADS = REPO_ROOT / "plugins/_interface/schemas"
+_SCRIPTS_SCHEMAS = REPO_ROOT / "scripts/schemas"
 
 SCHEMAS: dict[str, Path] = {
     "requirements": _FTD / "requirements.schema.json",
@@ -36,8 +37,10 @@ SCHEMAS: dict[str, Path] = {
     "api_cases": _ATD / "api_cases.schema.json",
     "traceability": REPO_ROOT / "scripts/schemas/traceability.schema.json",
     "run_summary": REPO_ROOT / "scripts/schemas/run_summary.schema.json",
+    "execution_manifest": REPO_ROOT / "scripts/schemas/execution_manifest.schema.json",
     "requirement_source_payload": _PAYLOADS / "requirement_source_payload.schema.json",
     "api_source_payload": _PAYLOADS / "api_source_payload.schema.json",
+    "medusa_source": _SCRIPTS_SCHEMAS / "medusa_source.schema.json",
 }
 
 
@@ -91,6 +94,13 @@ def test_every_schema_has_at_least_one_fixture_pair() -> None:
     covered = valid & invalid
     missing = sorted(set(SCHEMAS) - covered - {"iteration"})
     assert missing == [], f"schemas without committed fixture pairs: {missing}"
+
+
+def test_execution_manifest_old_version_is_not_accepted() -> None:
+    fixture = FIXTURE_DIR / "execution_manifest--passed.valid.yaml"
+    document = yaml.safe_load(fixture.read_text(encoding="utf-8"))
+    document["schema_version"] = "1.0"
+    assert validate("execution_manifest", document) != []
 
 
 def test_vacuous_conditional_out_of_scope_omitted_passes_without_reason() -> None:

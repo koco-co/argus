@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from _registry_lib import (
     DEFAULT_REGISTRY,
     RegistryError,
@@ -35,6 +35,7 @@ from _registry_lib import (
 from _registry_lib import (
     load_registry as _load_registry,
 )
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = DEFAULT_REGISTRY
@@ -60,6 +61,17 @@ class NewIterationError(Exception):
     """User-facing scaffolding failure."""
 
 
+def _assert_safe_path(path: Path, *, label: str) -> None:
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if "\x00" in str(candidate) or "\\" in str(candidate) or ".." in candidate.parts:
+        raise NewIterationError(f"{label} 不得包含路径穿越：{path}")
+    current = Path(candidate.anchor)
+    for part in candidate.parts:
+        current /= part
+        if current.is_symlink():
+            raise NewIterationError(f"{label} 不得经过符号链接：{path}")
+
+
 def load_registry(registry_path: Path = REGISTRY_PATH) -> list[dict[str, Any]]:
     try:
         return _load_registry(registry_path)  # type: ignore[arg-type]
@@ -82,6 +94,14 @@ def validate_artifact(
     """Validate a document against the schema its canonical artifact path is
     bound to in the registry. Raises NewIterationError for unregistered paths
     or validation failures, naming the exact JSON path of each violation."""
+    canonical = Path(canonical_path)
+    if (
+        "\x00" in canonical_path
+        or "\\" in canonical_path
+        or canonical.is_absolute()
+        or ".." in canonical.parts
+    ):
+        raise NewIterationError(f"unsafe artifact path: {canonical_path}")
     try:
         bindings = _load_registry(registry_path)
         from _registry_lib import binding_for as _binding_for
@@ -102,8 +122,14 @@ def validate_artifact(
 def validate_via_registry(yaml_path: Path, registry_path: Path = REGISTRY_PATH) -> dict[str, str]:
     """Validate one YAML file through the shared registry path (repo-relative
     location decides the binding — the Phase 1 validator behavior)."""
+    _assert_safe_path(yaml_path, label="artifact")
+    if yaml_path.is_symlink() or not yaml_path.is_file():
+        raise NewIterationError(f"artifact must be a safe regular file: {yaml_path}")
     relative = Path(os.path.relpath(yaml_path, REPO_ROOT)).as_posix()
-    document = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    try:
+        document = load_yaml(yaml_path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise NewIterationError(f"cannot safely parse {yaml_path}") from exc
     return validate_artifact(relative, document, registry_path)
 
 
@@ -111,16 +137,20 @@ FIXTURE_PREFIX = "test-fixture-"
 
 
 def find_in_progress_iteration(iterations_dir: Path) -> str | None:
+    _assert_safe_path(iterations_dir, label="iterations directory")
     if not iterations_dir.is_dir():
         return None
     for iteration_yaml in sorted(iterations_dir.glob("*/iteration.yaml")):
+        _assert_safe_path(iteration_yaml, label="iteration")
+        if iteration_yaml.is_symlink() or not iteration_yaml.is_file():
+            raise NewIterationError(f"iteration file is not a safe regular file: {iteration_yaml}")
         if iteration_yaml.parent.name.startswith(FIXTURE_PREFIX):
             continue  # permanent script-test fixtures are exempt (Roadmap 1.16)
         try:
-            document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
-        except yaml.YAMLError as exc:
+            document = load_yaml(iteration_yaml.read_bytes())
+        except (OSError, UnicodeError, ValueError) as exc:
             raise NewIterationError(
-                f"cannot parse {iteration_yaml} while checking the single-in-progress rule: {exc}"
+                f"cannot safely parse {iteration_yaml} while checking the single-in-progress rule"
             ) from exc
         state = document.get("state") if isinstance(document, dict) else None
         if state not in TERMINAL_STATES:
@@ -168,6 +198,9 @@ def scaffold_iteration(
             f"^[a-z0-9][a-z0-9-]{{2,63}}$ (GLOSSARY: 3-64 chars, lowercase, "
             f"leading YYYY-MM- recommended)"
         )
+    _assert_safe_path(iterations_dir, label="iterations directory")
+    if iterations_dir.exists() and not iterations_dir.is_dir():
+        raise NewIterationError(f"iterations directory is not a directory: {iterations_dir}")
     in_progress = find_in_progress_iteration(iterations_dir)
     if in_progress is not None and in_progress != iteration_id:
         raise NewIterationError(
@@ -175,6 +208,15 @@ def scaffold_iteration(
             f"one in-progress iteration (ARCHITECTURE §5.1). Finish or close it first."
         )
     iteration_dir = iterations_dir / iteration_id
+    _assert_safe_path(iteration_dir, label="iteration")
+    if iteration_dir.is_symlink():
+        raise NewIterationError(f"iteration directory is a symlink: {iteration_dir}")
+    if iteration_dir.exists() and not iteration_dir.is_dir():
+        raise NewIterationError(f"iteration path is not a directory: {iteration_dir}")
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    _assert_safe_path(iteration_yaml, label="iteration")
+    if iteration_yaml.is_symlink() or (iteration_yaml.exists() and not iteration_yaml.is_file()):
+        raise NewIterationError(f"iteration file is not a safe regular file: {iteration_yaml}")
     exists_nonempty = iteration_dir.exists() and any(iteration_dir.iterdir())
     if exists_nonempty and not force:
         raise NewIterationError(
@@ -185,15 +227,31 @@ def scaffold_iteration(
         # Reset only scaffolder-owned state (template dirs + iteration.yaml);
         # anything else found in the directory belongs to its owners and stays.
         for member in ITERATION_DIRS:
-            shutil.rmtree(iteration_dir / member, ignore_errors=True)
-        (iteration_dir / "iteration.yaml").unlink(missing_ok=True)
+            member_path = iteration_dir / member
+            if member_path.is_symlink():
+                raise NewIterationError(f"cannot reset symlinked iteration member: {member_path}")
+            try:
+                shutil.rmtree(member_path)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise NewIterationError(f"cannot reset iteration member: {member_path}") from exc
+        iteration_yaml.unlink(missing_ok=True)
     for member in ITERATION_DIRS:
-        (iteration_dir / member).mkdir(parents=True, exist_ok=True)
-        keeper = iteration_dir / member / ".gitkeep"
+        member_path = iteration_dir / member
+        _assert_safe_path(member_path, label="iteration member")
+        if member_path.exists() and not member_path.is_dir():
+            raise NewIterationError(f"iteration member is not a directory: {member_path}")
+        member_path.mkdir(parents=True, exist_ok=True)
+        keeper = member_path / ".gitkeep"
+        _assert_safe_path(keeper, label="iteration keeper")
+        if keeper.is_symlink() or (keeper.exists() and not keeper.is_file()):
+            raise NewIterationError(f"iteration keeper is not a safe regular file: {keeper}")
         if not keeper.exists():
             keeper.touch()
-    iteration_yaml = iteration_dir / "iteration.yaml"
     document = build_iteration_document(iteration_id, branch)
+    # The iteration path and destination are checked as non-symlink paths above.
+    # pi-lens-ignore: python-path-traversal
     iteration_yaml.write_text(
         yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
@@ -235,7 +293,19 @@ def main(argv: list[str] | None = None) -> int:
         else REPO_ROOT / args.iterations_dir
     )
     iteration_dir = iterations_dir / args.iteration_id
-    needs_confirmation = args.force and iteration_dir.exists() and any(iteration_dir.iterdir())
+    try:
+        _assert_safe_path(iterations_dir, label="iterations directory")
+        _assert_safe_path(iteration_dir, label="iteration")
+    except NewIterationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    needs_confirmation = (
+        args.force
+        and iteration_dir.exists()
+        and not iteration_dir.is_symlink()
+        and iteration_dir.is_dir()
+        and any(iteration_dir.iterdir())
+    )
     if needs_confirmation:
         try:
             answer = input(

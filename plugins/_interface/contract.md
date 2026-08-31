@@ -1,6 +1,6 @@
 # 插件接口契约（ROADMAP 2.1）
 
-状态：草案，等待用户明确签收（human sign-off）。本文件说明插件如何处理来源引用、职责边界及输出信封；不表示 `run_plugin.py` 已实现，也不替代人工确认。
+状态：已签收（2026-08-28，用户明确确认）。本文件说明插件如何处理来源引用、职责边界及输出信封；`run_plugin.py` 的实现状态以 Roadmap 和测试证据为准。
 
 信封结构的唯一机器权威是 [DATA_MODEL §10](../../docs/spec/architecture/DATA_MODEL.md#10-plugin-source-payloads)，Schema 位于 `plugins/_interface/schemas/`；落盘边界按 [ADR-006](../../docs/spec/architecture/adr/adr-006-source-payload-boundary.md) 执行。
 
@@ -29,7 +29,7 @@ fetch(source_ref: str, *, credentials: Mapping[str, str]) -> envelope dict
 - **超时和大小限制**：每次 fetch 声明默认连接超时 5 秒、读取超时 30 秒，并由运行器执行响应大小与解压限制。
 - **禁止访问私有网络**：抓取 URL 的来源必须拒绝私有地址、回环地址及链路本地地址，以限制 SSRF 风险。
 - **不可信内容**：载荷中的指令式文本最多作为 M1/M4 的澄清材料，不是 agent 应执行的指令；未经独立佐证，不得写入 `knowledge/`。
-- **结构化错误**：抓取失败时持久化 `error: {code, message}` 变体，不让原始异常跨越边界。Schema 强制成功与错误变体互斥：出现 `error` 时不得同时携带 `content`。
+- **结构化错误**：抓取失败时持久化 `error: {code, message}` 变体，不让原始异常跨越边界。Schema 强制成功与错误变体互斥且二选一：必须恰好包含 `content` 或 `error`。
 
 ## 4. 注册与 v1 范围
 

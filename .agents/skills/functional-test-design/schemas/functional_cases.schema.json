@@ -12,7 +12,7 @@
       "type": "array", "minItems": 1,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["case_id", "title", "priority", "precondition", "steps", "tags", "test_point_ids"],
+        "required": ["case_id", "title", "priority", "precondition", "steps", "tags", "test_point_ids", "side_effect"],
         "properties": {
           "case_id": {"type": "string", "pattern": "^C[0-9]{4}$"},
           "title": {"type": "string", "minLength": 1},
@@ -42,7 +42,9 @@
             "contains": {"type": "string", "pattern": "^module:[a-z][a-z0-9_]*$"}
           },
           "test_point_ids": {"type": "array", "minItems": 1,
-            "items": {"type": "string", "pattern": "^T[0-9]{4}$"}}
+            "items": {"type": "string", "pattern": "^T[0-9]{4}$"}},
+          "side_effect": {"enum": ["none", "creates", "updates", "deletes"],
+                          "description": "整个 UI case（含 setup 与提交）的副作用；用于安全重跑边界"}
         }
       }
     }

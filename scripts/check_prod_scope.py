@@ -21,7 +21,8 @@ import re
 import sys
 from pathlib import Path
 
-from _registry_lib import REPO_ROOT
+from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path
+from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 _DEFAULT_VERBS = {
     "create",
@@ -54,23 +55,33 @@ def _tokens(name: str) -> set[str]:
 
 def load_denylist(path: Path | None) -> set[str]:
     verbs = set(_DEFAULT_VERBS)
-    if path is None or not path.exists():
+    if path is None:
         return verbs
-    text = path.read_text(encoding="utf-8")
     try:
-        import yaml
-
-        document = yaml.safe_load(text)
-        if isinstance(document, list):
-            verbs.update(str(item).lower() for item in document)
+        _assert_safe_path(path, label="denylist")
+    except RegistryError as exc:
+        raise ValueError("denylist path is unsafe") from exc
+    if path.is_symlink() or not path.is_file():
+        if not path.exists():
             return verbs
-        if isinstance(document, dict):
-            for value in document.values():
-                if isinstance(value, list):
-                    verbs.update(str(item).lower() for item in value)
-            return verbs
-    except yaml.YAMLError:
-        pass
+        raise ValueError("denylist must be a regular file")
+    raw = path.read_bytes()
+    text = raw.decode("utf-8")
+    try:
+        document = load_yaml(raw)
+    except ValueError as exc:
+        message = str(exc).lower()
+        if any(marker in message for marker in ("duplicate", "alias", "non-finite", "deep")):
+            raise ValueError("denylist YAML 被严格解析器拒绝") from exc
+        document = None
+    if isinstance(document, list):
+        verbs.update(str(item).lower() for item in document)
+        return verbs
+    if isinstance(document, dict):
+        for value in document.values():
+            if isinstance(value, list):
+                verbs.update(str(item).lower() for item in value)
+        return verbs
     verbs.update(token.lower() for token in re.split(r"[\s,]+", text) if token)
     return verbs
 
@@ -132,7 +143,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("no paths given (pass file paths or --all)")
         return 2
 
-    denylist = load_denylist(args.denylist_file)
+    try:
+        denylist = load_denylist(args.denylist_file)
+    except (OSError, UnicodeError, ValueError):
+        print("error: denylist 不是安全可解析的 UTF-8 输入", file=sys.stderr)
+        return 1
     report = Report()
     for path in targets:
         if path.is_file() and "/tests/" in f"/{path.as_posix()}":
@@ -145,3 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_prod_scope: {len(targets)} file(s) clean")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

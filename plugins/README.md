@@ -8,7 +8,7 @@ logic, never LLM calls inside a plugin (ADR-006).
 
 - `_interface/contract.md` — envelope rules (authored in Roadmap 2.1)
 - `_interface/schemas/` — `*_source_payload.schema.json` (DATA_MODEL §10)
-- `requirement-sources/` / `api-sources/` — connector placeholders (post-v1)
+- `requirement-sources/` / `api-sources/` — v1 项目内的 connector 占位目录；0.2 参考连接器位于 `packages/argus-plugin-sdk`，不会动态扫描本目录。
 
 Registration: `registry.yaml` is the only name→plugin lookup.
 
@@ -20,7 +20,7 @@ Registration: `registry.yaml` is the only name→plugin lookup.
 uv run python scripts/run_plugin.py --payload <信封.yaml> --iteration iterations/<id>
 ```
 
-未来注册的连接器使用 `uv run python scripts/run_plugin.py <name> <source_ref> --iteration iterations/<id>`。注册项包含 `name`、相对 `plugins/` 的 Python 文件 `path`、`source_type`，以及可选的 `credentials_env`（凭据名到环境变量名的映射）。注册表不能有重复名称，路径不能越出插件目录；v1 的 `plugins: []` 保持为空，测试中的临时插件不属于产品连接器。
+v1 的连接器仍使用 `uv run python scripts/run_plugin.py <name> <source_ref> --iteration iterations/<id>`，注册项包含 `name`、相对 `plugins/` 的 Python 文件 `path`、`source_type` 和可选 `credentials_env`；v1 的 `plugins: []` 保持为空。0.2 SDK 连接器使用 `PluginRegistry.register()` 显式注册，`default_registry()` 只注册 GitHub Issues 与 OpenAPI 参考实现，不改变 v1 runner，也不把测试临时插件当作产品连接器。
 
 运行器在子进程调用 `fetch(source_ref, *, credentials)`，总时限为连接默认值 5 秒与读取默认值 30 秒之和；未来连接器仍须在实际 HTTP 客户端分别执行这两个超时，并检查每次重定向和实际连接地址。入口会拒绝解析至非公网的 URL，但该预检不是防 DNS 重绑定的网络沙箱，不能替代连接器与主机侧控制。
 

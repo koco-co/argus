@@ -1,0 +1,45 @@
+diff --git a/automation/web/pages/checkout/checkout_page.py b/automation/web/pages/checkout/checkout_page.py
+--- a/automation/web/pages/checkout/checkout_page.py
++++ b/automation/web/pages/checkout/checkout_page.py
+@@
+-        # 锁定版本在地址步骤按固定表单顺序暴露九个 textbox role，但未稳定暴露 label。
++        # 这些输入没有稳定可用的 label；锁定版本提供唯一 testid，避免依赖脆弱的 DOM 顺序。
+         fields = (
+-            "first_name",
+-            "last_name",
+-            "address_1",
+-            "company",
+-            "postal_code",
+-            "city",
+-            "province",
+-            "email",
+-            "phone",
++            ("first_name", "shipping-first-name-input"),
++            ("last_name", "shipping-last-name-input"),
++            ("address_1", "shipping-address-input"),
++            ("company", "shipping-company-input"),
++            ("postal_code", "shipping-postal-code-input"),
++            ("city", "shipping-city-input"),
++            ("province", "shipping-province-input"),
++            ("email", "shipping-email-input"),
++            ("phone", "shipping-phone-input"),
+         )
+-        textboxes = self.page.get_by_role("textbox")
+-        for index, name in enumerate(fields):
++        for name, test_id in fields:
+             value = "" if name == omit else address.get(name, "")
+-            textboxes.nth(index).fill(value)
+-        self.page.get_by_role("combobox").select_option(address["country_code"])
++            self.page.get_by_test_id(test_id).fill(value)
++        self.page.get_by_test_id("shipping-country-select").select_option(address["country_code"])
++        # Next.js 水合可能清掉水合前最先写入的值；提交前按真实 input 状态收敛一次。
++        for name, test_id in fields:
++            value = "" if name == omit else address.get(name, "")
++            field = self.page.get_by_test_id(test_id)
++            if field.input_value() != value:
++                field.fill(value)
+@@
+-        return self.page.get_by_text(f"Cart ({count})", exact=True)
++        if count == 0:
++            return self.page.get_by_text("Cart (0)", exact=True)
++        return self.page.get_by_text(f"{count}x", exact=True)

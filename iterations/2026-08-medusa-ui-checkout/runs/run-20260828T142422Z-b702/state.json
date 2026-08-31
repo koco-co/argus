@@ -1,0 +1,9 @@
+{
+  "attempt_number": 4,
+  "patched_files": [
+    "automation/web/pages/checkout/cart_page.py",
+    "automation/web/pages/checkout/checkout_page.py",
+    "automation/web/pages/checkout/product_page.py"
+  ],
+  "verification_pending": false
+}

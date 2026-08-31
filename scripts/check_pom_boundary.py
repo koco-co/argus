@@ -198,3 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"check_pom_boundary: {len(targets)} file(s) clean")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argus-medusa"
+version = "0.2.0"
+description = "Argus reference project adapter for Medusa"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "argus-core==0.2.0",
+    "argus-plugin-sdk==0.2.0",
+    "httpx>=0.27",
+    "pydantic>=2.9",
+]
+
+[tool.uv.sources]
+argus-core = { workspace = true }
+argus-plugin-sdk = { workspace = true }
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]

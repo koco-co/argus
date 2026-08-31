@@ -1,0 +1,38 @@
+schema_version: "1.0"
+iteration_id: test-fixture-ui-e2e
+status: exported
+generated_from:
+  artifact: iterations/test-fixture-ui-e2e/test_points.yaml
+  sha256: 52d441d23f272fe56d02a780b5affacc63a116bf3d8751419ab542b77ea5b5af
+cases:
+  - case_id: C0001
+    title: 有效折扣码更新购物车总额
+    priority: 1
+    side_effect: updates
+    precondition: Medusa 靶场健康且标准种子已装载。
+    test_point_ids: [T0001]
+    tags: ["module:checkout"]
+    steps:
+      - action: 选择黑色 S 码 T 恤并加入购物车。
+        expected: 购物车显示一件 S / Black 商品。
+        expected_kind: ui_state
+      - action: 应用 ARGUS10。
+        expected: 总额等于 EUR 价格乘以一减折扣比例。
+        expected_kind: derived_value
+        derived_from:
+          seed: discounted_total
+          rule: product_price_eur * (100 - discount_argus10.percentage) / 100
+  - case_id: C0002
+    title: 无效折扣码不改变购物车总额
+    priority: 1
+    side_effect: creates
+    precondition: Medusa 靶场健康且购物车为空。
+    test_point_ids: [T0002]
+    tags: ["module:checkout"]
+    steps:
+      - action: 加入黑色 S 码 T 恤并提交 INVALID10。
+        expected: 总额仍等于种子中的 EUR 商品价格。
+        expected_kind: derived_value
+        derived_from:
+          seed: product_price_eur
+          rule: product_price_eur
