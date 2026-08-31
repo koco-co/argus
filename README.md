@@ -162,7 +162,7 @@ make new-iteration ID=2026-08-orders BRANCH=api
 
 <h2 align="center">𝑬𝒗𝒊𝒅𝒆𝒏𝒄𝒆 · 验证证据</h2>
 
-<p>截至 2026-08-31，当前本地复核已完成 529 项框架测试；在提交 <code>42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f</code> 上对真实 <b>Medusa</b> Compose 靶场 fresh reset 后，API 20/20、UI 8/8（含桌面/移动视觉场景）均通过，并按 iteration 分别保存 1.1 execution manifest。此前的 UI 10/10、API 22/22 与完整 38/38 属于历史运行，仍作为历史事实保留。PR #1 与 PR #9 已真实合并到 <code>main</code>，PR #9 代码合并 SHA 为 <code>88f2b6a</code>；PR #10、PR #11 的文档更新也已由 GitHub 真实合并（分别为 <code>aec5782</code>、<code>dd5dacf</code>）。受保护 <code>release</code> 的独立门禁状态仍见验收矩阵。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
+<p>截至 2026-08-31，当前本地复核已完成 529 项框架测试；在被测代码提交 <code>1b822c92dc24487b03104171c0eeb7c2410a38e9</code> 上对真实 <b>Medusa</b> Compose 靶场 fresh reset 后，API 20/20、UI 8/8（含桌面/移动视觉场景）均通过。补充 execution manifest 1.1 分别归档于 <code>run-20260831T070952Z-bc7c</code> 与 <code>run-20260831T072318Z-f0f7</code>，包含完整 nodeid/outcome、JUnit/Allure、环境和靶场摘要。随后仅补充文档与证据文件，不改变被测自动化代码。此前的 UI 10/10、API 22/22 与完整 38/38 属于历史运行，仍作为历史事实保留。PR #1 与 PR #9 已真实合并到 <code>main</code>，PR #9 代码合并 SHA 为 <code>88f2b6a</code>；PR #10、PR #11 的文档更新也已由 GitHub 真实合并（分别为 <code>aec5782</code>、<code>dd5dacf</code>）。受保护 <code>release</code> 的独立门禁状态仍见验收矩阵。详细命令、运行、哈希和仍需外部事实的门禁见：</p>
 
 - [验收证据矩阵](docs/spec/status/ACCEPTANCE_2026-08-28.md)
 - [Medusa 真实路由与种子事实](knowledge/target-app-notes/medusa.md)

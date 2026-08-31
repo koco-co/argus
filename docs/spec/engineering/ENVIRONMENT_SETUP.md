@@ -4,7 +4,7 @@ Prerequisites, initialization steps, and every operational command the framework
 
 ## Prerequisites
 
-历史自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。**当前复核（2026-08-29）使用用户提供的 gitignored `config/env.local.yaml`（`localhost:8000`/`localhost:9000`），真实靶场健康检查、seed canary、API checkout 22 项和 Web checkout 10 项均通过；靶场最终 reset/down 清理仍是收尾步骤。**真实 webhook 尚无验证证据；通知送达、外部合并和最终验收仍是独立门禁。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
+历史自检记录在 2026-08-28 的会话证据中（该临时材料未作为仓库文件保留）：Docker/Compose、uv/Python 3.12、项目 Chromium 启动及 GitHub/Actions 访问已检查。**2026-08-31 当前复核使用 gitignored 的本地端点配置及进程内凭据注入（`localhost:8000`/`localhost:9000`），真实靶场 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8 均通过；随后已执行 `target-app-down`，容器、网络、数据卷和运行时凭据均已清理。**真实 webhook 尚无验证证据；通知送达、外部合并和最终验收仍是独立门禁。当前执行口径见 [AGENT_BRIEF](../AGENT_BRIEF.md)。
 
 | Requirement | Version / note | Why |
 | --- | --- | --- |

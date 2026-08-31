@@ -4,6 +4,8 @@
 
 - 2026-08-31：在提交 `42364927f07bae8b7da1e6f8e0b23c0fc3a4d07f` 上对真实 Medusa Compose 靶场完成 fresh reset 后的精确执行：API `20/20`、UI `8/8`（含 Chromium `[chromium]` 参数化 nodeid）通过；`record-ci-auto --iteration` 已分别写入 `execution-manifest.json` 1.1、run summary、代码 SHA 与环境摘要。UI 随后完成 `execution_passed → acceptance_pending → accepted`，靶应用已 `down` 并清理数据卷；补充 self-debug 执行示例。该本地证据不替代 GitHub CI、真实通知、非作者 PR approval 或受保护 `release` merge。
 
+- 2026-08-31：在已提交代码 `1b822c92dc24487b03104171c0eeb7c2410a38e9` 上重新 fresh reset 真实 Medusa Compose 靶场，API `20/20`、UI `8/8` 精确 traceability nodeid 均通过；补充 run `run-20260831T070952Z-bc7c` / `run-20260831T072318Z-f0f7` 各自保存 manifest 1.1、精确 outcomes、JUnit/Allure 摘要和环境绑定。执行完成后已 down 并删除容器、网络、数据卷和运行时凭据；该证据为已接受 iteration 的 supplemental run，不改写 acceptance aggregate。
+
 - 2026-08-29：完成不可信 YAML/JSON 严格解析迁移：`argus-core` 的 `load_yaml/load_json` 与 SDK 安全 JSON 解析统一拒绝重复键、非有限数字、YAML alias、过深/过大文档和不支持类型；文件、插件输出及 HTTP 响应的生产读取点同步收口，错误诊断不回显载荷。新增 `make static-gates` 汇总静态、Schema、语义、覆盖和边界门禁；当前框架测试为 497 passed，三份 0.2.0 workspace 包已完成 lock/build 复核。
 
 - 2026-08-29：补齐 `scripts/validate_readme.py --strict`，将 README 标题、UTF-8 编码、本地链接和仓库越界链接纳入可执行校验；新增 `make validate-readme` 并接入 `make lint`/static-checks，框架测试更新为 481 passed。

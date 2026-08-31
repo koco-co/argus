@@ -11,8 +11,8 @@
 | 框架单元/集成测试 | 历史记录 430 项通过；2026-08-31 当前复核 529 项通过 | `uv run pytest scripts/tests -q` |
 | 静态与类型 | ruff、ruff format、pyright、6 个 pre-commit 钩子通过 | `make lint`；`uv run pre-commit run --all-files` |
 | Medusa 靶场 | 全新 build/up、连续健康检查、幂等 reset、seed canary、down/re-up 通过；SELECT-only 数据库角色可读且真实建表被拒绝 | `knowledge/target-app-notes/medusa.md` |
-| UI 生成链 | 历史运行曾完成 10/10；2026-08-31 最新本地复核使用真实靶场完成 8/8 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；历史 run `run-20260828T183412Z-ui03`；最新 manifest `runs/run-20260831T061302Z-ad03/` |
-| API 生成链 | 历史运行曾完成 22/22；2026-08-31 最新本地复核使用真实靶场完成 20/20 | `iterations/2026-08-medusa-api-checkout/`；历史 run `run-20260828T182611Z-api3`；最新 manifest `runs/run-20260831T060726Z-8d7d/` |
+| UI 生成链 | 历史运行曾完成 10/10；2026-08-31 最新本地复核使用真实靶场完成 8/8 | `iterations/2026-08-medusa-ui-checkout/`；`automation/web/`；历史 run `run-20260828T183412Z-ui03`；最新补充 manifest `runs/run-20260831T072318Z-f0f7/`（code SHA `1b822c9`，JUnit `ca3fb2f…`，Allure `8e0b94e…`） |
+| API 生成链 | 历史运行曾完成 22/22；2026-08-31 最新本地复核使用真实靶场完成 20/20 | `iterations/2026-08-medusa-api-checkout/`；历史 run `run-20260828T182611Z-api3`；最新补充 manifest `runs/run-20260831T070952Z-bc7c/`（code SHA `1b822c9`，JUnit `577225d…`，Allure `7b1193d…`） |
 | 全栈完整回归 | 当前复核分面完成：Web 8/8、API 20/20；另有框架靶场健康与 seed canary 通过 | API/Web 分面命令及真实靶场证据；完整合并套件未在本轮重复执行 |
 | 覆盖门禁 | UI `c-auto`、API `a-auto`、API endpoint coverage、反向 orphan closure 全部通过 | `check_coverage.py`、`check_api_coverage.py`、`check_orphan_tests.py` |
 | PR 覆盖范围 | iteration 工件变化只检查对应目录；自动化、共享代码或覆盖门禁变化检查全部；删除 iteration 明确失败；CI 取得完整 base 历史 | `check_coverage.py --changed-base <sha>`；`test_check_coverage.py` |
@@ -30,7 +30,7 @@
 
 ## 当前复核收尾
 
-2026-08-31 当前复核已用真实 Docker 靶场完成 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8；执行后已 `target-app-down`，容器、网络和数据卷均已清理。最新本地 execution manifest 已提交，但其代码 SHA 绑定的是执行时的代码提交；后续文档/证据提交不改变被测自动化代码。真实 GitHub CI、通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
+2026-08-31 当前复核已用真实 Docker 靶场完成 fresh reset、seed、API checkout 20/20 和 Web checkout 8/8；执行后已 `target-app-down`，容器、网络和数据卷均已清理。最新补充 manifest 分别为 `runs/run-20260831T070952Z-bc7c/` 与 `runs/run-20260831T072318Z-f0f7/`，均绑定被测代码 SHA `1b822c92dc24487b03104171c0eeb7c2410a38e9`，并保留精确 collection/outcome、JUnit/Allure 和环境摘要。后续仅补充文档与证据文件，不改变被测自动化代码。真实 GitHub CI、通知送达、非作者 PR 审批、受保护 merge 和 merge SHA 仍是外部事实。
 
 ## 不可伪造的外部事实
 
