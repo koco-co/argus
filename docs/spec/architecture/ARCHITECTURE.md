@@ -70,7 +70,8 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 ├── .agents/skills/                  # canonical: functional-test-design, api-test-design,
 │   │                                # web-automation-generation, api-automation-generation,
 │   │                                # self-debug-runner, skill-self-optimizer
-│   │                                # each: SKILL.md + schemas/ + examples/
+│   │                                # each: SKILL.md + schemas/ + examples/;
+│   │                                # design skills also carry checklists/
 │   └── <skill>/versions/            # ⭐ prior SKILL.md snapshots + baselines/<version>/
 │                                    #    frozen inputs/manifests/semantic expectations (Roadmap 8.2)
 ├── .claude/skills/                  # one symlink per skill → .agents/skills/<name>
@@ -103,7 +104,8 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 │   ├── exports/*.xmind, exports/*.xlsx
 │   ├── traceability.yaml
 │   └── runs/<run-id>/               # ⭐ per-run evidence dir (ADR-010/012): run-summary.yaml +
-│                                    #    patch refs committed; allure-results/, logs/, traces/
+│                                    #    execution-manifest.json + patch refs committed;
+│                                    #    allure-results/, logs/, traces/
 │                                    #    gitignored — append-only, never overwritten by later runs
 ├── target-app/                      # ⭐ pinned harness home (ADR-002; policy in TESTING_STRATEGY):
 │                                    #    medusa.lock.yaml, compose.yaml, overrides/
@@ -132,13 +134,16 @@ Canonical target layout for a `<target-app>-automation` repo (Roadmap Phase 0 sc
 ├── scripts/
 │   ├── new_iteration.py             # scaffolds iterations/<id>/ incl. iteration.yaml
 │   ├── schema_registry.yaml         # ⭐ explicit artifact-path ↔ schema binding
-│   ├── schemas/                     # ⭐ exemptions / iteration / traceability / run_summary schemas (DATA_MODEL §2.1,3,8,9)
+│   ├── schemas/                     # ⭐ exemptions / iteration / traceability / run_summary /
+│   │                                #    execution_manifest schemas (DATA_MODEL §2.1,3,8,9,10)
 │   ├── validate_schema.py
 │   ├── validate_iteration.py        # ⭐ state-transition legality + staleness (hash chain) checks
 │   ├── validate_readme.py           # ⭐ strict README headings and local-link validation
 │   ├── render_md.py
 │   ├── export_xmind.py
 │   ├── export_xlsx.py
+│   ├── lint_test_design.py          # ⭐ cross-artifact design lint (side effects/typed API assertions)
+│   ├── pytest_execution_evidence.py # ⭐ exact collection/outcome evidence plugin
 │   ├── check_coverage.py            # branch-aware coverage gate (PRD §5.1)
 │   ├── check_functional_expectations.py # expected_kind/seed-rule guard
 │   ├── check_api_coverage.py        # ⭐ endpoint happy/negative coverage
@@ -300,7 +305,7 @@ Unchanged strategy pattern: `Notifier` ABC; channel implementations DingTalk/Fei
 Three workflow responsibilities are deliberately split because their trust and prerequisites differ:
 
 - **static-checks**: schema validation (including the exact `00-raw/source-payload.yaml` path), state/staleness validation, `--tier from-iteration` coverage, orphan-test closure, export semantics, layering/POM/API-model/markers checks, DB-readonly scan, secret scan, patch-scope fixtures, ruff/pyright. Needs no target app, runs on every PR, and has no notification Secret or write permission.
-- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes the suite, records the CI run summary via `self_debug_helper.py record-ci-auto` (sole summary writer on CI — scans eligible iterations, reads JUnit, writes `scope: full` with one attempt), uploads `reports/` 与各 iteration 的 run 证据（重型日志/trace 仅作为 artifact，规则见 ADR-012），and uploads only an allowlisted notification classification. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** explicitly checks out and executes `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
+- **e2e**: boots the pinned target-app harness (compose + seed + healthcheck), injects secrets to generate `config/env.ci.yaml`, executes each eligible iteration in an isolated module/report scope, records one exact execution manifest per iteration via `self_debug_helper.py record-ci-auto --iteration` (sole summary writer on CI — collection, expected/executed nodeids, first/retry JUnit/Allure, SHA and environment are bound without cross-iteration evidence), uploads `reports/` 与各 iteration 的 run 证据（重型日志/trace 仅作为 artifact，规则见 ADR-012），and uploads only an allowlisted notification classification. It is required for every PR targeting `release`; for other PRs it runs when `automation/**` or `iterations/**` changes; unrelated PRs run static checks only. A **weekly scheduled run** explicitly checks out and executes `release` HEAD, catching non-PR drift (upstream image digests, runner/Chromium upgrades, lockfile drift); this doubles as the cost-containment option if PR-level e2e proves too expensive (see Open Questions). A non-flaky weekly failure notifies the designated channel; **two consecutive** failures open a tracking issue (when token permissions allow); merge protection stays PR-scoped and is never keyed to scheduled runs.
 - **trusted-notifications**: is triggered by completed `static-checks`/`e2e` runs, checks out the repository default branch rather than `workflow_run.head_sha`, validates the small e2e classification against an allowlist, and only then reads notification Secrets. Its separate weekly job is the sole `issues: write` holder and passes the source e2e run id to the escalation script. Thus PR-controlled jobs can execute tests but cannot use notification credentials or issue-writing authority.
 - **Flake policy (CI-side, distinct from the in-test retry ban)**: a failed e2e job is re-run once automatically; a retry-pass marks the notification as `flaky-suspect` (single category, never counted green, never blocks merge on its own); the same nodeid appearing flaky-suspect repeatedly is recorded to `knowledge/patterns.md` via the M12 channel and triggers a repair-or-escalate decision. Full quarantine workflows stay post-v1 (Deferred).
 
@@ -333,6 +338,8 @@ CI trigger and notification contract:
 | Per-run evidence directories under `iterations/<id>/runs/<run_id>/` | [ADR-010](./adr/adr-010-per-run-evidence-directories.md) |
 | `accepted` closes the PR; `merged` is finalized post-merge by script | [ADR-011](./adr/adr-011-post-merge-finalization.md) |
 | Tiered evidence storage: summaries/patches in git, heavy evidence as artifacts | [ADR-012](./adr/adr-012-evidence-storage-policy.md) |
+| Execution manifest 1.1: per-iteration collection and attempt evidence | [ADR-014](./adr/adr-014-execution-manifest-schema-1-1.md) |
+| Test-design 1.0 clean-break: side effects and typed API assertions | [ADR-015](./adr/adr-015-test-design-contract-clean-break.md) |
 
 CI skeletons referenced by §8's jobs (merged from the former Implementation Guide §5 on 2026-08-27):
 
@@ -379,11 +386,11 @@ jobs:
       # never as shell arguments, never via inline echo (log-tracing would leak them);
       # settings.py reads env-var overrides first, so most jobs never need the YAML at all
       - run: uv run python -m shared.config.settings assemble --env ci   # writes gitignored config/env.ci.yaml
-      # 首轮失败时仅重试一次；retry 使用独立 JUnit/Allure 路径，不覆盖首轮证据。
+      # 每个 iteration 单独执行；首轮失败时仅重试一次，retry 使用独立 JUnit/Allure 路径。
       - id: regression
-        run: first run; if it fails, retry once; exit with retry status
+        run: run each module scope and retain its first/retry evidence
       - if: always()
-        run: choose junit-first.xml or junit-retry.xml and record final evidence
+        run: for each iteration call record-ci-auto --iteration with its own reports
       # 首次失败且复跑转绿时分类为 flaky-suspect；两轮失败才分类 failed。
       - if: always() && steps.regression.outputs.classification != ''
         run: printf '%s\n' "$ARGUS_CLASSIFICATION" > reports/notification/classification

@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
@@ -28,6 +28,7 @@ def _case(case_id: str, module_tags: list[str], steps: list[dict]) -> dict:
         "case_id": case_id,
         "title": f"Case {case_id}",
         "priority": 1,
+        "side_effect": "none",
         "precondition": "none",
         "steps": steps,
         "tags": module_tags,

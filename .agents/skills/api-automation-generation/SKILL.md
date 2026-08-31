@@ -27,10 +27,10 @@ metadata:
 2. 在任何状态转换前先比较输入 hash 并收集现有 nodeid。若当前已是 `api_automation_generated`、hash 未变化且 nodeid 可收集，立即返回 no-op，不调用 `record_event.py`、不写文件也不产生格式噪声。只有首次生成（当前为 `api_cases_exported`）或已按 reopen/stale 协议重新生成且输入摘要确实变化时，才记录 `api_cases_exported → api_automation_generating`；重复调用不得先推进状态再判断 no-op。
 3. 先搜索并复用同 module 的 clients/models；按 endpoint schema 生成 Pydantic request/response models，保留 required、enum、format、nested object、array、`$ref` 与 combinator 可表达语义。
 4. 使用同步 `httpx.Client` 生成类型化 client method；输入和返回值都引用模型，不返回 raw dict，不使用源 Schema 之外的字段。
-5. 从 API cases 生成 tests，解析 seed/path/prev_response variables；按 side_effect 标明重跑边界。assertion 位于 tests，client/model 不嵌入业务预期。
+5. 从 API cases 生成 tests，解析 seed/path/prev_response variables；按 side_effect 标明重跑边界。逐条实现 `expected_response.body_assertions[]`，包括 typed JSONPath 和 `derived_oracles[]` 的输入/目标/容差；不得在 automation 中新增 canonical 未声明的业务断言。assertion 位于 tests，client/model 不嵌入业务预期。
 6. 每个 test 添加 module、case_id、iteration markers，并以幂等 upsert 写入 A→nodeid traceability。
 7. 运行 ruff、pyright、`check_api_models.py`、`check_test_markers.py`、`check_layering.py`、`check_orphan_tests.py`、API coverage 与 A→automation coverage。失败修复并重验最多 3 次；耗尽后必须通过唯一事件写入器 `uv run python scripts/record_event.py <iteration> --from api_automation_generating --to blocked --by agent --reason validation_budget_exhausted` 进入 `blocked(validation_budget_exhausted)` 终态。
-8. 收集真实 nodeid，验证完整 R→A→nodeid 链，并通过 `uv run python scripts/record_event.py ...` 记录 `api_automation_generating → api_automation_generated`。
+8. 以 iteration 的 traceability 精确 nodeid 选择 pytest（禁止宽路径把其他 iteration 混入），使用 `scripts.pytest_execution_evidence` 记录完整 collection、executed nodeid 与 outcome；每个 first/retry attempt 单独保存 JUnit、Allure、环境摘要和当前代码 SHA，共用该 iteration 的 `execution-manifest.json`，再验证完整 R→A→nodeid 链。通过 `uv run python scripts/record_event.py ...` 记录 `api_automation_generating → api_automation_generated`。
 
 ## Guardrails
 
@@ -42,4 +42,4 @@ metadata:
 
 ## Delivery
 
-报告生成模型与 client method 映射、nodeid、traceability、所有门禁结果及尚未真实请求的接口场景。
+报告生成模型与 client method 映射、nodeid、traceability、每个 iteration 的 execution manifest/JUnit/Allure 证据、所有门禁结果及尚未真实请求的接口场景。

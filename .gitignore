@@ -22,8 +22,8 @@ automation/api/har/**
 iterations/**/.iteration.yaml.lock
 .argus/iterations/**/.iteration.yaml.lock
 
-# --- per-run heavy evidence (ADR-012): run-summary.yaml + patch files stay
-# tracked; allure-results/, logs/, traces/ never enter git (keeper-free) ---
+# --- per-run heavy evidence (ADR-012): run-summary.yaml + execution-manifest.json
+# + patch files stay tracked; allure-results/, logs/, traces/ never enter git ---
 iterations/*/runs/*/allure-results/**
 iterations/*/runs/*/logs/**
 iterations/*/runs/*/traces/**

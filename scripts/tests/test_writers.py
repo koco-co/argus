@@ -154,10 +154,58 @@ def _scaffold(tmp_path: Path, iteration_id: str, state: str, *, ui: bool = True)
     return iteration_dir
 
 
+def _write_valid_requirements(iteration_dir: Path) -> Path:
+    artifact = iteration_dir / "requirements.yaml"
+    artifact.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1.0",
+                "iteration_id": iteration_dir.name,
+                "status": "accepted",
+                "generated_from": {
+                    "artifact": "fixture/source.md",
+                    "sha256": "a" * 64,
+                },
+                "requirements": [
+                    {
+                        "requirement_id": "R0001",
+                        "title": "Fixture requirement",
+                        "description": "A valid fixture requirement for writer tests.",
+                    }
+                ],
+                "ambiguities": [],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return artifact
+
+
+def _write_valid_exemptions(iteration_dir: Path) -> Path:
+    artifact = iteration_dir / "exemptions.yaml"
+    artifact.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1.0",
+                "iteration_id": iteration_dir.name,
+                "status": "accepted",
+                "generated_from": {
+                    "artifact": "fixture/requirements.yaml",
+                    "sha256": "a" * 64,
+                },
+                "exemptions": [],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return artifact
+
+
 def _add_requirements_approval(iteration_dir: Path) -> None:
     """为写入器测试构造由当前 requirements 字节支持的批准记录。"""
-    artifact = iteration_dir / "requirements.yaml"
-    artifact.write_text("schema_version: '1.0'\n", encoding="utf-8")
+    artifact = _write_valid_requirements(iteration_dir)
     iteration_yaml = iteration_dir / "iteration.yaml"
     document = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
     document["approvals"].append(
@@ -222,6 +270,39 @@ def test_record_event_legal_transition_persists(record_event: Any, tmp_path: Pat
     assert document["state"] == "requirements_accepted"
     assert document["events"][-1]["to_state"] == "requirements_accepted"
     assert document["events"][-1]["triggered_by"] == "agent"
+
+
+def test_record_event_design_lint_is_a_pre_write_gate(
+    record_event: Any, tmp_path: Path, capsys: Any
+) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-w1-lint-gate", "requirements_clarifying")
+    _add_requirements_approval(iteration_dir)
+    artifact = iteration_dir / "requirements.yaml"
+    document = yaml.safe_load(artifact.read_text(encoding="utf-8"))
+    document["requirements"][0]["source"] = {"not": "a string"}
+    artifact.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    iteration_yaml = iteration_dir / "iteration.yaml"
+    aggregate = yaml.safe_load(iteration_yaml.read_text(encoding="utf-8"))
+    aggregate["approvals"][0]["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    iteration_yaml.write_text(yaml.safe_dump(aggregate, sort_keys=False), encoding="utf-8")
+    before = iteration_yaml.read_text(encoding="utf-8")
+
+    assert (
+        record_event.main(
+            [
+                str(iteration_dir),
+                "--from",
+                "requirements_clarifying",
+                "--to",
+                "requirements_accepted",
+                "--by",
+                "agent",
+            ]
+        )
+        == 1
+    )
+    assert "test-design lint gate rejected transition" in capsys.readouterr().err
+    assert iteration_yaml.read_text(encoding="utf-8") == before
 
 
 def test_record_event_rejects_gate_without_approval(
@@ -436,12 +517,38 @@ def test_hand_edited_approval_rejected_by_writer(record_approval: Any, tmp_path:
     )
 
 
+def test_record_approval_design_lint_is_a_pre_write_gate(
+    record_approval: Any, tmp_path: Path, capsys: Any
+) -> None:
+    iteration_dir = _scaffold(tmp_path, "2026-08-approval-lint", "requirements_clarifying")
+    artifact = _write_valid_requirements(iteration_dir)
+    requirements = yaml.safe_load(artifact.read_text(encoding="utf-8"))
+    requirements["requirements"][0]["source"] = {"unexpected": "object"}
+    artifact.write_text(yaml.safe_dump(requirements, sort_keys=False), encoding="utf-8")
+
+    assert (
+        record_approval.main(
+            [
+                str(iteration_dir),
+                "--stage",
+                "requirements",
+                "--action",
+                "accepted",
+                "--artifact",
+                str(artifact),
+            ]
+        )
+        == 1
+    )
+    assert "test-design lint gate rejected approval" in capsys.readouterr().err
+    assert yaml.safe_load((iteration_dir / "iteration.yaml").read_text())["approvals"] == []
+
+
 def test_record_approval_records_user_actor_and_artifact_hash(
     record_approval: Any, tmp_path: Path
 ) -> None:
     iteration_dir = _scaffold(tmp_path, "2026-08-w7", "requirements_clarifying")
-    artifact = tmp_path / "requirements.yaml"
-    artifact.write_text("requirements file content\n", encoding="utf-8")
+    artifact = _write_valid_requirements(iteration_dir)
     assert (
         record_approval.main(
             [
@@ -470,8 +577,7 @@ def test_requirements_approval_cannot_be_delegated(
 ) -> None:
     """M1 的产品取舍不能被持续授权或 agent 记录替代。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-requirements-delegated", "requirements_clarifying")
-    artifact = tmp_path / "requirements.yaml"
-    artifact.write_text("requirements file content\n", encoding="utf-8")
+    artifact = _write_valid_requirements(iteration_dir)
 
     assert (
         record_approval.main(
@@ -500,8 +606,8 @@ def test_delegated_approval_requires_note_and_records_agent(
 ) -> None:
     """持续授权必须如实记录代理决策者，并保留可审计的授权说明。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-delegated", "requirements_accepted")
-    artifact = tmp_path / "exemptions.yaml"
-    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+    _write_valid_requirements(iteration_dir)
+    artifact = _write_valid_exemptions(iteration_dir)
 
     assert (
         record_approval.main(
@@ -569,8 +675,8 @@ def test_expired_delegation_rejects_new_approval(
 ) -> None:
     """授权窗口过期后，唯一批准写入器不得产生新的代理决定。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-delegated-expired", "requirements_accepted")
-    artifact = tmp_path / "exemptions.yaml"
-    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+    _write_valid_requirements(iteration_dir)
+    artifact = _write_valid_exemptions(iteration_dir)
 
     assert (
         record_delegation.main(
@@ -643,8 +749,8 @@ def test_approval_stage_cannot_be_recorded_before_its_lifecycle_state(
 def test_record_approval_supports_exemptions_stage(record_approval: Any, tmp_path: Path) -> None:
     """需求豁免必须能经唯一写入器形成独立的用户批准记录。"""
     iteration_dir = _scaffold(tmp_path, "2026-08-exemptions", "requirements_accepted")
-    artifact = tmp_path / "exemptions.yaml"
-    artifact.write_text("schema_version: '1.0'\nexemptions: []\n", encoding="utf-8")
+    _write_valid_requirements(iteration_dir)
+    artifact = _write_valid_exemptions(iteration_dir)
 
     assert (
         record_approval.main(

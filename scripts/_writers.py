@@ -32,7 +32,7 @@ except ImportError:  # pragma: no cover - Windows has no fcntl
     fcntl = None
 
 import yaml  # pyright: ignore[reportMissingModuleSource]
-from _registry_lib import binding_for_path, schema_errors
+from _registry_lib import RegistryError, binding_for_path, schema_errors
 from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
 
 APPROVAL_STAGES = (
@@ -105,6 +105,28 @@ def _assert_safe_path(path: Path, *, label: str) -> None:
 _MERGE_AUTHORIZATION = object()
 _MERGE_VERIFIER_CAPABILITY = object()
 _MERGE_SHA = re.compile(r"^[a-f0-9]{40}$")
+_DESIGN_LINT_STAGES = {
+    "requirements_accepted": "requirements",
+    "test_points_accepted": "test_points",
+    "functional_cases_exported": "functional_cases",
+    "spec_valid": "api_spec",
+    "api_cases_exported": "api_cases",
+    "accepted": "acceptance",
+}
+_APPROVAL_LINT_STAGES = {
+    "requirements": "requirements",
+    "exemptions": "exemptions",
+    "test_points": "test_points",
+    "acceptance": "acceptance",
+}
+_DESIGN_LINT_FILES = {
+    "requirements": "requirements.yaml",
+    "exemptions": "exemptions.yaml",
+    "test_points": "test_points.yaml",
+    "functional_cases": "functional-cases.yaml",
+    "api_spec": "api/spec.normalized.yaml",
+    "api_cases": "api/cases.yaml",
+}
 
 
 class MergeVerification:
@@ -323,6 +345,44 @@ def validate_document(
         )
 
 
+def _design_lint_violations(iteration_dir: Path, stage: str) -> list[str]:
+    try:
+        from lint_test_design import LintError, format_diagnostic, lint_iteration
+
+        diagnostics = lint_iteration(iteration_dir, stage)
+    except (LintError, OSError, ValueError, RegistryError) as exc:
+        raise WriterError(f"test-design lint 无法执行：{exc}") from exc
+    return [
+        format_diagnostic(diagnostic)
+        for diagnostic in diagnostics
+        if diagnostic.severity == "error"
+    ]
+
+
+def _design_lint_gate_for_transition(iteration_dir: Path, to_state: str) -> None:
+    stage = _DESIGN_LINT_STAGES.get(to_state)
+    if stage is None:
+        return
+    violations = _design_lint_violations(iteration_dir, stage)
+    if violations:
+        raise WriterError("test-design lint gate rejected transition: " + "; ".join(violations))
+
+
+def _design_lint_gate_for_approval(iteration_dir: Path, stage: str) -> None:
+    lint_stage = _APPROVAL_LINT_STAGES.get(stage)
+    if lint_stage is None:
+        return
+    if lint_stage == "acceptance":
+        violations = _design_lint_violations(iteration_dir, lint_stage)
+    else:
+        relative = _DESIGN_LINT_FILES[lint_stage]
+        artifact = iteration_dir / relative
+        _assert_safe_path(artifact, label="design artifact")
+        violations = _design_lint_violations(iteration_dir, lint_stage)
+    if violations:
+        raise WriterError("test-design lint gate rejected approval: " + "; ".join(violations))
+
+
 def _write_iteration_unlocked(
     iteration_yaml: Path, document: dict[str, Any], *, check_lifecycle: bool = True
 ) -> None:
@@ -414,6 +474,7 @@ def _record_event_unlocked(
     )
     if gate_violations:
         raise WriterError("; ".join(gate_violations))
+    _design_lint_gate_for_transition(iteration_dir, to_state)
     if to_state == "blocked" and not (reason or "").strip():
         raise WriterError("moving to blocked requires a non-empty --reason")
     if (
@@ -557,6 +618,7 @@ def _record_approval_unlocked(
             raise WriterError("delegated approval rejected: " + "; ".join(violations))
     elif delegation_id is not None:
         raise WriterError("--delegation-id 仅可用于 delegated approval")
+    _design_lint_gate_for_approval(iteration_dir, stage)
     approval: dict[str, Any] = {
         "stage": stage,
         "action": action,

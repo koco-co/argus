@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -17,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # pyright: ignore[reportMissingModuleSource]
+from _registry_lib import RegistryError, validate_path
 from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
 from jsonschema import Draft7Validator, FormatChecker  # pyright: ignore[reportMissingModuleSource]
 
@@ -275,7 +278,7 @@ def append_attempt(
     if summary["status"] != "running":
         raise EvidenceError("终态 run 不得追加 attempt")
     attempt_number = len(summary["attempts"]) + 1
-    if state["attempt_number"] not in {0, attempt_number}:
+    if state["attempt_number"] not in {0, attempt_number - 1, attempt_number}:
         raise EvidenceError("检查点 attempt_number 与摘要不连续")
     if diff_ref is not None:
         if not isinstance(diff_ref, str) or not diff_ref or "\x00" in diff_ref or "\\" in diff_ref:
@@ -447,6 +450,17 @@ def verify_patch(patch: Path) -> list[str]:
 
 
 _STRICT_NON_NEGATIVE_INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
+_SHA256 = re.compile(r"^sha256:[a-f0-9]{64}$")
+_CODE_SHA = re.compile(r"^[a-f0-9]{40,64}$")
+_SAFE_NODEID = re.compile(r"^automation/[^\x00\\\r\n]+::[^\x00\\\r\n]+$")
+_MANIFEST_SCHEMA = REPO_ROOT / "scripts" / "schemas" / "execution_manifest.schema.json"
+
+
+def _valid_nodeid(value: object) -> bool:
+    if not isinstance(value, str) or _SAFE_NODEID.fullmatch(value) is None:
+        return False
+    file_part = value.split("::", 1)[0]
+    return ".." not in Path(file_part).parts
 
 
 def _junit_count(root: ET.Element, attribute: str) -> int:
@@ -462,22 +476,14 @@ def _junit_count(root: ET.Element, attribute: str) -> int:
     return total
 
 
-def record_ci(
-    iteration_dir: Path,
-    run_id: str,
-    modules: list[str],
-    env: str,
-    junit: Path,
-) -> Path:
-    """将 CI 单次只读执行转换成 scope=full 的一条 attempt。"""
-
-    _assert_no_symlink_components(junit, label="JUnit 证据")
-    if junit.is_symlink() or not junit.is_file():
-        raise EvidenceError(f"JUnit 证据必须是安全的普通文件：{junit}")
+def _read_junit(path: Path) -> dict[str, Any]:
+    _assert_no_symlink_components(path, label="JUnit 证据")
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"JUnit 证据必须是安全的普通文件：{path}")
     try:
-        if junit.stat().st_size > MAX_EVIDENCE_BYTES:
+        if path.stat().st_size > MAX_EVIDENCE_BYTES:
             raise EvidenceError("JUnit 证据超过大小限制")
-        payload = junit.read_bytes()
+        payload = path.read_bytes()
         lowered = payload.lower()
         if b"<!doctype" in lowered or b"<!entity" in lowered:
             raise EvidenceError("JUnit 证据不得包含 XML 外部实体声明")
@@ -491,22 +497,523 @@ def record_ci(
         raise
     except (OSError, ET.ParseError, RecursionError) as exc:
         raise EvidenceError("JUnit 证据不是安全可解析的 XML") from exc
-    failures = _junit_count(root, "failures")
-    errors = _junit_count(root, "errors")
-    run_dir = initialize_run(iteration_dir, run_id, modules, env, 0, scope="full")
-    if failures + errors:
-        append_attempt(
-            run_dir,
-            "fail",
-            "unknown",
-            f"CI 单次执行失败：failures={failures}, errors={errors}",
-            None,
+    stats: dict[str, Any] = {
+        "tests": _junit_count(root, "tests"),
+        "failures": _junit_count(root, "failures"),
+        "errors": _junit_count(root, "errors"),
+        "skipped": _junit_count(root, "skipped"),
+    }
+    if stats["tests"] <= 0:
+        raise EvidenceError("JUnit 证据不得记录零测试")
+    if stats["skipped"] >= stats["tests"]:
+        raise EvidenceError("JUnit 证据不得全部 skipped")
+    if stats["failures"] + stats["errors"] + stats["skipped"] > stats["tests"]:
+        raise EvidenceError("JUnit 证据的 failures/errors/skipped 总数超过 tests")
+    stats["sha256"] = hashlib.sha256(payload).hexdigest()
+    stats["path"] = _evidence_reference(path)
+    return stats
+
+
+def _evidence_reference(path: Path) -> str:
+    """以仓库相对路径保存报告引用，仓库外输入只保留安全文件名。"""
+
+    _assert_no_symlink_components(path, label="证据引用")
+    resolved = path.resolve()
+    repo_root = REPO_ROOT.resolve()
+    if resolved != repo_root and repo_root not in resolved.parents:
+        name = path.name
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            raise EvidenceError(f"证据引用文件名不安全：{path}")
+        return f"external/{name}"
+    return resolved.relative_to(repo_root).as_posix()
+
+
+def _read_execution_nodeids(path: Path) -> tuple[list[str], list[str], dict[str, str]]:
+    _assert_no_symlink_components(path, label="pytest 执行清单")
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"pytest 执行清单必须是安全的普通文件：{path}")
+    try:
+        if path.stat().st_size > MAX_EVIDENCE_BYTES:
+            raise EvidenceError("pytest 执行清单超过大小限制")
+        document = load_json(path.read_bytes())
+    except EvidenceError:
+        raise
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise EvidenceError(f"pytest 执行清单不是安全 JSON：{path}") from exc
+    if not isinstance(document, dict):
+        raise EvidenceError("pytest 执行清单必须是对象")
+    if document.get("schema_version") != "1.1":
+        raise EvidenceError("pytest 执行清单 schema_version 必须是 1.1")
+    raw_collected = document.get("collected_nodeids")
+    if not isinstance(raw_collected, list):
+        raise EvidenceError("pytest 执行清单必须包含 collected_nodeids 数组")
+    if any(not _valid_nodeid(nodeid) for nodeid in raw_collected):
+        raise EvidenceError("pytest collection 清单包含非法 nodeid")
+    if len(set(raw_collected)) != len(raw_collected):
+        raise EvidenceError("pytest collection 清单包含重复 nodeid")
+    nodeids = document.get("nodeids")
+    if not isinstance(nodeids, list):
+        raise EvidenceError("pytest 执行清单必须包含 nodeids 数组")
+    if any(not _valid_nodeid(nodeid) for nodeid in nodeids):
+        raise EvidenceError("pytest 执行清单包含非法 nodeid")
+    if len(set(nodeids)) != len(nodeids):
+        raise EvidenceError("pytest 执行清单包含重复 nodeid")
+    if not set(nodeids).issubset(set(raw_collected)):
+        raise EvidenceError("pytest 执行 nodeid 不在 collection 清单中")
+    raw_outcomes = document.get("outcomes")
+    if not isinstance(raw_outcomes, dict):
+        raise EvidenceError("pytest 执行清单 outcomes 必须是对象")
+    outcomes: dict[str, str] = {}
+    allowed = {"passed", "failed", "skipped", "xfailed", "xpassed", "unknown"}
+    for nodeid, outcome in raw_outcomes.items():
+        if not _valid_nodeid(nodeid) or not isinstance(outcome, str) or outcome not in allowed:
+            raise EvidenceError("pytest 执行清单 outcomes 包含非法条目")
+        outcomes[nodeid] = outcome
+    if set(outcomes) != set(nodeids):
+        raise EvidenceError("pytest 执行清单必须为每个 executed nodeid 提供 outcome")
+    return sorted(nodeids), sorted(raw_collected), outcomes
+
+
+def _expected_nodeids(iteration_dir: Path, *, required: bool = True) -> list[str]:
+    path = iteration_dir / "traceability.yaml"
+    _assert_no_symlink_components(path, label="traceability")
+    if not path.exists() and not path.is_symlink():
+        if required:
+            raise EvidenceError(f"缺少 traceability.yaml，无法精确绑定 iteration：{iteration_dir}")
+        return []
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"traceability.yaml 必须是安全的普通文件：{path}")
+    try:
+        validate_path(path)
+        document = load_yaml(path.read_bytes())
+    except (OSError, UnicodeError, ValueError, RegistryError) as exc:
+        raise EvidenceError(f"traceability.yaml 不可安全解析：{path}") from exc
+    if not isinstance(document, dict) or document.get("iteration_id") != iteration_dir.name:
+        raise EvidenceError("traceability iteration_id 与目录不一致")
+    links = document.get("links")
+    if not isinstance(links, list):
+        raise EvidenceError("traceability.links 必须是列表")
+    nodeids: list[str] = []
+    for link in links:
+        if not isinstance(link, dict):
+            raise EvidenceError("traceability link 必须是对象")
+        values = link.get("automation_test_ids", [])
+        if not isinstance(values, list):
+            raise EvidenceError("traceability.automation_test_ids 必须是列表")
+        for nodeid in values:
+            if not _valid_nodeid(nodeid):
+                raise EvidenceError("traceability 包含非法 automation nodeid")
+            nodeids.append(nodeid)
+    unique = sorted(set(nodeids))
+    if required and not unique:
+        raise EvidenceError(f"traceability 没有 automation nodeid：{iteration_dir}")
+    if len(unique) != len(nodeids):
+        raise EvidenceError("traceability 包含重复 automation nodeid")
+    return unique
+
+
+def _digest_file(path: Path, *, label: str) -> str:
+    _assert_no_symlink_components(path, label=label)
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"{label} 必须是安全的普通文件：{path}")
+    try:
+        if path.stat().st_size > MAX_EVIDENCE_BYTES:
+            raise EvidenceError(f"{label} 超过大小限制")
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise EvidenceError(f"{label} 无法读取") from exc
+
+
+def _target_config_digest() -> str:
+    digest = hashlib.sha256()
+    for relative in (
+        "target-app/compose.yaml",
+        "target-app/Dockerfile",
+        "target-app/medusa.lock.yaml",
+    ):
+        path = REPO_ROOT / relative
+        _assert_no_symlink_components(path, label="靶场配置")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\\0")
+        if path.is_file() and not path.is_symlink():
+            digest.update(path.read_bytes())
+        else:
+            digest.update(b"unavailable")
+    return digest.hexdigest()
+
+
+def _docker_image_ids() -> list[str]:
+    command = ["docker", "compose", "-f", "target-app/compose.yaml", "images", "-q"]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
-        finalize(run_dir, "failed")
-    else:
-        append_attempt(run_dir, "pass", "none", "CI 单次完整执行通过", None)
-        finalize(run_dir, "passed")
+    except (OSError, subprocess.TimeoutExpired):
+        return ["unavailable"]
+    if completed.returncode != 0:
+        return ["unavailable"]
+    values: list[str] = []
+    for line in completed.stdout.splitlines():
+        value = line.strip()
+        if re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+            values.append(value)
+        elif re.fullmatch(r"[a-f0-9]{64}", value):
+            values.append(f"sha256:{value}")
+    return sorted(set(values)) or ["unavailable"]
+
+
+def _allure_evidence(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {
+            "path": "unavailable",
+            "sha256": hashlib.sha256(b"unavailable").hexdigest(),
+            "available": False,
+        }
+    _assert_no_symlink_components(path, label="Allure 证据")
+    if path.is_symlink() or not path.is_dir():
+        return {
+            "path": _evidence_reference(path),
+            "sha256": hashlib.sha256(b"unavailable").hexdigest(),
+            "available": False,
+        }
+    digest = hashlib.sha256()
+    total = 0
+    for item in sorted(path.rglob("*")):
+        if item.is_symlink():
+            raise EvidenceError(f"Allure 证据不得包含符号链接：{path}")
+        if not item.is_file():
+            continue
+        data = item.read_bytes()
+        total += len(data)
+        if total > MAX_EVIDENCE_BYTES:
+            raise EvidenceError("Allure 证据超过大小限制")
+        digest.update(item.relative_to(path).as_posix().encode("utf-8"))
+        digest.update(b"\\0")
+        digest.update(data)
+    return {"path": _evidence_reference(path), "sha256": digest.hexdigest(), "available": True}
+
+
+def _current_commit_sha() -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise EvidenceError("无法读取当前代码 commit SHA") from exc
+    value = completed.stdout.strip()
+    if completed.returncode != 0 or not _CODE_SHA.fullmatch(value):
+        raise EvidenceError("当前代码 commit SHA 无效")
+    return value
+
+
+def _validate_execution_manifest(manifest: dict[str, Any]) -> list[str]:
+    try:
+        schema = load_json(_MANIFEST_SCHEMA.read_bytes())
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise EvidenceError("execution manifest schema 不可读取") from exc
+    validator = Draft7Validator(schema, format_checker=FormatChecker())
+    errors = sorted(validator.iter_errors(manifest), key=lambda error: list(error.absolute_path))
+    return [error.message for error in errors]
+
+
+def load_execution_manifest(run_dir: Path) -> dict[str, Any]:
+    _assert_run_dir(run_dir)
+    path = run_dir / "execution-manifest.json"
+    _assert_no_symlink_components(path, label="execution manifest")
+    if path.is_symlink() or not path.is_file():
+        raise EvidenceError(f"缺少安全的 execution manifest：{path}")
+    try:
+        manifest = load_json(path.read_bytes())
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise EvidenceError("execution manifest 不是安全 JSON") from exc
+    if not isinstance(manifest, dict):
+        raise EvidenceError("execution manifest 顶层必须是对象")
+    errors = _validate_execution_manifest(manifest)
+    if errors:
+        raise EvidenceError("execution manifest schema 错误：" + "; ".join(errors))
+    return manifest
+
+
+def _write_execution_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
+    errors = _validate_execution_manifest(manifest)
+    if errors:
+        raise EvidenceError("execution manifest schema 错误：" + "; ".join(errors))
+    _atomic_write(
+        run_dir / "execution-manifest.json",
+        (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+
+
+def _resolve_expected_nodeids(expected: list[str], collected: list[str]) -> list[str]:
+    """Resolve traceability selectors to the nodeids emitted by pytest.
+
+    Pytest appends parameter IDs to a parametrized test (for example,
+    ``::test_checkout[chromium]``), while traceability generated from the
+    test function records the stable unparameterized selector.  Only a
+    parameter suffix on an otherwise exact selector is accepted; unrelated
+    collected tests remain an iteration-scope error.
+    """
+
+    remaining = set(collected)
+    resolved: list[str] = []
+    missing: list[str] = []
+    for selector in expected:
+        if selector in remaining:
+            matches = [selector]
+        else:
+            parameter_prefix = f"{selector}["
+            matches = sorted(nodeid for nodeid in remaining if nodeid.startswith(parameter_prefix))
+        if not matches:
+            missing.append(selector)
+            continue
+        resolved.extend(matches)
+        remaining.difference_update(matches)
+    if missing:
+        raise EvidenceError(f"pytest collection 未包含 traceability nodeid：{missing}")
+    if remaining:
+        raise EvidenceError(f"pytest collection 包含非本 iteration nodeid：{sorted(remaining)}")
+    return sorted(resolved)
+
+
+def _manifest_attempt(
+    expected: list[str],
+    execution: dict[str, Any],
+    junit: dict[str, Any],
+    allure: dict[str, Any],
+) -> dict[str, Any]:
+    executed = execution["nodeids"]
+    collected = execution["collected_nodeids"]
+    outcomes = execution["outcomes"]
+    resolved_expected = _resolve_expected_nodeids(expected, collected)
+    missing = sorted(set(resolved_expected) - set(executed))
+    if missing:
+        raise EvidenceError(f"pytest 未执行 traceability nodeid：{missing}")
+    extra = sorted(set(executed) - set(resolved_expected))
+    if extra:
+        raise EvidenceError(f"pytest 执行了非本 iteration nodeid：{extra}")
+    if set(outcomes) != set(executed):
+        raise EvidenceError("pytest 执行清单必须为每个 executed nodeid 提供 outcome")
+    skipped = sorted(
+        nodeid
+        for nodeid in resolved_expected
+        if outcomes[nodeid] in {"skipped", "xfailed", "xpassed"}
+    )
+    if skipped:
+        raise EvidenceError(f"traceability nodeid 被 skipped/xfailed/xpassed：{skipped}")
+    unknown = sorted(nodeid for nodeid in resolved_expected if outcomes[nodeid] == "unknown")
+    if unknown:
+        raise EvidenceError(f"traceability nodeid outcome 不可确认：{unknown}")
+    if junit["tests"] != len(resolved_expected):
+        raise EvidenceError("JUnit tests 数必须精确等于该 iteration 的 traceability nodeid 数")
+    junit_failed = bool(junit["failures"] + junit["errors"])
+    outcome_failed = any(outcomes[nodeid] == "failed" for nodeid in resolved_expected)
+    if junit_failed != outcome_failed:
+        raise EvidenceError("JUnit failures/errors 与 pytest nodeid outcome 不一致")
+    result = "fail" if junit_failed else "pass"
+    return {
+        "result": result,
+        "expected_nodeids": resolved_expected,
+        "collected_nodeids": collected,
+        "executed_nodeids": executed,
+        "outcomes": outcomes,
+        "junit": {
+            "path": junit["path"],
+            "sha256": junit["sha256"],
+            "tests": junit["tests"],
+            "failures": junit["failures"],
+            "errors": junit["errors"],
+            "skipped": junit["skipped"],
+        },
+        "allure": allure,
+    }
+
+
+def _build_manifest(
+    iteration_dir: Path,
+    run_id: str,
+    env: str,
+    expected: list[str],
+    attempts: list[dict[str, Any]],
+    *,
+    commit_sha: str | None,
+    command: str | None,
+    environment_file: Path | None,
+    seed_registry: Path | None,
+    target_image_ids: list[str] | None,
+    collected_nodeids: list[str],
+) -> dict[str, Any]:
+    current_sha = _current_commit_sha()
+    if commit_sha is not None and commit_sha != current_sha:
+        raise EvidenceError("manifest code_sha 必须与当前 checkout 的 commit SHA 一致")
+    code_sha = current_sha
+    if not _CODE_SHA.fullmatch(code_sha):
+        raise EvidenceError("manifest code_sha 必须是当前代码 commit SHA")
+    if not attempts:
+        raise EvidenceError("execution manifest 至少需要一个 attempt")
+    collected = sorted(
+        {nodeid for attempt in attempts for nodeid in attempt["collected_nodeids"]}
+        | set(collected_nodeids)
+    )
+    environment_path = environment_file or REPO_ROOT / f"config/env.{env}.yaml"
+    seed_path = seed_registry or REPO_ROOT / "shared/testdata/seed-registry.yaml"
+    manifest = {
+        "schema_version": "1.1",
+        "iteration_id": iteration_dir.name,
+        "run_id": run_id,
+        "code_sha": code_sha,
+        "env": env,
+        "scope": "full",
+        "command": command or "not-recorded",
+        "expected_nodeids": expected,
+        "collected_nodeids": collected,
+        "environment_summary": {
+            "name": env,
+            "path": _evidence_reference(environment_path),
+            "sha256": _digest_file(environment_path, label="环境配置"),
+        },
+        "seed_summary": {
+            "path": _evidence_reference(seed_path),
+            "sha256": _digest_file(seed_path, label="seed registry"),
+        },
+        "target_summary": {
+            "config_sha256": _target_config_digest(),
+            "image_ids": sorted(set(target_image_ids or _docker_image_ids())),
+        },
+        "attempts": [],
+    }
+    for number, attempt in enumerate(attempts, start=1):
+        item = dict(attempt)
+        item["attempt_number"] = number
+        manifest["attempts"].append(item)
+    errors = _validate_execution_manifest(manifest)
+    if errors:
+        raise EvidenceError("execution manifest schema 错误：" + "; ".join(errors))
+    return manifest
+
+
+def _record_ci_attempts(
+    iteration_dir: Path,
+    run_id: str,
+    modules: list[str],
+    env: str,
+    expected: list[str],
+    attempt_inputs: list[dict[str, Any]],
+    *,
+    commit_sha: str | None,
+    command: str | None,
+    environment_file: Path | None,
+    seed_registry: Path | None,
+    target_image_ids: list[str] | None,
+) -> Path:
+    attempt_evidence: list[dict[str, Any]] = []
+    for item in attempt_inputs:
+        junit = _read_junit(item["junit"])
+        execution_path = item.get("execution")
+        if not isinstance(execution_path, Path):
+            raise EvidenceError("每个 CI attempt 必须提供 pytest 执行清单")
+        nodeids, collected_nodeids, outcomes = _read_execution_nodeids(execution_path)
+        execution = {
+            "nodeids": nodeids,
+            "collected_nodeids": collected_nodeids,
+            "outcomes": outcomes,
+        }
+        allure = _allure_evidence(item.get("allure"))
+        attempt_evidence.append(_manifest_attempt(expected, execution, junit, allure))
+    manifest_expected = sorted(
+        {nodeid for attempt in attempt_evidence for nodeid in attempt["expected_nodeids"]}
+    )
+    manifest = _build_manifest(
+        iteration_dir,
+        run_id,
+        env,
+        manifest_expected,
+        attempt_evidence,
+        commit_sha=commit_sha,
+        command=command,
+        environment_file=environment_file,
+        seed_registry=seed_registry,
+        target_image_ids=target_image_ids,
+        collected_nodeids=sorted(
+            {nodeid for attempt in attempt_evidence for nodeid in attempt["collected_nodeids"]}
+        ),
+    )
+    run_dir = initialize_run(iteration_dir, run_id, modules, env, 0, scope="full")
+    for attempt in attempt_evidence:
+        if attempt["result"] == "fail":
+            append_attempt(
+                run_dir,
+                "fail",
+                "unknown",
+                (
+                    f"CI attempt 失败：failures={attempt['junit']['failures']}, "
+                    f"errors={attempt['junit']['errors']}"
+                ),
+                None,
+            )
+        else:
+            append_attempt(run_dir, "pass", "none", "CI attempt 完整通过", None)
+    # 先落盘完整 manifest，再把 run-summary 收口为终态，避免出现无 manifest 的终态 run。
+    _write_execution_manifest(run_dir, manifest)
+    finalize(run_dir, "passed" if attempt_evidence[-1]["result"] == "pass" else "failed")
     return run_dir
+
+
+def record_ci(
+    iteration_dir: Path,
+    run_id: str,
+    modules: list[str],
+    env: str,
+    junit: Path,
+    *,
+    expected_nodeids: list[str] | None = None,
+    executed_nodeids: list[str] | None = None,
+    execution_file: Path | None = None,
+    allure: Path | None = None,
+    commit_sha: str | None = None,
+    command: str | None = None,
+    environment_file: Path | None = None,
+    seed_registry: Path | None = None,
+    target_image_ids: list[str] | None = None,
+) -> Path:
+    """将 CI 单次执行写为一条带精确 nodeid/JUnit/环境绑定的 attempt。"""
+
+    expected = expected_nodeids
+    if expected is None:
+        expected = _expected_nodeids(iteration_dir, required=True)
+    if len(expected) != len(set(expected)):
+        raise EvidenceError("expected nodeids 不得重复")
+    if any(not _valid_nodeid(nodeid) for nodeid in expected):
+        raise EvidenceError("expected nodeids 包含非法 nodeid")
+    if execution_file is not None and executed_nodeids is not None:
+        raise EvidenceError("execution_file 与 executed_nodeids 不能同时提供")
+    if execution_file is None and executed_nodeids is None:
+        raise EvidenceError("存在 traceability nodeid 时必须提供 pytest 执行清单")
+    if execution_file is None and executed_nodeids is not None:
+        raise EvidenceError(
+            "仅提供 executed_nodeids 无法形成完整 1.1 执行清单；请提供 execution_file"
+        )
+    return _record_ci_attempts(
+        iteration_dir,
+        run_id,
+        modules,
+        env,
+        expected,
+        [{"junit": junit, "execution": execution_file, "allure": allure}],
+        commit_sha=commit_sha,
+        command=command,
+        environment_file=environment_file,
+        seed_registry=seed_registry,
+        target_image_ids=target_image_ids,
+    )
 
 
 def archive_reports(run_dir: Path, sources: list[Path]) -> list[Path]:
@@ -570,8 +1077,36 @@ def _case_modules(iteration_dir: Path) -> list[str]:
     return sorted(modules)
 
 
-def record_ci_auto(iterations_dir: Path, junit: Path, env: str) -> list[Path]:
-    """为所有进入自动化或执行阶段的迭代分别写入 CI 证据。"""
+def _new_run_id() -> str:
+    timestamp = datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
+    return f"{timestamp}-{os.urandom(2).hex()}"
+
+
+def _same_path(first: Path, second: Path) -> bool:
+    return os.path.abspath(first) == os.path.abspath(second)
+
+
+def record_ci_auto(
+    iterations_dir: Path,
+    junit: Path,
+    env: str,
+    *,
+    iteration: Path | None = None,
+    executed_nodeids: Path | None = None,
+    first_junit: Path | None = None,
+    first_executed_nodeids: Path | None = None,
+    retry_junit: Path | None = None,
+    retry_executed_nodeids: Path | None = None,
+    allure: Path | None = None,
+    first_allure: Path | None = None,
+    retry_allure: Path | None = None,
+    commit_sha: str | None = None,
+    command: str | None = None,
+    environment_file: Path | None = None,
+    seed_registry: Path | None = None,
+    target_image_ids: list[str] | None = None,
+) -> list[Path]:
+    """为一个明确选定的 eligible iteration 记录精确的 first/retry 证据链。"""
 
     _assert_no_symlink_components(iterations_dir, label="iterations directory")
     if iterations_dir.is_symlink() or not iterations_dir.is_dir():
@@ -587,10 +1122,63 @@ def record_ci_auto(iterations_dir: Path, junit: Path, env: str) -> list[Path]:
         "accepted",
         "merged",
     }
-    run_id = datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
-    written: list[Path] = []
-    for iteration_dir in sorted(iterations_dir.iterdir()):
-        aggregate = iteration_dir / "iteration.yaml"
+    if retry_junit is not None and first_junit is None:
+        raise EvidenceError("retry JUnit 必须同时提供 first JUnit")
+    if first_executed_nodeids is not None and first_junit is None:
+        raise EvidenceError("first pytest 执行清单必须绑定 first JUnit")
+    if retry_executed_nodeids is not None and retry_junit is None:
+        raise EvidenceError("retry pytest 执行清单必须绑定 retry JUnit")
+    if first_allure is not None and first_junit is None:
+        raise EvidenceError("first Allure 必须绑定 first JUnit")
+    if retry_allure is not None and retry_junit is None:
+        raise EvidenceError("retry Allure 必须绑定 retry JUnit")
+    if executed_nodeids is not None and (first_junit is not None or retry_junit is not None):
+        raise EvidenceError("executed-nodeids 不能与 first/retry execution 组合使用")
+    if first_junit is not None:
+        if retry_junit is not None:
+            if not _same_path(retry_junit, junit):
+                raise EvidenceError("最终 JUnit 必须是 retry JUnit")
+        elif not _same_path(first_junit, junit):
+            raise EvidenceError("没有 retry 时最终 JUnit 必须是 first JUnit")
+    attempt_inputs: list[dict[str, Any]] = []
+    if first_junit is not None:
+        if first_executed_nodeids is None:
+            raise EvidenceError("first JUnit 必须绑定 first pytest 执行清单")
+        attempt_inputs.append(
+            {"junit": first_junit, "execution": first_executed_nodeids, "allure": first_allure}
+        )
+    if retry_junit is not None:
+        if retry_executed_nodeids is None:
+            raise EvidenceError("retry JUnit 必须绑定 retry pytest 执行清单")
+        attempt_inputs.append(
+            {"junit": retry_junit, "execution": retry_executed_nodeids, "allure": retry_allure}
+        )
+    elif not attempt_inputs or not _same_path(first_junit or junit, junit):
+        execution = executed_nodeids or first_executed_nodeids
+        if execution is None:
+            raise EvidenceError("最终 JUnit 必须绑定 pytest 执行清单")
+        attempt_inputs.append({"junit": junit, "execution": execution, "allure": allure})
+    if not attempt_inputs:
+        raise EvidenceError("至少需要一个 CI attempt")
+
+    if iteration is not None:
+        _assert_no_symlink_components(iteration, label="iteration")
+        if iteration.is_symlink() or not iteration.is_dir():
+            raise EvidenceError(f"iteration 不是安全的目录：{iteration}")
+        if not _same_path(iteration.parent, iterations_dir):
+            raise EvidenceError("--iteration 必须是 iterations directory 的直接子目录")
+        candidates = [iteration]
+    else:
+        candidates = sorted(
+            candidate
+            for candidate in iterations_dir.iterdir()
+            if candidate.is_dir() and not candidate.is_symlink()
+        )
+
+    eligible_candidates: list[Path] = []
+    for candidate in candidates:
+        aggregate = candidate / "iteration.yaml"
+        _assert_no_symlink_components(candidate, label="iteration directory")
         _assert_no_symlink_components(aggregate, label="iteration 文件")
         if not aggregate.exists():
             continue
@@ -602,9 +1190,40 @@ def record_ci_auto(iterations_dir: Path, junit: Path, env: str) -> list[Path]:
             raise EvidenceError(f"iteration 文件不是安全可解析的 YAML：{aggregate}") from exc
         if not isinstance(document, dict):
             raise EvidenceError(f"iteration 文件顶层必须是映射：{aggregate}")
-        modules = _case_modules(iteration_dir)
-        if document.get("state") in eligible and modules:
-            written.append(record_ci(iteration_dir, run_id, modules, env, junit))
+        if document.get("state") not in eligible:
+            continue
+        eligible_candidates.append(candidate)
+
+    if iteration is None and len(eligible_candidates) > 1:
+        names = ", ".join(path.name for path in eligible_candidates)
+        raise EvidenceError(
+            "多个 iteration 同时 eligible，必须分别调用 --iteration 记录证据：" + names
+        )
+    if iteration is not None and not eligible_candidates:
+        raise EvidenceError(f"指定 iteration 不在可执行状态：{iteration}")
+
+    run_id = _new_run_id()
+    written: list[Path] = []
+    for candidate in eligible_candidates:
+        modules = _case_modules(candidate)
+        expected = _expected_nodeids(candidate, required=True)
+        if not modules:
+            raise EvidenceError(f"eligible iteration 没有可执行 module：{candidate}")
+        written.append(
+            _record_ci_attempts(
+                candidate,
+                run_id,
+                modules,
+                env,
+                expected,
+                attempt_inputs,
+                commit_sha=commit_sha,
+                command=command,
+                environment_file=environment_file,
+                seed_registry=seed_registry,
+                target_image_ids=target_image_ids,
+            )
+        )
     return written
 
 
@@ -647,13 +1266,36 @@ def main(argv: list[str] | None = None) -> int:
     ci.add_argument("--module", action="append", required=True)
     ci.add_argument("--env", choices=("local", "test", "ci", "prod"), default="ci")
     ci.add_argument("--junit", type=Path, required=True)
+    ci.add_argument("--executed-nodeids", type=Path)
+    ci.add_argument("--alluredir", type=Path)
+    ci.add_argument("--commit-sha")
+    ci.add_argument("--command", dest="execution_command")
+    ci.add_argument("--environment-file", type=Path)
+    ci.add_argument("--seed-registry", type=Path)
+    ci.add_argument("--target-image-id", action="append", default=[])
+    nodes = sub.add_parser("expected-nodeids")
+    nodes.add_argument("iteration", type=Path)
     archive = sub.add_parser("archive")
     archive.add_argument("run_dir", type=Path)
     archive.add_argument("source", type=Path, nargs="+")
     ci_auto = sub.add_parser("record-ci-auto")
     ci_auto.add_argument("--iterations", type=Path, default=REPO_ROOT / "iterations")
+    ci_auto.add_argument("--iteration", type=Path)
     ci_auto.add_argument("--env", choices=("local", "test", "ci", "prod"), default="ci")
     ci_auto.add_argument("--junit", type=Path, required=True)
+    ci_auto.add_argument("--executed-nodeids", type=Path)
+    ci_auto.add_argument("--first-junit", type=Path)
+    ci_auto.add_argument("--first-executed-nodeids", type=Path)
+    ci_auto.add_argument("--retry-junit", type=Path)
+    ci_auto.add_argument("--retry-executed-nodeids", type=Path)
+    ci_auto.add_argument("--alluredir", type=Path)
+    ci_auto.add_argument("--first-alluredir", type=Path)
+    ci_auto.add_argument("--retry-alluredir", type=Path)
+    ci_auto.add_argument("--commit-sha")
+    ci_auto.add_argument("--command", dest="execution_command")
+    ci_auto.add_argument("--environment-file", type=Path)
+    ci_auto.add_argument("--seed-registry", type=Path)
+    ci_auto.add_argument("--target-image-id", action="append", default=[])
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
@@ -690,12 +1332,48 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"patch-scope violation: {problem}")
             return 1 if problems else 0
         elif args.command == "record-ci":
-            print(record_ci(args.iteration, args.run_id, args.module, args.env, args.junit))
+            print(
+                record_ci(
+                    args.iteration,
+                    args.run_id,
+                    args.module,
+                    args.env,
+                    args.junit,
+                    execution_file=args.executed_nodeids,
+                    allure=args.alluredir,
+                    commit_sha=args.commit_sha,
+                    command=args.execution_command,
+                    environment_file=args.environment_file,
+                    seed_registry=args.seed_registry,
+                    target_image_ids=args.target_image_id,
+                )
+            )
+        elif args.command == "expected-nodeids":
+            for nodeid in _expected_nodeids(args.iteration, required=True):
+                print(nodeid)
         elif args.command == "archive":
             for path in archive_reports(args.run_dir, args.source):
                 print(path)
         elif args.command == "record-ci-auto":
-            for path in record_ci_auto(args.iterations, args.junit, args.env):
+            for path in record_ci_auto(
+                args.iterations,
+                args.junit,
+                args.env,
+                iteration=args.iteration,
+                executed_nodeids=args.executed_nodeids,
+                first_junit=args.first_junit,
+                first_executed_nodeids=args.first_executed_nodeids,
+                retry_junit=args.retry_junit,
+                retry_executed_nodeids=args.retry_executed_nodeids,
+                allure=args.alluredir,
+                first_allure=args.first_alluredir,
+                retry_allure=args.retry_alluredir,
+                commit_sha=args.commit_sha,
+                command=args.execution_command,
+                environment_file=args.environment_file,
+                seed_registry=args.seed_registry,
+                target_image_ids=args.target_image_id,
+            ):
                 print(path)
     except EvidenceError as exc:
         print(f"self-debug evidence error: {exc}", file=sys.stderr)

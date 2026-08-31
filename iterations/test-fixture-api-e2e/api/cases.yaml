@@ -15,15 +15,20 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {promo_codes: [ARGUS10]}
+      path_params: { id: "${cart_id}" }
+      body: { promo_codes: [ARGUS10] }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.total"
+          operator: type
+          value_type: number
+          expected: number
   - api_case_id: A0002
     requirement_ids: [R0001]
     operation_id: applyCartPromotions
@@ -34,12 +39,17 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {code: ARGUS10}
+      path_params: { id: "${cart_id}" }
+      body: { code: ARGUS10 }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.message"
+          operator: type
+          value_type: string
+          expected: string

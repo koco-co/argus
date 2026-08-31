@@ -670,6 +670,35 @@ def test_second_in_progress_iteration_rejected(validator: Any, tmp_path: Path) -
     assert validator.main([str(iteration_two)]) == 1
 
 
+def test_terminal_iteration_does_not_report_live_sibling_conflict(
+    validator: Any, tmp_path: Path
+) -> None:
+    live = _iteration_doc(
+        "2026-08-live-terminal-check",
+        ui=True,
+        state="created",
+        events=[],
+        approvals=[],
+    )
+    terminal = _iteration_doc(
+        "2026-08-terminal-check",
+        ui=True,
+        state="accepted",
+        events=[],
+        approvals=[],
+    )
+    _scaffold(tmp_path, "2026-08-live-terminal-check", live)
+    terminal_dir = _scaffold(tmp_path, "2026-08-terminal-check", terminal)
+
+    report = validator.IterationReport()
+    validator.check_iteration(
+        terminal_dir,
+        report,
+        in_progress_elsewhere="2026-08-live-terminal-check",
+    )
+    assert not any("single-in-progress violation" in error for error in report.errors)
+
+
 def test_precommit_can_validate_multiple_iteration_yaml_paths(
     validator: Any, tmp_path: Path
 ) -> None:

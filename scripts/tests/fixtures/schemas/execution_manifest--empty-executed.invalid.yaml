@@ -1,0 +1,42 @@
+schema_version: "1.1"
+iteration_id: 2026-08-medusa-api-checkout
+run_id: run-20260829T120000Z-test
+code_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+env: ci
+scope: module_set
+command: uv run pytest automation/api
+expected_nodeids:
+  - automation/api/tests/checkout/test_example.py::test_case
+collected_nodeids:
+  - automation/api/tests/checkout/test_example.py::test_case
+environment_summary:
+  name: ci
+  path: config/env.ci.yaml
+  sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+seed_summary:
+  path: shared/testdata/seed-registry.yaml
+  sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+target_summary:
+  config_sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  image_ids:
+    - unavailable
+attempts:
+  - attempt_number: 1
+    result: pass
+    expected_nodeids:
+      - automation/api/tests/checkout/test_example.py::test_case
+    collected_nodeids:
+      - automation/api/tests/checkout/test_example.py::test_case
+    executed_nodeids: []
+    outcomes: {}
+    junit:
+      path: reports/junit-first.xml
+      sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      tests: 1
+      failures: 0
+      errors: 0
+      skipped: 0
+    allure:
+      path: reports/allure-first
+      sha256: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+      available: false

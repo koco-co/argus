@@ -122,10 +122,14 @@ def test_regression_workflow_does_not_notify_a_stale_summary_without_junit() -> 
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows/regression.yml").read_text(encoding="utf-8")
     trusted = (root / ".github/workflows/trusted-notifications.yml").read_text(encoding="utf-8")
-    assert "reports/junit-first.xml" in workflow
-    assert "reports/junit-retry.xml" in workflow
-    assert "reports/allure-first" in workflow
-    assert "reports/allure-retry" in workflow
+    assert "junit-first.xml" in workflow
+    assert "junit-retry.xml" in workflow
+    assert "allure-first" in workflow
+    assert "allure-retry" in workflow
+    assert '--iteration "iterations/${iteration}"' in workflow
+    assert "traceability.yaml" in workflow
+    assert 'uv run pytest "$test_path"' not in workflow
+    assert 'uv run pytest "${pytest_args[@]}"' in workflow
     assert "scripts/notify.py --summary auto" not in workflow
     assert "保存受限通知分类" in workflow
     assert '--job "$ARGUS_WORKFLOW_NAME"' in trusted

@@ -27,7 +27,7 @@ Authoritative skeletons to be created verbatim-shaped in Phase 0 tasks:
 **Makefile targets** (v1.0 renames applied):
 
 ```makefile
-setup:            uv sync && pre-commit install && playwright install chromium
+setup:            uv sync --locked && pre-commit install && playwright install chromium
 new-iteration ID=:  uv run python scripts/new_iteration.py $(ID)
 validate-iteration ID=:  uv run python scripts/validate_schema.py iterations/$(ID)   # renamed from gen-cases
 export ID=:       export_xmind + export_xlsx + render_md for iterations/$(ID)
@@ -56,13 +56,13 @@ Notes vs v1.0: module selection is by **path**, not `-m` marker expressions (pyt
 | Purpose | Directory | Command | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | Lint | root | `make lint` | clean on skeleton and after generation；格式检查直接扫描工作树，包含尚未被 Git 跟踪的新 Python 文件 | 已运行 2026-08-28（ruff lint、ruff format check 与 pyright 零告警） |
-| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：497 项通过；不代表 Web/API E2E 通过 |
+| Framework tests | root | `uv run pytest scripts/tests` | integration+unit suites green incl. fixture round-trips and DATA_MODEL JSON-block parsing | 本轮复核：528 项通过；不代表 Web/API E2E 通过 |
 | Skill 黄金基线 | root | `make skill-golden` | 四个生成 Skill 的冻结输入 SHA、YAML Schema/结构语义与 Python AST 语义全部匹配 | 已运行 2026-08-28（4 份 1.0.0 baseline、10 项代表性产物通过；输入漂移、YAML 语义漂移和 Python AST 漂移反向测试通过） |
 | Schema validation | root | `make validate-iteration ID=<id>` | exit 0 valid / non-zero naming exact violating field | 已运行 2026-08-28（目录递归展开 10 个 UI 工件通过；非法 fixture 仍精确报 JSON 路径） |
 | Coverage gate | root | `uv run python scripts/check_coverage.py --tier from-iteration iterations/<id>` | branch/state-selected tier verdict per PRD §5.1; `auto` is local audit only | 已运行 2026-08-28（单 iteration、全量及 `--changed-base` PR 范围均通过；iteration 工件只选对应目录，自动化/共享门禁变化保守检查全部，删除 iteration 明确失败） |
 | Static all-gates | root | `make static-gates`（提交前另运行 `uv run pre-commit run --all-files`） | green on compliant tree; red on any broken schema, state, boundary, or secret fixture | 当前复核已运行（Ruff/format/Pyright/README、四份 Skill golden、Schema/semantic/coverage、分层/POM/markers/DB/prod/orphan/API model gates 通过） |
-| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 当前复核已运行：10 passed against the real Medusa harness |
-| Generated regression (API) | root | `make api-tests MODULE=checkout ENV=local` | typed client/model suite green against healthy harness | 当前复核已运行：22 passed against the real Medusa harness |
+| Generated regression (UI) | root | `make web-tests MODULE=checkout ENV=local` | suite green against healthy harness | 当前复核已运行：8 passed against the real Medusa harness |
+| Generated regression (API) | root | `make api-tests MODULE=checkout ENV=local` | typed client/model suite green against healthy harness | 当前复核已运行：20 passed against the real Medusa harness |
 | Harness parallel smoke | root | `ARGUS_RUN_ID=smoke TEST_ENV=local uv run pytest -n 2 automation/web/tests/harness` | gw0/gw1 均执行，worker 会话和命名空间隔离 | 已运行 2026-08-28（连续三轮全绿；PROD collect 另验证 1 项非只读探针被剔除） |
 | Environment check | root | `uv run python shared/config/settings.py check --env local --iteration iterations/<id>` | 全部必需键、URL/DSN 与只读声明合法后才允许 M8 approval | 当前本地端点配置已通过；真实通知 Secret 仍未提供/验收 |
 | Export artifacts | root | `make export ID=<id>` | branch-aware byte-reproducible `.xmind` or `.xlsx`, plus `.md`, written under `exports/` | 已运行 2026-08-28（UI/API 各连续两次 SHA-256 一致；XLSX 的 ZIP 与 core modified 时间均固定） |

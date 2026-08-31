@@ -30,6 +30,7 @@ from typing import Any
 
 from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
 from argus_core.parsing import load_json, load_yaml  # pyright: ignore[reportMissingImports]
+from lint_test_design import lint_iteration
 
 PROJECT = REPO_ROOT.name
 FIXED_DATE = (1980, 1, 1, 0, 0, 0)
@@ -162,6 +163,19 @@ def load_tree_sources(iteration_dir: Path) -> dict[str, Any]:
             sources[name] = load_yaml(path.read_bytes())
         except (OSError, UnicodeError, ValueError) as exc:
             raise RegistryError(f"source is not safely parseable: {path}") from exc
+    lint_dependencies = (iteration_dir / "exemptions.yaml",)
+    if all(path.is_file() and not path.is_symlink() for path in lint_dependencies):
+        design_errors = [
+            diagnostic
+            for diagnostic in lint_iteration(iteration_dir, "functional_cases")
+            if diagnostic.severity == "error"
+        ]
+        if design_errors:
+            detail = "; ".join(
+                f"{diagnostic.rule_id} {diagnostic.location}: {diagnostic.message}"
+                for diagnostic in design_errors[:5]
+            )
+            raise RegistryError(f"test-design lint failed before export: {detail}")
     cases_status = sources["functional-cases.yaml"]["status"]
     if cases_status not in CASES_READY:
         raise RegistryError(

@@ -8,6 +8,7 @@ cases:
   - case_id: C0001
     title: Discount code reduces total
     priority: 1
+    side_effect: updates
     precondition: Storefront open with seeded product in cart.
     steps:
       - action: Enter discount code QA-DISCOUNT and apply.

@@ -525,7 +525,11 @@ def check_iteration(
     iteration_id: str = document["iteration_id"]
     state: str = document["state"]
 
-    if in_progress_elsewhere and in_progress_elsewhere != iteration_id:
+    if (
+        in_progress_elsewhere
+        and in_progress_elsewhere != iteration_id
+        and state not in {"accepted", "merged"}
+    ):
         report.error(
             f"single-in-progress violation: iteration {in_progress_elsewhere!r} is "
             f"also non-terminal"

@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             failures += 1
             continue
+
+        # Schema 通过不是设计通过：先执行统一的、带稳定 rule_id 的
+        # requirements/test-points/cases lint，再执行历史专门语义检查器。
+        checked += 1
+        failures += _run_checker("lint_test_design.py", iteration) != 0
+
         functional_cases = iteration / "functional-cases.yaml"
         if functional_cases.is_file():
             checked += 1

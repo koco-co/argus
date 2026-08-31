@@ -23,6 +23,11 @@ cases:
           expression: seeded_order_id
     expected_response:
       status_code: 200
+      body_assertions:
+        - path: "$.id"
+          operator: type
+          value_type: string
+          expected: string
   - api_case_id: A0002
     requirement_ids: [R0001]
     operation_id: getOrder
@@ -30,7 +35,13 @@ cases:
     method: GET
     title: Unknown order id returns 404
     case_type: negative
+    side_effect: none
     module: orders
     request: {}
     expected_response:
       status_code: 404
+      body_assertions:
+        - path: "$.message"
+          operator: type
+          value_type: string
+          expected: string

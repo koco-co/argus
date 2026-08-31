@@ -53,6 +53,10 @@ bindings:
     path_pattern: "iterations/*/runs/*/run-summary.yaml"
     schema: "scripts/schemas/run_summary.schema.json"
 
+  - artifact: execution_manifest
+    path_pattern: "iterations/*/runs/*/execution-manifest.json"
+    schema: "scripts/schemas/execution_manifest.schema.json"
+
   - artifact: source_payload
     path_pattern: "iterations/*/00-raw/source-payload.yaml"
     any_of:

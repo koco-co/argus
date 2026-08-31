@@ -8,6 +8,7 @@ cases:
   - case_id: C0001
     title: 有效折扣码更新购物车总额
     priority: 1
+    side_effect: updates
     precondition: Medusa 靶场健康且标准种子已装载。
     test_point_ids: [T0001]
     tags: ["module:checkout"]
@@ -24,6 +25,7 @@ cases:
   - case_id: C0002
     title: 无效折扣码不改变购物车总额
     priority: 1
+    side_effect: creates
     precondition: Medusa 靶场健康且购物车为空。
     test_point_ids: [T0002]
     tags: ["module:checkout"]

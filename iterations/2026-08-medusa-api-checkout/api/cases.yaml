@@ -24,8 +24,43 @@ cases:
           expression: $.region_europe
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/ProductListResponse"}
-      body_includes: {product_handle: t-shirt, variant_sku: SHIRT-S-BLACK}
+      body_schema: { $ref: "#/components/schemas/ProductListResponse" }
+      body_includes: { product_handle: t-shirt, variant_sku: SHIRT-S-BLACK }
+      body_assertions:
+        - path: "$.products"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.products[*].handle"
+          operator: contains
+          value_type: string
+          expected: t-shirt
+        - path: "$.products[handle=t-shirt].variants[sku=SHIRT-S-BLACK].sku"
+          operator: contains
+          value_type: string
+          expected: SHIRT-S-BLACK
+        - path: "$.products[handle=t-shirt].variants[sku=SHIRT-S-BLACK].title"
+          operator: equals
+          value_type: string
+          expected: S / Black
+        - path: "$.products[handle=t-shirt].variants[sku=SHIRT-S-BLACK].calculated_price.currency_code"
+          operator: equals
+          value_type: string
+          expected: eur
+        - path: "$.products[handle=t-shirt].variants[sku=SHIRT-S-BLACK].calculated_price.calculated_amount"
+          operator: derived_equals
+          value_type: number
+          expected: product_price_eur
+      derived_oracles:
+        - name: product_price_eur
+          target_path: "$.products[handle=t-shirt].variants[sku=SHIRT-S-BLACK].calculated_price.calculated_amount"
+          expression: product_price_eur
+          inputs:
+            - name: product_price_eur
+              source: seed
+              path: "$.product_price_eur.value"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0002
     requirement_ids: [R0001]
     operation_id: listStoreProducts
@@ -36,10 +71,19 @@ cases:
     side_effect: none
     module: checkout
     request:
-      query: {handle: t-shirt, region_id: reg_missing_for_argus}
+      query: { handle: t-shirt, region_id: reg_missing_for_argus }
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0003
     requirement_ids: [R0001]
     operation_id: createStoreCart
@@ -50,14 +94,31 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      body: {region_id: "${region_id}"}
+      body: { region_id: "${region_id}" }
       variables:
         - name: region_id
           source: seed
           expression: $.region_europe
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.id"
+          operator: type
+          value_type: string
+          expected: string
+        - path: "$.cart.total"
+          operator: type
+          value_type: number
+          expected: number
+        - path: "$.cart.region_id"
+          operator: equals
+          value_type: string
+          expected: "${region_id}"
+        - path: "$.cart.items"
+          operator: equals
+          value_type: array
+          expected: []
   - api_case_id: A0004
     requirement_ids: [R0001]
     operation_id: createStoreCart
@@ -67,10 +128,19 @@ cases:
     case_type: negative
     side_effect: none
     module: checkout
-    request: {body: {region_id: reg_missing_for_argus}}
+    request: { body: { region_id: reg_missing_for_argus } }
     expected_response:
       status_code: 404
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: not_found
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0005
     requirement_ids: [R0001]
     operation_id: addStoreCartLineItem
@@ -81,8 +151,8 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {variant_id: "${variant_id}", quantity: 1}
+      path_params: { id: "${cart_id}" }
+      body: { variant_id: "${variant_id}", quantity: 1 }
       variables:
         - name: cart_id
           source: prev_response
@@ -92,7 +162,30 @@ cases:
           expression: $.products[0].variants[sku=SHIRT-S-BLACK].id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.items"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.cart.items[*].quantity"
+          operator: contains
+          value_type: integer
+          expected: 1
+        - path: "$.cart.items[*].unit_price"
+          operator: derived_equals
+          value_type: number
+          expected: product_price_eur
+      derived_oracles:
+        - name: product_price_eur
+          target_path: "$.cart.items[*].unit_price"
+          expression: product_price_eur
+          inputs:
+            - name: product_price_eur
+              source: seed
+              path: "$.product_price_eur.value"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0006
     requirement_ids: [R0001]
     operation_id: addStoreCartLineItem
@@ -103,15 +196,24 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {quantity: 1}
+      path_params: { id: "${cart_id}" }
+      body: { quantity: 1 }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0007
     requirement_ids: [R0002]
     operation_id: applyStoreCartPromotions
@@ -122,8 +224,8 @@ cases:
     side_effect: updates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {promo_codes: ["${promotion_code}"]}
+      path_params: { id: "${cart_id}" }
+      body: { promo_codes: ["${promotion_code}"] }
       variables:
         - name: cart_id
           source: prev_response
@@ -133,7 +235,41 @@ cases:
           expression: $.discount_argus10.value
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.discount_total"
+          operator: derived_equals
+          value_type: number
+          expected: discount_total
+        - path: "$.cart.total"
+          operator: derived_equals
+          value_type: number
+          expected: total
+      derived_oracles:
+        - name: discount_total
+          target_path: "$.cart.discount_total"
+          expression: product_price_eur * discount_argus10.percentage / 100
+          inputs:
+            - name: product_price_eur
+              source: seed
+              path: "$.product_price_eur.value"
+            - name: discount_argus10
+              source: seed
+              path: "$.discount_argus10.percentage"
+          value_type: number
+          tolerance: 0.01
+        - name: total
+          target_path: "$.cart.total"
+          expression: product_price_eur * (100 - discount_argus10.percentage) / 100
+          inputs:
+            - name: product_price_eur
+              source: seed
+              path: "$.product_price_eur.value"
+            - name: discount_argus10
+              source: seed
+              path: "$.discount_argus10.percentage"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0008
     requirement_ids: [R0004]
     operation_id: applyStoreCartPromotions
@@ -144,15 +280,24 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {promo_codes: [NOT-A-REAL-CODE]}
+      path_params: { id: "${cart_id}" }
+      body: { promo_codes: [NOT-A-REAL-CODE] }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: contains
+          value_type: string
+          expected: invalid
   - api_case_id: A0009
     requirement_ids: [R0003]
     operation_id: updateStoreCart
@@ -163,7 +308,7 @@ cases:
     side_effect: updates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
+      path_params: { id: "${cart_id}" }
       body:
         email: argus-api@example.invalid
         shipping_address:
@@ -188,7 +333,28 @@ cases:
           expression: $.cart.id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.email"
+          operator: equals
+          value_type: string
+          expected: argus-api@example.invalid
+        - path: "$.cart.shipping_address"
+          operator: type
+          value_type: object
+          expected: object
+        - path: "$.cart.shipping_address.country_code"
+          operator: equals
+          value_type: string
+          expected: de
+        - path: "$.cart.billing_address"
+          operator: type
+          value_type: object
+          expected: object
+        - path: "$.cart.billing_address.postal_code"
+          operator: equals
+          value_type: string
+          expected: "10115"
   - api_case_id: A0010
     requirement_ids: [R0003]
     operation_id: updateStoreCart
@@ -199,15 +365,24 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {email: not-an-email}
+      path_params: { id: "${cart_id}" }
+      body: { email: not-an-email }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0011
     requirement_ids: [R0003]
     operation_id: listStoreShippingOptions
@@ -218,15 +393,32 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      query: {cart_id: "${cart_id}"}
+      query: { cart_id: "${cart_id}" }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/ShippingOptionListResponse"}
-      body_includes: {shipping_option_name: Standard Shipping}
+      body_schema: { $ref: "#/components/schemas/ShippingOptionListResponse" }
+      body_includes: { shipping_option_name: Standard Shipping }
+      body_assertions:
+        - path: "$.shipping_options"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.shipping_options[*].name"
+          operator: contains
+          value_type: string
+          expected: Standard Shipping
+        - path: "$.shipping_options[*].id"
+          operator: type
+          value_type: string
+          expected: string
+        - path: "$.shipping_options[*].amount"
+          operator: type
+          value_type: number
+          expected: number
   - api_case_id: A0012
     requirement_ids: [R0003]
     operation_id: listStoreShippingOptions
@@ -236,10 +428,19 @@ cases:
     case_type: negative
     side_effect: none
     module: checkout
-    request: {query: {}}
+    request: { query: {} }
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: contains
+          value_type: string
+          expected: cart_id
   - api_case_id: A0013
     requirement_ids: [R0003]
     operation_id: addStoreCartShippingMethod
@@ -250,8 +451,8 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {option_id: "${shipping_option_id}", data: {}}
+      path_params: { id: "${cart_id}" }
+      body: { option_id: "${shipping_option_id}", data: {} }
       variables:
         - name: cart_id
           source: prev_response
@@ -261,7 +462,24 @@ cases:
           expression: $.shipping_options[name=Standard Shipping].id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/CartResponse"}
+      body_schema: { $ref: "#/components/schemas/CartResponse" }
+      body_assertions:
+        - path: "$.cart.shipping_methods"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.cart.total"
+          operator: type
+          value_type: number
+          expected: number
+        - path: "$.cart.shipping_methods[*].shipping_option_id"
+          operator: type
+          value_type: string
+          expected: string
+        - path: "$.cart.shipping_methods[*].name"
+          operator: contains
+          value_type: string
+          expected: Standard Shipping
   - api_case_id: A0014
     requirement_ids: [R0003]
     operation_id: addStoreCartShippingMethod
@@ -272,15 +490,24 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
-      body: {option_id: so_missing_for_argus, data: {}}
+      path_params: { id: "${cart_id}" }
+      body: { option_id: so_missing_for_argus, data: {} }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0015
     requirement_ids: [R0003]
     operation_id: createStorePaymentCollection
@@ -291,14 +518,37 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      body: {cart_id: "${cart_id}"}
+      body: { cart_id: "${cart_id}" }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+      body_schema: { $ref: "#/components/schemas/PaymentCollectionResponse" }
+      body_assertions:
+        - path: "$.payment_collection.id"
+          operator: type
+          value_type: string
+          expected: string
+        - path: "$.payment_collection.currency_code"
+          operator: equals
+          value_type: string
+          expected: eur
+        - path: "$.payment_collection.amount"
+          operator: derived_equals
+          value_type: number
+          expected: cart_total
+      derived_oracles:
+        - name: cart_total
+          target_path: "$.payment_collection.amount"
+          expression: cart_total
+          inputs:
+            - name: cart_total
+              source: prev_response
+              path: "$.cart.total"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0016
     requirement_ids: [R0003]
     operation_id: createStorePaymentCollection
@@ -308,10 +558,19 @@ cases:
     case_type: negative
     side_effect: none
     module: checkout
-    request: {body: {}}
+    request: { body: {} }
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: contains
+          value_type: string
+          expected: cart_id
   - api_case_id: A0017
     requirement_ids: [R0003]
     operation_id: initializeStorePaymentSession
@@ -322,8 +581,8 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${payment_collection_id}"}
-      body: {provider_id: "${payment_provider_id}", data: {}}
+      path_params: { id: "${payment_collection_id}" }
+      body: { provider_id: "${payment_provider_id}", data: {} }
       variables:
         - name: payment_collection_id
           source: prev_response
@@ -333,7 +592,34 @@ cases:
           expression: $.payment_manual.value
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/PaymentCollectionResponse"}
+      body_schema: { $ref: "#/components/schemas/PaymentCollectionResponse" }
+      body_assertions:
+        - path: "$.payment_collection.payment_sessions"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.payment_collection.payment_sessions[*].provider_id"
+          operator: contains
+          value_type: string
+          expected: pp_system
+        - path: "$.payment_collection.payment_sessions[0].status"
+          operator: contains
+          value_type: string
+          expected: pending
+        - path: "$.payment_collection.payment_sessions[0].amount"
+          operator: derived_equals
+          value_type: number
+          expected: payment_amount
+      derived_oracles:
+        - name: payment_amount
+          target_path: "$.payment_collection.payment_sessions[0].amount"
+          expression: payment_amount
+          inputs:
+            - name: payment_amount
+              source: prev_response
+              path: "$.payment_collection.amount"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0018
     requirement_ids: [R0003]
     operation_id: initializeStorePaymentSession
@@ -344,15 +630,24 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${payment_collection_id}"}
-      body: {data: {}}
+      path_params: { id: "${payment_collection_id}" }
+      body: { data: {} }
       variables:
         - name: payment_collection_id
           source: prev_response
           expression: $.payment_collection.id
     expected_response:
       status_code: 400
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: invalid_data
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+
   - api_case_id: A0019
     requirement_ids: [R0003]
     operation_id: completeStoreCart
@@ -363,15 +658,66 @@ cases:
     side_effect: creates
     module: checkout
     request:
-      path_params: {id: "${cart_id}"}
+      path_params: { id: "${cart_id}" }
       variables:
         - name: cart_id
           source: prev_response
           expression: $.cart.id
     expected_response:
       status_code: 200
-      body_schema: {$ref: "#/components/schemas/OrderResponse"}
-      body_includes: {type: order}
+      body_schema: { $ref: "#/components/schemas/OrderResponse" }
+      body_includes: { type: order }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: order
+        - path: "$.order.id"
+          operator: type
+          value_type: string
+          expected: string
+        - path: "$.order.email"
+          operator: equals
+          value_type: string
+          expected: argus-api@example.invalid
+        - path: "$.order.items"
+          operator: type
+          value_type: array
+          expected: array
+        - path: "$.order.items[*].variant_sku"
+          operator: contains
+          value_type: string
+          expected: SHIRT-S-BLACK
+        - path: "$.order.items[*].quantity"
+          operator: contains
+          value_type: integer
+          expected: 1
+        - path: "$.order.items[*].total"
+          operator: type
+          value_type: number
+          expected: number
+        - path: "$.order.shipping_methods[*].name"
+          operator: contains
+          value_type: string
+          expected: Standard Shipping
+        - path: "$.order.payment_collections[*].status"
+          operator: contains
+          value_type: string
+          expected: authorized
+        - path: "$.order.total"
+          operator: derived_equals
+          value_type: number
+          expected: total_matches_cart
+      derived_oracles:
+        - name: total_matches_cart
+          target_path: "$.order.total"
+          expression: cart_total
+          inputs:
+            - name: cart_total
+              source: prev_response
+              path: "$.cart.total"
+          value_type: number
+          tolerance: 0.01
   - api_case_id: A0020
     requirement_ids: [R0003]
     operation_id: completeStoreCart
@@ -382,7 +728,16 @@ cases:
     side_effect: none
     module: checkout
     request:
-      path_params: {id: cart_missing_for_argus}
+      path_params: { id: cart_missing_for_argus }
     expected_response:
       status_code: 404
-      body_schema: {$ref: "#/components/schemas/ErrorResponse"}
+      body_schema: { $ref: "#/components/schemas/ErrorResponse" }
+      body_assertions:
+        - path: "$.type"
+          operator: equals
+          value_type: string
+          expected: not_found
+        - path: "$.message"
+          operator: matches
+          value_type: string
+          expected: .+

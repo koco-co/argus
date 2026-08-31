@@ -8,6 +8,7 @@ cases:
   - case_id: C0001
     title: 游客加入黑色 S 码 T 恤
     priority: 1
+    side_effect: creates
     precondition: Medusa 靶场健康、真实种子已装载且购物车已重置为空。
     test_point_ids: [T0001]
     tags: ["module:checkout"]
@@ -21,6 +22,7 @@ cases:
   - case_id: C0002
     title: 单次加购保持一条初始商品行
     priority: 1
+    side_effect: creates
     precondition: Medusa 靶场健康、真实种子已装载且购物车已重置为空。
     test_point_ids: [T0002]
     tags: ["module:checkout"]
@@ -34,6 +36,7 @@ cases:
   - case_id: C0003
     title: ARGUS10 按实时种子比例更新总额
     priority: 1
+    side_effect: updates
     precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且尚未应用促销。
     test_point_ids: [T0003]
     tags: ["module:checkout"]
@@ -50,6 +53,7 @@ cases:
   - case_id: C0004
     title: 无效折扣码不改变购物车总额
     priority: 1
+    side_effect: none
     precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且尚未应用促销。
     test_point_ids: [T0004]
     tags: ["module:checkout"]
@@ -66,6 +70,7 @@ cases:
   - case_id: C0005
     title: 游客完成折扣结账并创建订单
     priority: 1
+    side_effect: creates
     precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且 ARGUS10 已成功应用。
     test_point_ids: [T0005]
     tags: ["module:checkout"]
@@ -82,6 +87,7 @@ cases:
   - case_id: C0006
     title: 缺少必填地址时阻止创建订单
     priority: 1
+    side_effect: none
     precondition: Medusa 靶场健康，购物车内有一件黑色 S 码 T 恤且已进入地址结账步骤。
     test_point_ids: [T0006]
     tags: ["module:checkout"]
@@ -95,6 +101,7 @@ cases:
   - case_id: C0007
     title: 桌面视口关键结账状态视觉验收
     priority: 2
+    side_effect: creates
     precondition: Medusa 靶场健康，Chromium 视口固定为 1440×900，视觉证据目录可写。
     test_point_ids: [T0007]
     tags: ["module:checkout", "visual"]
@@ -108,6 +115,7 @@ cases:
   - case_id: C0008
     title: 移动边界视口关键结账状态视觉验收
     priority: 2
+    side_effect: creates
     precondition: Medusa 靶场健康，Chromium 视口固定为 390×844，视觉证据目录可写。
     test_point_ids: [T0008]
     tags: ["module:checkout", "visual"]

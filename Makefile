@@ -5,12 +5,12 @@
 ENV ?= local
 BRANCH ?= ui
 
-.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint static-gates skill-golden \
+.PHONY: setup new-iteration validate-iteration validate-readme export web-tests api-tests lint test-design-lint static-gates skill-golden \
 	target-app-up target-app-seed target-app-reset target-app-healthcheck target-app-canary \
 	target-app-down
 
 setup:
-	uv sync
+	uv sync --locked
 	uv run pre-commit install
 	uv run playwright install chromium
 
@@ -40,7 +40,10 @@ lint:
 	uv run pyright
 	uv run python scripts/validate_readme.py --strict
 
-static-gates: lint skill-golden
+test-design-lint:
+	uv run python scripts/lint_test_design.py --all
+
+static-gates: lint test-design-lint skill-golden
 	uv run python scripts/check_layering.py --all
 	uv run python scripts/check_pom_boundary.py --all
 	uv run python scripts/check_test_markers.py --all

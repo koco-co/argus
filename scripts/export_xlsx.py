@@ -6,7 +6,8 @@ Column contract (DATA_MODEL §7): ``api_case_id, module, operation_id, method,
 endpoint, case_type, title, request.path_params, request.query,
 request.headers, request.body, request.variables,
 expected_response.status_code, expected_response.body_schema,
-expected_response.body_includes``.
+expected_response.body_includes, expected_response.body_assertions,
+expected_response.derived_oracles``.
 
 Byte-reproducibility contract (PRD §6): workbook document properties
 (created/modified) are pinned and every ZIP entry of the resulting package is
@@ -32,6 +33,7 @@ from typing import Any
 
 from _registry_lib import REPO_ROOT, RegistryError, _assert_safe_path, validate_path
 from argus_core.parsing import load_yaml  # pyright: ignore[reportMissingImports]
+from lint_test_design import lint_iteration
 from openpyxl import Workbook, load_workbook  # pyright: ignore[reportMissingModuleSource]
 
 PROJECT = REPO_ROOT.name
@@ -56,6 +58,8 @@ COLUMNS = [
     "expected_response.status_code",
     "expected_response.body_schema",
     "expected_response.body_includes",
+    "expected_response.body_assertions",
+    "expected_response.derived_oracles",
 ]
 
 
@@ -86,6 +90,8 @@ def row_for(case: dict[str, Any]) -> list[str]:
         cell_value(expected.get("status_code")),
         cell_value(expected.get("body_schema")),
         cell_value(expected.get("body_includes")),
+        cell_value(expected.get("body_assertions")),
+        cell_value(expected.get("derived_oracles")),
     ]
 
 
@@ -141,6 +147,23 @@ def export(iteration_dir: Path) -> Path:
         document = load_yaml(cases_path.read_bytes())
     except (OSError, UnicodeError, ValueError) as exc:
         raise RegistryError(f"source for export is not safely parseable: {cases_path}") from exc
+    dependency_paths = (
+        iteration_dir / "requirements.yaml",
+        iteration_dir / "exemptions.yaml",
+        iteration_dir / "api" / "spec.normalized.yaml",
+    )
+    if all(path.is_file() and not path.is_symlink() for path in dependency_paths):
+        design_errors = [
+            diagnostic
+            for diagnostic in lint_iteration(iteration_dir, "api_cases")
+            if diagnostic.severity == "error"
+        ]
+        if design_errors:
+            detail = "; ".join(
+                f"{diagnostic.rule_id} {diagnostic.location}: {diagnostic.message}"
+                for diagnostic in design_errors[:5]
+            )
+            raise RegistryError(f"test-design lint failed before export: {detail}")
     status = document["status"]
     if status not in CASES_READY:
         raise RegistryError(

@@ -30,7 +30,7 @@ metadata:
 5. 从 seed context 运行时推导 expected value，不复制 derived literal。每个 test 添加 module、case_id、iteration markers，behavior 使用不含 ID、长度不超过 50 的 snake_case 动词短语。
 6. 幂等 upsert traceability 的 C→nodeid；不得删除仍被其他 active iteration 引用的方法或 nodeid，retirement 必须有记录并通过 coverage。
 7. 依次运行 ruff、pyright、`check_pom_boundary.py`、`check_test_markers.py`、`check_layering.py`、`check_functional_expectations.py`、`check_orphan_tests.py` 与 C→automation coverage。失败修复并重验最多 3 次；耗尽后必须通过唯一事件写入器 `uv run python scripts/record_event.py <iteration> --from web_automation_generating --to blocked --by agent --reason validation_budget_exhausted` 进入 `blocked(validation_budget_exhausted)` 终态。
-8. 收集实际 pytest nodeid 并再次验证 traceability；通过 `uv run python scripts/record_event.py ...` 记录 `web_automation_generating → web_automation_generated`。
+8. 以 iteration 的 traceability 精确 nodeid 选择 pytest（禁止宽路径把其他 iteration 混入），使用 `scripts.pytest_execution_evidence` 记录完整 collection、executed nodeid 与 outcome；每个 first/retry attempt 单独保存 JUnit、Allure、环境摘要和当前代码 SHA，共用该 iteration 的 `execution-manifest.json`，再验证 traceability。通过 `uv run python scripts/record_event.py ...` 记录 `web_automation_generating → web_automation_generated`。
 
 ## Guardrails
 
@@ -41,4 +41,4 @@ metadata:
 
 ## Delivery
 
-报告新增/复用资产、生成 nodeid、traceability 变化、所有静态门禁结果与未执行的真实浏览器场景。
+报告新增/复用资产、生成 nodeid、traceability 变化、每个 iteration 的 execution manifest/JUnit/Allure 证据、所有静态门禁结果与未执行的真实浏览器场景。

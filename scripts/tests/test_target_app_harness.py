@@ -6,7 +6,7 @@ import stat
 from pathlib import Path
 from typing import Any
 
-import pytest
+import pytest  # pyright: ignore[reportMissingImports]
 import yaml
 from conftest import _load_script
 
