@@ -46,7 +46,7 @@ members = ["packages/argus-core", "packages/argus-plugin-sdk", "adapters/medusa"
 dev = [
     "ruff>=0.16.4",
     "pyright>=1.1.390",
-    "pre-commit>=4.0",
+    "pre-commit>=4.6.2",
 ]
 mobile = [
     "appium-python-client>=6.0.0",
